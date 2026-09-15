@@ -1,0 +1,283 @@
+"""Food log CRUD, calorie estimation and per user isolation."""
+
+from __future__ import annotations
+
+import pytest
+from httpx import AsyncClient
+
+LOGS = "/api/v1/logs"
+
+
+async def _a_category(client: AsyncClient, slug: str = "biryani") -> dict:
+    categories = (await client.get("/api/v1/categories")).json()
+    return next(c for c in categories if c["slug"] == slug)
+
+
+async def test_creating_a_log_stores_it_and_estimates_calories(auth_client: AsyncClient) -> None:
+    category = await _a_category(auth_client)
+
+    response = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "chicken biryani",
+            "category_id": category["id"],
+            "rating": 5,
+            "fun_scale": 4,
+            "friend_scale": "squad",
+            "serving_size": "medium",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["dish_name"] == "chicken biryani"
+    assert body["friend_scale"] == "squad"
+    # A medium serving is a 1.0 multiplier, so the estimate must land inside the
+    # category's own range.
+    assert category["base_calorie_min"] <= body["estimated_calories"] <= category["base_calorie_max"]
+    assert body["category"]["slug"] == "biryani"
+
+
+async def test_serving_size_scales_the_estimate(auth_client: AsyncClient) -> None:
+    category = await _a_category(auth_client)
+
+    def payload(serving: str) -> dict:
+        return {
+            "dish_name": "chicken biryani",
+            "category_id": category["id"],
+            "rating": 4,
+            "serving_size": serving,
+        }
+
+    small = (await auth_client.post(LOGS, json=payload("small"))).json()
+    medium = (await auth_client.post(LOGS, json=payload("medium"))).json()
+    large = (await auth_client.post(LOGS, json=payload("large"))).json()
+
+    assert small["estimated_calories"] < medium["estimated_calories"]
+    assert medium["estimated_calories"] < large["estimated_calories"]
+    # A large portion is allowed to exceed the category maximum: the clamp
+    # applies to the AI's in-range figure, not to the scaled result.
+    assert large["estimated_calories"] > category["base_calorie_max"] * 0.99
+
+
+async def test_the_estimate_is_deterministic(auth_client: AsyncClient) -> None:
+    category = await _a_category(auth_client)
+    payload = {
+        "dish_name": "chicken alfredo",
+        "category_id": category["id"],
+        "rating": 4,
+        "serving_size": "medium",
+    }
+
+    first = (await auth_client.post(LOGS, json=payload)).json()
+    second = (await auth_client.post(LOGS, json=payload)).json()
+
+    assert first["estimated_calories"] == second["estimated_calories"]
+
+
+async def test_a_restaurant_name_is_deduped_into_the_registry(auth_client: AsyncClient) -> None:
+    category = await _a_category(auth_client)
+
+    def payload(name: str) -> dict:
+        return {
+            "dish_name": "chicken biryani",
+            "category_id": category["id"],
+            "restaurant_name": name,
+            "area": "Clifton",
+            "rating": 4,
+            "serving_size": "medium",
+        }
+
+    first = (await auth_client.post(LOGS, json=payload("Student Biryani"))).json()
+    # Different casing and trailing space must collapse onto the same row.
+    second = (await auth_client.post(LOGS, json=payload("student biryani "))).json()
+
+    assert first["restaurant_id"] is not None
+    assert first["restaurant_id"] == second["restaurant_id"]
+
+    restaurants = (await auth_client.get("/api/v1/restaurants")).json()
+    assert len([r for r in restaurants if r["name"].lower() == "student biryani"]) == 1
+
+
+async def test_a_log_can_be_created_without_a_restaurant(auth_client: AsyncClient) -> None:
+    """A home cooked meal must never be blocked from being logged."""
+    category = await _a_category(auth_client)
+
+    response = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "daal chawal at home",
+            "category_id": category["id"],
+            "rating": 4,
+            "serving_size": "medium",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["restaurant_id"] is None
+
+
+async def test_restaurant_id_and_name_together_are_rejected(auth_client: AsyncClient) -> None:
+    category = await _a_category(auth_client)
+
+    response = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "biryani",
+            "category_id": category["id"],
+            "restaurant_id": "00000000-0000-0000-0000-000000000000",
+            "restaurant_name": "Somewhere",
+            "rating": 4,
+            "serving_size": "medium",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+async def test_an_unknown_category_is_rejected(auth_client: AsyncClient) -> None:
+    response = await auth_client.post(
+        LOGS,
+        json={"dish_name": "mystery", "category_id": 99999, "rating": 4, "serving_size": "medium"},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("rating", [0, 6, -1])
+async def test_rating_must_be_between_one_and_five(auth_client: AsyncClient, rating: int) -> None:
+    category = await _a_category(auth_client)
+
+    response = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "biryani",
+            "category_id": category["id"],
+            "rating": rating,
+            "serving_size": "medium",
+        },
+    )
+    assert response.status_code == 422
+
+
+async def test_listing_logs_is_newest_first_and_paginated(auth_client: AsyncClient) -> None:
+    category = await _a_category(auth_client)
+    for index in range(5):
+        await auth_client.post(
+            LOGS,
+            json={
+                "dish_name": f"dish {index}",
+                "category_id": category["id"],
+                "rating": 4,
+                "serving_size": "medium",
+            },
+        )
+
+    page = (await auth_client.get(LOGS, params={"limit": 2})).json()
+
+    assert page["total"] == 5
+    assert len(page["items"]) == 2
+    timestamps = [item["created_at"] for item in page["items"]]
+    assert timestamps == sorted(timestamps, reverse=True)
+
+
+async def test_editing_the_serving_size_recalculates_the_estimate(
+    auth_client: AsyncClient,
+) -> None:
+    category = await _a_category(auth_client)
+    created = (
+        await auth_client.post(
+            LOGS,
+            json={
+                "dish_name": "chicken biryani",
+                "category_id": category["id"],
+                "rating": 4,
+                "serving_size": "small",
+            },
+        )
+    ).json()
+
+    updated = (
+        await auth_client.patch(f"{LOGS}/{created['id']}", json={"serving_size": "large"})
+    ).json()
+
+    assert updated["serving_size"] == "large"
+    assert updated["estimated_calories"] > created["estimated_calories"]
+
+
+async def test_editing_only_the_rating_leaves_the_estimate_alone(
+    auth_client: AsyncClient,
+) -> None:
+    category = await _a_category(auth_client)
+    created = (
+        await auth_client.post(
+            LOGS,
+            json={
+                "dish_name": "chicken biryani",
+                "category_id": category["id"],
+                "rating": 3,
+                "serving_size": "medium",
+            },
+        )
+    ).json()
+
+    updated = (await auth_client.patch(f"{LOGS}/{created['id']}", json={"rating": 5})).json()
+
+    assert updated["rating"] == 5
+    assert updated["estimated_calories"] == created["estimated_calories"]
+
+
+async def test_a_log_can_be_fetched_and_deleted(auth_client: AsyncClient) -> None:
+    category = await _a_category(auth_client)
+    created = (
+        await auth_client.post(
+            LOGS,
+            json={
+                "dish_name": "nihari",
+                "category_id": category["id"],
+                "rating": 5,
+                "serving_size": "medium",
+            },
+        )
+    ).json()
+
+    assert (await auth_client.get(f"{LOGS}/{created['id']}")).status_code == 200
+    assert (await auth_client.delete(f"{LOGS}/{created['id']}")).status_code == 204
+    assert (await auth_client.get(f"{LOGS}/{created['id']}")).status_code == 404
+
+
+async def test_one_user_cannot_see_or_touch_another_users_log(client: AsyncClient) -> None:
+    first = (
+        await client.post(
+            "/api/v1/auth/register", json={"email": "owner@forkast.app", "password": "password123"}
+        )
+    ).json()
+    second = (
+        await client.post(
+            "/api/v1/auth/register",
+            json={"email": "stranger@forkast.app", "password": "password123"},
+        )
+    ).json()
+
+    owner_headers = {"Authorization": f"Bearer {first['access_token']}"}
+    stranger_headers = {"Authorization": f"Bearer {second['access_token']}"}
+
+    categories = (await client.get("/api/v1/categories", headers=owner_headers)).json()
+    created = (
+        await client.post(
+            LOGS,
+            headers=owner_headers,
+            json={
+                "dish_name": "private meal",
+                "category_id": categories[0]["id"],
+                "rating": 4,
+                "serving_size": "medium",
+            },
+        )
+    ).json()
+
+    # 404 rather than 403: there is no reason to confirm the id exists.
+    assert (await client.get(f"{LOGS}/{created['id']}", headers=stranger_headers)).status_code == 404
+    assert (
+        await client.delete(f"{LOGS}/{created['id']}", headers=stranger_headers)
+    ).status_code == 404
+    assert (await client.get(LOGS, headers=stranger_headers)).json()["total"] == 0

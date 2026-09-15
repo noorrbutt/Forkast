@@ -8,12 +8,12 @@ import uuid
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import FriendScale, ServingSize
-from app.schemas.catalog import CategoryOut, RestaurantOut
+from app.schemas.catalog import SMALLINT_MAX, CategoryOut, RestaurantOut
 
 
 class FoodLogCreate(BaseModel):
     dish_name: str = Field(min_length=1, max_length=200)
-    category_id: int
+    category_id: int = Field(ge=1, le=SMALLINT_MAX)
 
     # Either point at an existing restaurant or give a name and let the server
     # dedupe it into the registry. Both may be omitted: a home cooked meal
@@ -39,7 +39,7 @@ class FoodLogCreate(BaseModel):
 
 class FoodLogUpdate(BaseModel):
     dish_name: str | None = Field(default=None, min_length=1, max_length=200)
-    category_id: int | None = None
+    category_id: int | None = Field(default=None, ge=1, le=SMALLINT_MAX)
     restaurant_id: uuid.UUID | None = None
     area: str | None = Field(default=None, max_length=120)
     rating: int | None = Field(default=None, ge=1, le=5)

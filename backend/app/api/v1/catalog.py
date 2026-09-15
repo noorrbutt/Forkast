@@ -8,6 +8,7 @@ from sqlalchemy import func, or_, select
 from app.api.deps import CurrentUser, SessionDep
 from app.models import Cuisine, FoodCategory, FoodLog, Restaurant
 from app.schemas.catalog import (
+    SMALLINT_MAX,
     CategoryOut,
     CuisineOut,
     DishSuggestion,
@@ -33,7 +34,7 @@ async def list_cuisines(session: SessionDep, user: CurrentUser) -> list[Cuisine]
 async def list_categories(
     session: SessionDep,
     user: CurrentUser,
-    cuisine_id: int | None = Query(default=None),
+    cuisine_id: int | None = Query(default=None, ge=1, le=SMALLINT_MAX),
 ) -> list[FoodCategory]:
     stmt = select(FoodCategory).order_by(FoodCategory.name)
     if cuisine_id is not None:

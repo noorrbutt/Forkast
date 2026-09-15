@@ -7,6 +7,11 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# cuisines.id and food_categories.id are smallint. Without this bound an
+# oversized id reaches the database and fails as a 500 DataError instead of a
+# clean 422.
+SMALLINT_MAX = 32767
+
 
 class CuisineOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
