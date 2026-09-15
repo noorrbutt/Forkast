@@ -1,0 +1,38 @@
+"""Async engine, session factory, and the FastAPI session dependency."""
+
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from app.config import get_settings
+
+_settings = get_settings()
+
+# No Windows event-loop boilerplate here on purpose: asyncpg works on the
+# default ProactorEventLoop, and asyncio.set_event_loop_policy is deprecated on
+# Python 3.14 (removal in 3.16) and inert under uvicorn, which passes an
+# explicit loop_factory since 0.36.0.
+engine = create_async_engine(
+    _settings.database_url,
+    echo=False,
+    pool_pre_ping=True,
+)
+
+SessionLocal = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autoflush=False,
+)
+
+
+async def get_session() -> AsyncIterator[AsyncSession]:
+    async with SessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise

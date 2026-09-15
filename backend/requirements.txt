@@ -1,0 +1,40 @@
+# Forkast backend, pinned 2026-09-16.
+# Every pin below was verified to resolve to a prebuilt cp314 Windows wheel:
+#   uv pip compile --python-version 3.14 --python-platform windows --only-binary :all:
+# Install with --only-binary :all: so any future wheel gap fails loudly
+# instead of silently dropping into a source build.
+
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
+
+# PIN EXACTLY. sqlalchemy 2.0.54 was published 2026-09-15 with only cp311/cp312
+# wheels + an sdist -- no cp314 wheel and no pure-python fallback. Unpinned, a
+# fresh install on Python 3.14 silently falls back to compiling the sdist.
+sqlalchemy[asyncio]==2.0.53
+alembic==1.20.0
+
+# asyncpg, NOT psycopg3-async: psycopg is documented as incompatible with
+# Windows' default ProactorEventLoop, and uvicorn selects Proactor for plain
+# `uvicorn` but Selector for `uvicorn --reload` -- so psycopg3-async would work
+# in dev and break in production, and break `alembic upgrade head` too.
+asyncpg==0.31.0
+greenlet==3.5.6
+# psycopg is present for SYNC use only (offline migrations, debugging).
+psycopg[binary]==3.3.5
+
+pydantic==2.13.5
+pydantic-settings==2.15.0
+email-validator==2.3.0
+
+# PyJWT + pwdlib, not python-jose + passlib: passlib's last release was
+# 2020-10-08, and python-jose pulls `ecdsa` which carries the unpatched
+# CVE-2024-23342 Minerva timing attack.
+pyjwt==2.14.0
+pwdlib[argon2]==0.3.1
+python-multipart==0.0.32
+
+groq==1.7.0
+
+httpx==0.28.1
+pytest==9.1.1
+pytest-asyncio==1.4.0
