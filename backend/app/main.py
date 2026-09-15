@@ -26,10 +26,16 @@ app = FastAPI(
     ),
 )
 
+# A wildcard origin and allow_credentials cannot be combined: browsers reject
+# the pair outright, so the permissive dev default would silently break every
+# request from a web client. Forkast sends a bearer token rather than a cookie,
+# so credentials are not needed with a wildcard anyway.
+_allow_all_origins = settings.cors_origin_list == ["*"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
-    allow_credentials=True,
+    allow_credentials=not _allow_all_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
