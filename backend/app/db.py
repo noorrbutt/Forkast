@@ -29,10 +29,17 @@ SessionLocal = async_sessionmaker(
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
+    """Provide a session. Writing routes commit explicitly before returning.
+
+    Deliberately does NOT commit after the yield. FastAPI runs the exit half of
+    a yield dependency AFTER the response has been sent, so committing here
+    hands the client its data before that data is durable. A quick client can
+    then use a token from a register response and get a 401 because the row is
+    not visible yet. Committing inside the handler removes the race entirely.
+    """
     async with SessionLocal() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise

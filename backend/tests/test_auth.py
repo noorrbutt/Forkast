@@ -172,3 +172,47 @@ async def test_health_needs_no_authentication(client: AsyncClient) -> None:
     response = await client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+async def test_register_commits_before_the_response_is_returned(
+    client: AsyncClient, session_factory
+) -> None:
+    """Regression: the data must be durable by the time the client has the token.
+
+    FastAPI runs the exit half of a yield dependency AFTER the response is sent.
+    While the session dependency committed there, a client could register, then
+    immediately use the returned refresh token and get a 401 because the row was
+    not visible yet. A separate session is used here deliberately: it can only
+    see committed rows.
+    """
+    response = await client.post(
+        REGISTER, json={"email": "durable@forkast.app", "password": "password123"}
+    )
+    assert response.status_code == 201
+    raw_refresh = response.json()["refresh_token"]
+
+    async with session_factory() as fresh:
+        user = await fresh.scalar(select(User).where(User.email == "durable@forkast.app"))
+        assert user is not None, "user was not committed before the response returned"
+
+        token = await fresh.scalar(
+            select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_token(raw_refresh))
+        )
+        assert token is not None, "refresh token was not committed before the response returned"
+
+
+async def test_a_token_works_immediately_after_registering(client: AsyncClient) -> None:
+    """The end to end shape of the same race, exercised through the API."""
+    registered = (
+        await client.post(
+            REGISTER, json={"email": "immediate@forkast.app", "password": "password123"}
+        )
+    ).json()
+
+    refreshed = await client.post(REFRESH, json={"refresh_token": registered["refresh_token"]})
+    assert refreshed.status_code == 200, refreshed.text
+
+    me = await client.get(
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {registered['access_token']}"}
+    )
+    assert me.status_code == 200

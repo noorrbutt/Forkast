@@ -188,7 +188,7 @@ async def upsert_restaurant(
 async def create_restaurant(
     payload: RestaurantCreate, session: SessionDep, user: CurrentUser
 ) -> Restaurant:
-    return await upsert_restaurant(
+    restaurant = await upsert_restaurant(
         session,
         name=payload.name,
         area=payload.area,
@@ -196,3 +196,5 @@ async def create_restaurant(
         latitude=payload.latitude,
         longitude=payload.longitude,
     )
+    await session.commit()
+    return restaurant

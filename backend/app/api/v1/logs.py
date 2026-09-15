@@ -107,7 +107,9 @@ async def create_log(
 
     session.add(log)
     await session.flush()
-    return await _load_log(session, user.id, log.id)
+    created = await _load_log(session, user.id, log.id)
+    await session.commit()
+    return created
 
 
 @router.get("", response_model=FoodLogPage)
@@ -165,11 +167,14 @@ async def update_log(
         )
 
     await session.flush()
-    return await _load_log(session, user.id, log.id)
+    updated = await _load_log(session, user.id, log.id)
+    await session.commit()
+    return updated
 
 
 @router.delete("/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_log(log_id: uuid.UUID, session: SessionDep, user: CurrentUser) -> Response:
     log = await _load_log(session, user.id, log_id)
     await session.delete(log)
+    await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

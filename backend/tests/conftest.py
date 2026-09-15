@@ -105,10 +105,12 @@ async def session(session_factory) -> AsyncIterator[AsyncSession]:
 @pytest.fixture
 async def client(session_factory) -> AsyncIterator[AsyncClient]:
     async def _override_session() -> AsyncIterator[AsyncSession]:
+        # Mirrors app.db.get_session exactly, including the absence of a commit
+        # after the yield. Committing here would hide the read-after-write race
+        # that the real dependency used to have.
         async with session_factory() as db:
             try:
                 yield db
-                await db.commit()
             except Exception:
                 await db.rollback()
                 raise

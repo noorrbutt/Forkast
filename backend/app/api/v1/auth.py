@@ -40,7 +40,10 @@ async def _issue_tokens(session: SessionDep, user: User) -> TokenPair:
     session.add(
         RefreshToken(user_id=user.id, token_hash=refresh_hash, expires_at=refresh_expires)
     )
-    await session.flush()
+    # Commit here rather than in the session dependency: a yield dependency's
+    # exit code runs after the response is sent, so the client could present
+    # these tokens before the rows were durable and get a 401.
+    await session.commit()
 
     return TokenPair(access_token=access_token, refresh_token=raw_refresh)
 
@@ -111,6 +114,7 @@ async def logout(payload: RefreshRequest, session: SessionDep) -> Response:
     stored = await session.scalar(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
     if stored is not None and stored.revoked_at is None:
         stored.revoked_at = dt.datetime.now(dt.UTC)
+    await session.commit()
     # Always 204. Logging out an already dead token is not an error worth
     # telling the caller about.
     return Response(status_code=status.HTTP_204_NO_CONTENT)

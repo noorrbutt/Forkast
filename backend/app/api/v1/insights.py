@@ -60,7 +60,7 @@ async def update_me(payload: UserUpdate, session: SessionDep, user: CurrentUser)
     for field, value in changes.items():
         if value is not None:
             setattr(user, field, value)
-    await session.flush()
+    await session.commit()
     return user
 
 
@@ -135,7 +135,7 @@ async def create_plan(
         model=result.model,
     )
     session.add(plan)
-    await session.flush()
+    await session.commit()
     return plan
 
 
