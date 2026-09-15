@@ -31,7 +31,12 @@ class Cuisine(Base):
 
     __table_args__ = (
         # Trigram index so search tolerates typos ("italien" -> "Italian").
-        Index("ix_cuisines_name_trgm", text("name gin_trgm_ops"), postgresql_using="gin"),
+        Index(
+            "ix_cuisines_name_trgm",
+            "name",
+            postgresql_using="gin",
+            postgresql_ops={"name": "gin_trgm_ops"},
+        ),
     )
 
 
@@ -58,5 +63,10 @@ class FoodCategory(Base):
             name="calorie_range",
         ),
         Index("ix_food_categories_cuisine_id", "cuisine_id"),
-        Index("ix_food_categories_name_trgm", text("name gin_trgm_ops"), postgresql_using="gin"),
+        Index(
+            "ix_food_categories_name_trgm",
+            "name",
+            postgresql_using="gin",
+            postgresql_ops={"name": "gin_trgm_ops"},
+        ),
     )

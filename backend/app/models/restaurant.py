@@ -46,5 +46,10 @@ class Restaurant(Base):
             func.coalesce(func.lower(area), ""),
             unique=True,
         ),
-        Index("ix_restaurants_name_trgm", text("name gin_trgm_ops"), postgresql_using="gin"),
+        Index(
+            "ix_restaurants_name_trgm",
+            "name",
+            postgresql_using="gin",
+            postgresql_ops={"name": "gin_trgm_ops"},
+        ),
     )

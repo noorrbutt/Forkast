@@ -71,5 +71,10 @@ class FoodLog(Base):
         Index("ix_food_logs_user_id_created_at", "user_id", text("created_at DESC")),
         Index("ix_food_logs_user_id_category_id", "user_id", "category_id"),
         Index("ix_food_logs_restaurant_id", "restaurant_id"),
-        Index("ix_food_logs_dish_name_trgm", text("dish_name gin_trgm_ops"), postgresql_using="gin"),
+        Index(
+            "ix_food_logs_dish_name_trgm",
+            "dish_name",
+            postgresql_using="gin",
+            postgresql_ops={"dish_name": "gin_trgm_ops"},
+        ),
     )
