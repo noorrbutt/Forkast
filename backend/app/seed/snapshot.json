@@ -1,0 +1,113 @@
+{
+  "dashboard": {
+    "best_fun_meals": [
+      {
+        "dish_name": "samgyeopsal",
+        "fun_scale": 5,
+        "restaurant_name": "Cafe Aylanto"
+      },
+      {
+        "dish_name": "chicken tenders",
+        "fun_scale": 5,
+        "restaurant_name": "BBQ Tonight"
+      },
+      {
+        "dish_name": "aglio e olio",
+        "fun_scale": 5,
+        "restaurant_name": null
+      },
+      {
+        "dish_name": "chicken haleem",
+        "fun_scale": 5,
+        "restaurant_name": "Kolachi"
+      },
+      {
+        "dish_name": "beef lasagna",
+        "fun_scale": 5,
+        "restaurant_name": null
+      }
+    ],
+    "burn_equivalents": {
+      "cycling_minutes": 138,
+      "running_minutes": 97,
+      "walking_minutes": 257
+    },
+    "calories_by_day": [
+      {
+        "calories": 3097,
+        "day": "2026-09-03"
+      },
+      {
+        "calories": 1249,
+        "day": "2026-09-04"
+      },
+      {
+        "calories": 444,
+        "day": "2026-09-05"
+      },
+      {
+        "calories": 2104,
+        "day": "2026-09-06"
+      },
+      {
+        "calories": 0,
+        "day": "2026-09-07"
+      },
+      {
+        "calories": 0,
+        "day": "2026-09-08"
+      },
+      {
+        "calories": 444,
+        "day": "2026-09-09"
+      },
+      {
+        "calories": 586,
+        "day": "2026-09-10"
+      },
+      {
+        "calories": 1328,
+        "day": "2026-09-11"
+      },
+      {
+        "calories": 0,
+        "day": "2026-09-12"
+      },
+      {
+        "calories": 0,
+        "day": "2026-09-13"
+      },
+      {
+        "calories": 236,
+        "day": "2026-09-14"
+      },
+      {
+        "calories": 254,
+        "day": "2026-09-15"
+      },
+      {
+        "calories": 0,
+        "day": "2026-09-16"
+      }
+    ],
+    "junk_ratio": 0.1583,
+    "logs_count": 120,
+    "top_category": {
+      "category_id": 4,
+      "count": 7,
+      "name": "Haleem"
+    },
+    "top_restaurant": {
+      "count": 12,
+      "name": "Kolachi",
+      "restaurant_id": "01a0a739-7d69-7394-91a0-300752979100"
+    },
+    "total_calories": 72492
+  },
+  "streaks": {
+    "current_streak": 6,
+    "last_junk_date": "2026-09-10",
+    "longest_streak": 13,
+    "message": "6 days without a junk log. Quietly impressive."
+  }
+}
