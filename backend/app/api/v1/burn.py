@@ -15,6 +15,7 @@ from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
+from app.services.insights import today_for
 from app.api.deps import CurrentUser, SessionDep
 from app.models import BurnLog, User
 from app.schemas.burn import BurnOut, BurnUpsert
@@ -26,14 +27,6 @@ DEFAULT_WINDOW_DAYS = 14
 MAX_WINDOW_DAYS = 90
 
 
-def today_for(user: User) -> dt.date:
-    """The user's own calendar day.
-
-    The same rule the dashboard buckets by. Using the server's date instead
-    would file an evening entry in Karachi under the previous day, which is the
-    exact bug the per-user timezone exists to avoid.
-    """
-    return dt.datetime.now(ZoneInfo(user.timezone)).date()
 
 
 @router.put("", response_model=BurnOut)

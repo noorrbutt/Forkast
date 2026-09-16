@@ -55,6 +55,23 @@ class FunMeal(BaseModel):
     restaurant_name: str | None = None
 
 
+class TodayOut(BaseModel):
+    """Today alone, measured against the target if there is one.
+
+    Separate from the 14 day totals because a progress bar is a statement about
+    today and nothing else. Reading it off the end of calories_by_day would
+    work until the chart window or its ordering changed.
+    """
+
+    target: int | None = None
+    consumed: int = 0
+    burned: int = 0
+    net: int = 0
+    # Null when no target is set, and allowed to go negative when one is and the
+    # day went over. Clamping would hide the thing the user most wants to know.
+    remaining: int | None = None
+
+
 class DashboardOut(BaseModel):
     junk_ratio: float
     total_calories: int
@@ -64,6 +81,7 @@ class DashboardOut(BaseModel):
     total_burned: int = 0
     net_calories: int = 0
     logs_count: int
+    today: TodayOut = Field(default_factory=TodayOut)
     calories_by_day: list[CaloriesByDay] = Field(default_factory=list)
     top_category: TopCategory | None = None
     top_restaurant: TopRestaurant | None = None
@@ -77,6 +95,41 @@ class StreaksOut(BaseModel):
     last_junk_date: dt.date | None = None
     # Soft recovery wording rather than a punitive tone, per the product brief.
     message: str
+
+
+class TrendPeriod(BaseModel):
+    """One calendar month, bucketed into the user's own local days."""
+
+    # The first of the month, local. The client titles the column from this
+    # rather than from its own clock, which can sit in a different zone.
+    month: dt.date
+    total_calories: int
+    meals_logged: int
+    junk_ratio: float
+    avg_calories_per_day: float
+    # The denominator behind the average. The current month counts only the
+    # days that have actually happened, so this is not always the length of the
+    # month and the client must not assume it is.
+    days_counted: int
+
+
+class TrendChange(BaseModel):
+    """This month minus last month, per metric.
+
+    Computed here so every surface shows the same arrow. A client subtracting
+    two already rounded figures can land a whole unit away from this.
+    """
+
+    total_calories: int
+    meals_logged: int
+    junk_ratio: float
+    avg_calories_per_day: float
+
+
+class TrendOut(BaseModel):
+    this_month: TrendPeriod
+    last_month: TrendPeriod
+    change: TrendChange
 
 
 class PlanCreate(BaseModel):

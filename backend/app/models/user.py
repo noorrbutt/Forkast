@@ -5,7 +5,17 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, Uuid, func, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    Uuid,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, new_uuid7, str_enum
@@ -33,6 +43,11 @@ class User(Base):
     goal: Mapped[Goal] = mapped_column(
         str_enum(Goal, "goal", length=16), nullable=False, server_default=text("'maintain'")
     )
+    # A daily ceiling in kcal to measure the day against. Null is meaningful and
+    # is not the same as zero: null means the user has never set one, so the
+    # dashboard shows a plain total, while a number turns that total into
+    # progress against it.
+    daily_calorie_target: Mapped[int | None] = mapped_column(nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -46,6 +61,14 @@ class User(Base):
         # collation: the latter disables B-tree deduplication and breaks
         # pattern matching.
         Index("uq_users_email_lower", func.lower(email), unique=True),
+        # Wide enough for anyone from a cutting sedentary adult to an athlete,
+        # narrow enough that a stray extra digit is caught before it silently
+        # makes every day look like a success.
+        CheckConstraint(
+            "daily_calorie_target IS NULL OR "
+            "(daily_calorie_target >= 800 AND daily_calorie_target <= 10000)",
+            name="calorie_target_plausible",
+        ),
     )
 
 

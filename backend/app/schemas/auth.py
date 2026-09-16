@@ -40,12 +40,16 @@ class UserOut(BaseModel):
     email: str
     timezone: str
     goal: Goal
+    daily_calorie_target: int | None = None
     created_at: dt.datetime
 
 
 class UserUpdate(BaseModel):
     goal: Goal | None = None
     timezone: str | None = Field(default=None, max_length=64)
+    # Matches ck_users_calorie_target_plausible, so a stray digit is refused
+    # with a 422 rather than a 500 from the database.
+    daily_calorie_target: int | None = Field(default=None, ge=800, le=10_000)
 
     @field_validator("timezone")
     @classmethod

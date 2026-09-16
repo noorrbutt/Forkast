@@ -1,4 +1,4 @@
-"""Dashboard and streak computation, straight from food_logs.
+"""Dashboard, trend and streak computation, straight from food_logs.
 
 This replaces the seed snapshot the scaffold shipped with. Two things matter
 here and neither is obvious:
@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import BurnLog, FoodCategory, FoodLog, Restaurant, User
 from app.schemas.insights import (
+    TodayOut,
     BurnEquivalents,
     CaloriesByDay,
     DashboardOut,
@@ -34,6 +35,9 @@ from app.schemas.insights import (
     StreaksOut,
     TopCategory,
     TopRestaurant,
+    TrendChange,
+    TrendOut,
+    TrendPeriod,
 )
 
 # Roughly how many kcal a 70kg adult burns per minute, from standard MET values.
@@ -50,8 +54,18 @@ STREAK_WINDOW_DAYS = 365
 
 
 def _local_day(user: User):
-    """The log's calendar date in the user's own timezone."""
+    """The log's calendar date in the user's own timezone, as SQL."""
     return cast(func.timezone(user.timezone, FoodLog.created_at), Date)
+
+
+def today_for(user: User) -> dt.date:
+    """The user's own calendar day, in Python.
+
+    The same rule _local_day applies in SQL. Using the server's date instead
+    would file an evening entry in Karachi under the previous day, which is the
+    exact bug the per-user timezone exists to avoid.
+    """
+    return dt.datetime.now(ZoneInfo(user.timezone)).date()
 
 
 async def build_dashboard(session: AsyncSession, user: User) -> DashboardOut:
@@ -191,7 +205,24 @@ async def build_dashboard(session: AsyncSession, user: User) -> DashboardOut:
     ) or 1
     average_day = total_calories / distinct_days
 
+    # Today on its own. The chart is a 14 day window and its shape is free to
+    # change; a progress bar is a claim about today, so it is computed from the
+    # user's own current date rather than read off the end of that list.
+    today_local = today_for(user)
+    today_row = next((d for d in calories_by_day if d.day == today_local), None)
+    consumed = today_row.calories if today_row else 0
+    burned_today = today_row.burned if today_row else 0
+    net_today = consumed - burned_today
+    target = user.daily_calorie_target
+
     return DashboardOut(
+        today=TodayOut(
+            target=target,
+            consumed=consumed,
+            burned=burned_today,
+            net=net_today,
+            remaining=None if target is None else target - net_today,
+        ),
         junk_ratio=round(junk_count / logs_count, 4) if logs_count else 0.0,
         total_calories=total_calories,
         total_burned=total_burned,
@@ -303,4 +334,110 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
         longest_streak=longest_streak,
         last_junk_date=max(junk_days) if junk_days else None,
         message=_streak_message(current_streak, has_any_logs=True),
+    )
+
+
+def _month_start(day: dt.date) -> dt.date:
+    return day.replace(day=1)
+
+
+def _previous_month_start(month_start: dt.date) -> dt.date:
+    """The first of the month before this one.
+
+    One day back from the first always lands inside the previous month whatever
+    its length, so February and the December to January rollover need no special
+    case and no per month table.
+    """
+    return (month_start - dt.timedelta(days=1)).replace(day=1)
+
+
+def _next_month_start(month_start: dt.date) -> dt.date:
+    """The first of the month after this one. Same trick, forwards.
+
+    31 days from the first of any month lands inside the next one, because no
+    month is longer than that.
+    """
+    return (month_start + dt.timedelta(days=31)).replace(day=1)
+
+
+async def _month_totals(
+    session: AsyncSession, user: User, start: dt.date, end: dt.date, days: int
+) -> TrendPeriod:
+    """Aggregate the half open local day range [start, end) into one period.
+
+    The bounds are compared against the same `_local_day` expression the
+    dashboard buckets by, so a meal at half past midnight on the first of the
+    month in Karachi belongs to the new month rather than being dragged back
+    into the old one by its UTC date.
+    """
+    row = (
+        await session.execute(
+            select(
+                func.count(FoodLog.id),
+                func.coalesce(func.sum(FoodLog.estimated_calories), 0),
+                func.coalesce(func.sum(case((FoodCategory.is_junk, 1), else_=0)), 0),
+            )
+            .select_from(FoodLog)
+            .join(FoodCategory, FoodCategory.id == FoodLog.category_id)
+            .where(
+                FoodLog.user_id == user.id,
+                _local_day(user) >= start,
+                _local_day(user) < end,
+            )
+        )
+    ).one()
+    meals, total_calories, junk_count = int(row[0]), int(row[1]), int(row[2])
+
+    # A month with nothing in it is an answer, not an absence. Every field stays
+    # a number so the client can draw a flat column and a "down on last month"
+    # arrow without a null check on each metric; `days` is never zero, so the
+    # average has nothing to guard against either.
+    return TrendPeriod(
+        month=start,
+        total_calories=total_calories,
+        meals_logged=meals,
+        junk_ratio=round(junk_count / meals, 4) if meals else 0.0,
+        avg_calories_per_day=round(total_calories / days, 1),
+        days_counted=days,
+    )
+
+
+async def build_trend(session: AsyncSession, user: User) -> TrendOut:
+    today = today_for(user)
+    this_start = _month_start(today)
+    last_start = _previous_month_start(this_start)
+
+    # The current month is averaged over the days that have happened, last month
+    # over its full length. Dividing a month that is three days old by 30 would
+    # report an average a tenth of the real one and show every user a collapse
+    # in intake on the 3rd that reversed itself by the 30th.
+    this_month = await _month_totals(
+        session,
+        user,
+        this_start,
+        _next_month_start(this_start),
+        days=(today - this_start).days + 1,
+    )
+    last_month = await _month_totals(
+        session,
+        user,
+        last_start,
+        this_start,
+        days=(this_start - last_start).days,
+    )
+
+    return TrendOut(
+        this_month=this_month,
+        last_month=last_month,
+        # Subtracted from the rounded figures above rather than from the raw
+        # ones, so the arrow always agrees with the two numbers printed beside
+        # it. A client doing this itself would be doing exactly this arithmetic.
+        change=TrendChange(
+            total_calories=this_month.total_calories - last_month.total_calories,
+            meals_logged=this_month.meals_logged - last_month.meals_logged,
+            junk_ratio=round(this_month.junk_ratio - last_month.junk_ratio, 4),
+            avg_calories_per_day=round(
+                this_month.avg_calories_per_day - last_month.avg_calories_per_day, 1
+            ),
+        ),
     )
