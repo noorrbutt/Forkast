@@ -23,7 +23,7 @@ from app.schemas.insights import DashboardOut, PlanCreate, PlanOut, StreaksOut
 from app.services.ai.base import AIService
 from app.services.ai.deps import get_ai_service
 from app.services.ai.groq_service import GroqResponseError
-from app.services.ai.schemas import PlanLogSummary, PlanRequest
+from app.services.ai.schemas import PlanContext, PlanLogSummary, PlanRequest
 from app.services.insights import build_dashboard, compute_streaks
 from app.services.rate_limit import client_identity
 
@@ -105,9 +105,34 @@ async def create_plan(
         for log in logs
     ]
 
+    # The same figures the dashboard and streaks screens show, handed to the
+    # planner as facts. Without them the model recounts from the raw list and
+    # its narrative can contradict the numbers the user is looking at.
+    dashboard = await build_dashboard(session, user)
+    streak = await compute_streaks(session, user)
+    days = len(dashboard.calories_by_day) or 1
+
+    context = PlanContext(
+        window_days=days,
+        logs_count=dashboard.logs_count,
+        total_calories=dashboard.total_calories,
+        total_burned=dashboard.total_burned,
+        net_calories=dashboard.net_calories,
+        junk_ratio=dashboard.junk_ratio,
+        avg_calories_per_day=round(dashboard.total_calories / days),
+        current_streak=streak.current_streak,
+        longest_streak=streak.longest_streak,
+        top_category=dashboard.top_category.name if dashboard.top_category else None,
+    )
+
     try:
         result = await ai.generate_plan(
-            PlanRequest(goal=goal, timezone=user.timezone, recent_logs=summaries)
+            PlanRequest(
+                goal=goal,
+                timezone=user.timezone,
+                recent_logs=summaries,
+                context=context,
+            )
         )
     except GroqResponseError as exc:
         raise HTTPException(

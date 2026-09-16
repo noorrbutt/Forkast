@@ -43,10 +43,33 @@ class PlanLogSummary(BaseModel):
     logged_at: dt.datetime
 
 
+class PlanContext(BaseModel):
+    """The figures the app has already worked out for this user.
+
+    Without these the model is handed a pile of raw logs and left to count for
+    itself, so its summary can say "you have been good this week" while the
+    dashboard two taps away shows a junk ratio of 60 percent. Same user, same
+    moment, two different stories. These are the dashboard's own numbers, so
+    the plan can only agree with it.
+    """
+
+    window_days: int
+    logs_count: int
+    total_calories: int
+    total_burned: int
+    net_calories: int
+    junk_ratio: float
+    avg_calories_per_day: int
+    current_streak: int
+    longest_streak: int
+    top_category: str | None = None
+
+
 class PlanRequest(BaseModel):
     goal: Goal
     timezone: str
     recent_logs: list[PlanLogSummary] = Field(default_factory=list)
+    context: PlanContext | None = None
 
 
 class PlanMeal(BaseModel):

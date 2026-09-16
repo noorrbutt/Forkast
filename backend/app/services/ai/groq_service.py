@@ -216,9 +216,33 @@ def _plan_prompt(req: PlanRequest) -> str:
         ]
         history = "Recent meals, newest first:\n" + "\n".join(lines)
 
+    if req.context is None:
+        facts = ""
+    else:
+        c = req.context
+        # Stated as settled facts, because they are. The app has already
+        # counted. Handed only the raw list, the model counts for itself and
+        # can tell someone they have eaten well this week while the dashboard
+        # two taps away shows a junk ratio of sixty percent.
+        facts = (
+            "Figures the app has already calculated. Treat these as true and do "
+            "not work them out again from the meals below:\n"
+            f"- Window: the last {c.window_days} days\n"
+            f"- Meals logged: {c.logs_count}\n"
+            f"- Eaten {c.total_calories} kcal, burned {c.total_burned} kcal, "
+            f"net {c.net_calories} kcal\n"
+            f"- Average per day: {c.avg_calories_per_day} kcal\n"
+            f"- Share of meals that were junk: {round(c.junk_ratio * 100)} percent\n"
+            f"- Current junk free streak: {c.current_streak} days, "
+            f"their best is {c.longest_streak}\n"
+            + (f"- Most logged category: {c.top_category}\n" if c.top_category else "")
+            + "\n"
+        )
+
     return (
         f"Goal: {req.goal.value}\n"
         f"Their timezone: {req.timezone}\n\n"
+        f"{facts}"
         f"{history}\n\n"
         "Write a three day plan that fits the way they already eat."
     )
