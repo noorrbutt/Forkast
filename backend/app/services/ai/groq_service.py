@@ -46,6 +46,50 @@ logger = logging.getLogger(__name__)
 # year of history and blow up the prompt.
 MAX_LOGS_IN_PROMPT = 40
 
+# Attempts per request, including the first.
+MAX_ATTEMPTS = 3
+
+# The seed the first attempt always uses. Retries walk up from here.
+BASE_SEED = 1337
+
+# Token budgets. These are ceilings, not reservations: only what the model
+# actually emits is billed.
+#
+# gpt-oss-20b is a reasoning model, so its chain of thought is spent out of this
+# same budget and the visible JSON is a small fraction of it. A three day plan
+# was measured using anywhere from 759 to 5899 completion tokens for identical
+# input, so the old 2048 ceiling truncated the long tail into an empty reply.
+# Calorie estimates were a steady 117, and 1024 is simply headroom for a dish
+# name that makes the model think harder than usual.
+PLAN_MAX_TOKENS = 8192
+CALORIE_MAX_TOKENS = 1024
+
+# Fragments that mark a failure as a coin toss rather than a standing problem.
+# Groq reports the empty generation case as a 400, which is ordinarily a
+# "do not try that again" status, so matching on the message is the only way to
+# tell it apart from a genuinely malformed request.
+_RETRYABLE_MARKERS = (
+    "json_validate_failed",
+    "Failed to validate JSON",
+    "empty completion",
+    "not JSON",
+)
+
+
+def _is_retryable(exc: Exception) -> bool:
+    """Whether another attempt is likely to land differently.
+
+    A bad key, a missing model or a malformed schema fail the same way every
+    time, and retrying those only multiplies the wait before the user is told.
+    A rate limit is excluded too: there is no backoff here, so an immediate
+    second call would be refused as well and spend the allowance doing it.
+    """
+    text = str(exc)
+    if "rate limit" in text.lower() or "429" in text:
+        return False
+    return any(marker in text for marker in _RETRYABLE_MARKERS)
+
+
 CALORIE_SCHEMA: dict[str, Any] = {
     "name": "calorie_estimate",
     "strict": True,
@@ -192,7 +236,10 @@ class GroqAIService:
         self._client = client
         self._model = model
 
-    async def _complete(self, system: str, user: str, schema: dict[str, Any], max_tokens: int) -> Any:
+    async def _attempt(
+        self, system: str, user: str, schema: dict[str, Any], max_tokens: int, seed: int
+    ) -> Any:
+        """One call. Raises GroqResponseError, transient or not, on any failure."""
         try:
             response = await self._client.chat.completions.create(
                 model=self._model,
@@ -203,11 +250,7 @@ class GroqAIService:
                 response_format={"type": "json_schema", "json_schema": schema},
                 temperature=0.2,
                 max_completion_tokens=max_tokens,
-                # A fixed seed makes the same dish tend to produce the same
-                # number, which matters because the estimate is stored and a
-                # user seeing a different figure for the same meal reads it as
-                # a bug.
-                seed=1337,
+                seed=seed,
             )
         except Exception as exc:
             # Everything the SDK can raise, from a timeout to a rate limit to a
@@ -215,7 +258,6 @@ class GroqAIService:
             # know what Groq is in order to return a sensible status code, and
             # the seam exists precisely so a second provider would not change
             # their error handling.
-            logger.warning("Groq request failed: %s: %s", type(exc).__name__, exc)
             raise GroqResponseError(f"Groq request failed: {exc}") from exc
 
         try:
@@ -234,9 +276,49 @@ class GroqAIService:
             logger.warning("Groq returned unparseable JSON: %r", content[:200])
             raise GroqResponseError("Groq returned content that was not JSON") from exc
 
+    async def _complete(self, system: str, user: str, schema: dict[str, Any], max_tokens: int) -> Any:
+        """Call Groq, retrying the failures that are known to be a coin toss.
+
+        Measured against the live API on 2026-09-16: the same plan prompt, same
+        seed, same token budget, failed 3 times in 15 with
+        ``json_validate_failed`` and an empty ``failed_generation``. Raising the
+        budget did not move the rate, so this is not truncation. Under strict
+        structured output the model occasionally emits nothing at all, Groq
+        validates that against the schema, and the request 400s.
+
+        A user cannot be shown a plan that failed for that reason, so one in
+        five attempts arriving as "the plan generator is unavailable" is not a
+        rate the product can carry. Three attempts takes it to roughly one in
+        a hundred and twenty.
+        """
+        last: GroqResponseError | None = None
+
+        for attempt in range(MAX_ATTEMPTS):
+            # The first attempt keeps the fixed seed, which is what makes the
+            # same dish tend to produce the same calorie figure: the estimate
+            # gets stored, and a different number for the same meal reads as a
+            # bug. Retries have to move off it, because asking again with the
+            # identical seed is asking for the generation that just failed.
+            try:
+                return await self._attempt(system, user, schema, max_tokens, BASE_SEED + attempt)
+            except GroqResponseError as exc:
+                last = exc
+                if attempt + 1 >= MAX_ATTEMPTS or not _is_retryable(exc):
+                    break
+                logger.info(
+                    "Groq attempt %d of %d failed, retrying: %s",
+                    attempt + 1,
+                    MAX_ATTEMPTS,
+                    exc,
+                )
+
+        assert last is not None  # the loop cannot exit without setting it
+        logger.warning("Groq gave up after %d attempts: %s", MAX_ATTEMPTS, last)
+        raise last
+
     async def adjust_calories(self, req: CalorieAdjustRequest) -> CalorieAdjustResult:
         payload = await self._complete(
-            CALORIE_SYSTEM_PROMPT, _calorie_prompt(req), CALORIE_SCHEMA, max_tokens=256
+            CALORIE_SYSTEM_PROMPT, _calorie_prompt(req), CALORIE_SCHEMA, max_tokens=CALORIE_MAX_TOKENS
         )
 
         try:
@@ -266,7 +348,7 @@ class GroqAIService:
 
     async def generate_plan(self, req: PlanRequest) -> PlanResult:
         payload = await self._complete(
-            PLAN_SYSTEM_PROMPT, _plan_prompt(req), PLAN_SCHEMA, max_tokens=2048
+            PLAN_SYSTEM_PROMPT, _plan_prompt(req), PLAN_SCHEMA, max_tokens=PLAN_MAX_TOKENS
         )
 
         try:

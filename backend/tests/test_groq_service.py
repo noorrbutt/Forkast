@@ -347,3 +347,140 @@ async def test_the_calorie_reasoning_is_cleaned_too() -> None:
 
     assert result.reasoning == "Cream, heavy, so upper end."
 
+
+
+# A Groq 400 for the empty generation case, close enough to the real message
+# that _is_retryable is matching on what production actually sees.
+_JSON_VALIDATE_FAILED = (
+    "Error code: 400 - {'error': {'message': \"Failed to validate JSON. Please adjust "
+    "your prompt. See 'failed_generation' for more details.\", 'type': "
+    "'invalid_request_error', 'code': 'json_validate_failed', 'failed_generation': ''}}"
+)
+
+_PLAN_JSON = json.dumps(
+    {
+        "summary": "A steady week.",
+        "days": [
+            {
+                "day": "Day 1",
+                "meals": [{"slot": "breakfast", "suggestion": "Oats", "approx_calories": 300}],
+            }
+        ],
+        "nudges": ["Drink water."],
+    }
+)
+
+
+class _ScriptedCompletions:
+    """Returns a scripted outcome per call: an Exception to raise, or content."""
+
+    def __init__(self, script: list) -> None:
+        self.script = list(script)
+        self.calls: list[dict] = []
+
+    async def create(self, **kwargs):
+        self.calls.append(kwargs)
+        outcome = self.script.pop(0) if self.script else None
+        if isinstance(outcome, Exception):
+            raise outcome
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=outcome))]
+        )
+
+
+class _ScriptedClient:
+    def __init__(self, script: list) -> None:
+        self.completions = _ScriptedCompletions(script)
+        self.chat = SimpleNamespace(completions=self.completions)
+
+
+async def test_an_empty_generation_is_retried_rather_than_surfaced() -> None:
+    """Measured live at 3 failures in 15 identical calls. One in five plan
+    requests failing is not a rate the product can carry, and the failure is a
+    coin toss rather than anything wrong with the request."""
+    client = _ScriptedClient([RuntimeError(_JSON_VALIDATE_FAILED), _PLAN_JSON])
+
+    plan = await GroqAIService(client, model=MODEL).generate_plan(_plan_request())
+
+    assert plan.summary == "A steady week."
+    assert len(client.completions.calls) == 2
+
+
+async def test_a_completion_that_comes_back_blank_is_retried_too() -> None:
+    """The same underlying fault, surfaced as a 200 with no content instead of
+    as a 400."""
+    client = _ScriptedClient([None, _PLAN_JSON])
+
+    plan = await GroqAIService(client, model=MODEL).generate_plan(_plan_request())
+
+    assert plan.summary == "A steady week."
+    assert len(client.completions.calls) == 2
+
+
+async def test_the_first_attempt_keeps_the_fixed_seed() -> None:
+    """The calorie estimate gets stored against the meal, so the same dish
+    producing a different number on a later log reads as a bug."""
+    from app.services.ai.groq_service import BASE_SEED
+
+    client = _ScriptedClient([json.dumps({"calories": 700, "reasoning": "rice"})])
+
+    await GroqAIService(client, model=MODEL).adjust_calories(_calorie_request())
+
+    assert client.completions.calls[0]["seed"] == BASE_SEED
+
+
+async def test_each_retry_moves_off_the_seed_that_just_failed() -> None:
+    """Asking again with the identical seed is asking for the generation that
+    was just rejected."""
+    client = _ScriptedClient(
+        [RuntimeError(_JSON_VALIDATE_FAILED), RuntimeError(_JSON_VALIDATE_FAILED), _PLAN_JSON]
+    )
+
+    await GroqAIService(client, model=MODEL).generate_plan(_plan_request())
+
+    seeds = [call["seed"] for call in client.completions.calls]
+    assert len(seeds) == len(set(seeds)), f"a seed was reused across attempts: {seeds}"
+
+
+async def test_it_gives_up_rather_than_retrying_forever() -> None:
+    from app.services.ai.groq_service import MAX_ATTEMPTS
+
+    client = _ScriptedClient([RuntimeError(_JSON_VALIDATE_FAILED)] * 10)
+
+    with pytest.raises(GroqResponseError):
+        await GroqAIService(client, model=MODEL).generate_plan(_plan_request())
+
+    assert len(client.completions.calls) == MAX_ATTEMPTS
+
+
+async def test_a_bad_key_is_not_retried() -> None:
+    """It will fail identically every time, and retrying only makes the user
+    wait three times as long to be told."""
+    client = _ScriptedClient([RuntimeError("Error code: 401 - Invalid API Key")] * 5)
+
+    with pytest.raises(GroqResponseError):
+        await GroqAIService(client, model=MODEL).generate_plan(_plan_request())
+
+    assert len(client.completions.calls) == 1
+
+
+async def test_a_rate_limit_is_not_retried() -> None:
+    """There is no backoff here, so an immediate second call is refused as well
+    and spends the allowance doing it."""
+    client = _ScriptedClient([RuntimeError("Error code: 429 - Rate limit reached")] * 5)
+
+    with pytest.raises(GroqResponseError):
+        await GroqAIService(client, model=MODEL).generate_plan(_plan_request())
+
+    assert len(client.completions.calls) == 1
+
+
+async def test_the_plan_budget_has_room_for_the_long_tail() -> None:
+    """gpt-oss-20b is a reasoning model and spends this budget thinking. The
+    same plan prompt was measured using between 759 and 5899 completion tokens,
+    so the old 2048 ceiling truncated the slow runs into an empty reply."""
+    client = _ScriptedClient([_PLAN_JSON])
+
+    await GroqAIService(client, model=MODEL).generate_plan(_plan_request())
+
+    assert client.completions.calls[0]["max_completion_tokens"] >= 6000
