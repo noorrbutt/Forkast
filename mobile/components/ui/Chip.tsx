@@ -1,6 +1,10 @@
 import { Pressable, Text, type StyleProp, type ViewStyle } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { useTheme } from '../../theme';
+import { usePressScale } from './usePressScale';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type ChipProps = {
   label: string;
@@ -28,14 +32,19 @@ export function Chip({
   style,
 }: ChipProps) {
   const { colors, radius, spacing, type } = useTheme();
+  // Chips are the one control in the app, so this tick is most of what makes
+  // choosing a category feel physical rather than like filling in a form.
+  const { animatedStyle, onPressIn, onPressOut } = usePressScale({ disabled });
 
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ selected, disabled }}
-      style={({ pressed }) => [
+      style={({ pressed }: { pressed: boolean }) => [
         {
           borderRadius: radius.pill,
           borderWidth: 1,
@@ -43,8 +52,9 @@ export function Chip({
           backgroundColor: selected ? colors.accentSoft : colors.surfaceAlt,
           paddingVertical: compact ? spacing.sm : spacing.md - 2,
           paddingHorizontal: compact ? spacing.md : spacing.lg,
-          opacity: disabled ? 0.45 : pressed ? 0.75 : 1,
+          opacity: disabled ? 0.45 : pressed ? 0.85 : 1,
         },
+        animatedStyle,
         style,
       ]}
     >
@@ -60,6 +70,6 @@ export function Chip({
       >
         {leading ? `${leading}  ${label}` : label}
       </Text>
-    </Pressable>
+    </AnimatedPressable>
   );
 }

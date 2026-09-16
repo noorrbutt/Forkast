@@ -14,6 +14,8 @@ import {
 import { useDashboard } from '../../hooks/useInsights';
 import { describeError } from '../../lib/api';
 import { formatMinutes, formatNumber, formatRatio, labelOf } from '../../lib/format';
+import { Appear } from '../../components/ui/Appear';
+import { CountUp } from '../../components/ui/CountUp';
 import { useTheme } from '../../theme';
 
 export default function DashboardScreen() {
@@ -60,17 +62,19 @@ export default function DashboardScreen() {
 
       {data ? (
         <>
-          <Card>
-            <View style={{ gap: spacing.xs }}>
-              <SectionLabel>Total calories</SectionLabel>
-              <Text style={[type.display, { color: colors.text }]}>{formatNumber(data.total_calories)}</Text>
-              <Text style={[type.caption, { color: colors.muted }]}>
-                Across {formatNumber(data.logs_count)} logged {data.logs_count === 1 ? 'meal' : 'meals'}.
-              </Text>
-            </View>
-          </Card>
+          <Appear index={0}>
+            <Card>
+              <View style={{ gap: spacing.xs }}>
+                <SectionLabel>Total calories</SectionLabel>
+                <CountUp value={data.total_calories} style={[type.display, { color: colors.text }]} />
+                <Text style={[type.caption, { color: colors.muted }]}>
+                  Across {formatNumber(data.logs_count)} logged {data.logs_count === 1 ? 'meal' : 'meals'}.
+                </Text>
+              </View>
+            </Card>
+          </Appear>
 
-          <View style={{ flexDirection: 'row', gap: spacing.md }}>
+          <Appear index={1} style={{ flexDirection: 'row', gap: spacing.md }}>
             <StatTile
               label="Junk ratio"
               value={formatRatio(data.junk_ratio)}
@@ -78,19 +82,21 @@ export default function DashboardScreen() {
               tone={(data.junk_ratio ?? 0) > 0.5 ? 'danger' : 'success'}
             />
             <StatTile label="Meals logged" value={formatNumber(data.logs_count)} hint="this period" />
-          </View>
+          </Appear>
 
-          <View style={{ flexDirection: 'row', gap: spacing.md }}>
+          <Appear index={2} style={{ flexDirection: 'row', gap: spacing.md }}>
             <StatTile label="Top category" value={labelOf(data.top_category, 'None yet')} tone="accent" />
             <StatTile label="Top spot" value={labelOf(data.top_restaurant, 'None yet')} />
-          </View>
+          </Appear>
 
-          <Card>
-            <View style={{ gap: spacing.lg }}>
-              <SectionLabel>Calories by day</SectionLabel>
-              <CalorieBars data={data.calories_by_day ?? []} />
-            </View>
-          </Card>
+          <Appear index={3}>
+            <Card>
+              <View style={{ gap: spacing.lg }}>
+                <SectionLabel>Calories by day</SectionLabel>
+                <CalorieBars data={data.calories_by_day ?? []} />
+              </View>
+            </Card>
+          </Appear>
 
           {burnRows.length > 0 ? (
             <Card>

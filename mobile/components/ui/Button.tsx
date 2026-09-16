@@ -1,6 +1,10 @@
 import { ActivityIndicator, Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { useTheme } from '../../theme';
+import { usePressScale } from './usePressScale';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type ButtonSize = 'md' | 'lg';
@@ -28,6 +32,12 @@ export function Button({
 }: ButtonProps) {
   const { colors, radius, spacing, type } = useTheme();
   const inactive = disabled || loading;
+  // No tick on a primary action: the meaningful haptic is the success one that
+  // fires when the work completes, and two in a row reads as a stutter.
+  const { animatedStyle, onPressIn, onPressOut } = usePressScale({
+    haptic: variant !== 'primary',
+    disabled: inactive,
+  });
 
   const fills: Record<ButtonVariant, string> = {
     primary: colors.accent,
@@ -51,12 +61,14 @@ export function Button({
   const verticalPad = size === 'lg' ? spacing.lg + 2 : spacing.md + 1;
 
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
       disabled={inactive}
       accessibilityRole="button"
       accessibilityState={{ disabled: inactive, busy: loading }}
-      style={({ pressed }) => [
+      style={({ pressed }: { pressed: boolean }) => [
         {
           borderRadius: radius.pill,
           backgroundColor: fills[variant],
@@ -67,8 +79,9 @@ export function Button({
           alignItems: 'center',
           justifyContent: 'center',
           alignSelf: full ? 'stretch' : 'flex-start',
-          opacity: inactive ? 0.5 : pressed ? 0.82 : 1,
+          opacity: inactive ? 0.5 : pressed ? 0.9 : 1,
         },
+        animatedStyle,
         style,
       ]}
     >
@@ -86,6 +99,6 @@ export function Button({
           {label}
         </Text>
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 }

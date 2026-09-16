@@ -2,6 +2,7 @@ import { Tabs, type BottomTabBarProps } from 'expo-router/js-tabs';
 import { Pressable, Text, View } from 'react-native';
 
 import { Frosted } from '../../components/ui';
+import { haptics } from '../../lib/haptics';
 import { useTheme } from '../../theme';
 
 /**
@@ -40,7 +41,10 @@ function FloatingTabBar({ state, descriptors, navigation, insets }: BottomTabBar
             target: route.key,
             canPreventDefault: true,
           });
+          // Only when the tab actually changes. Bumping on a tap that goes
+          // nowhere teaches the user the feedback means nothing.
           if (!focused && !event.defaultPrevented) {
+            haptics.tap();
             // NavigationHelpers types navigate against a generic param list, so
             // the concrete route name and params need a widening cast here.
             const navigate = navigation.navigate as (name: string, params?: object) => void;

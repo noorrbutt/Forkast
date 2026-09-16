@@ -8,6 +8,7 @@ import { useCategories, useCuisines, useSearch } from '../../hooks/useCatalog';
 import { useCreateLog } from '../../hooks/useLogs';
 import { useRestaurants } from '../../hooks/useRestaurants';
 import { describeError } from '../../lib/api';
+import { haptics } from '../../lib/haptics';
 import { FRIEND_LABELS, SERVING_LABELS, formatNumber } from '../../lib/format';
 import {
   FRIEND_SCALES,
@@ -89,7 +90,12 @@ export default function LogScreen() {
     if (area.trim().length > 0) input.area = area.trim();
 
     createLog.mutate(input, {
-      onSuccess: (log) => setSaved(log),
+      // The moment worth celebrating, and the only success haptic in the app.
+      onSuccess: (log) => {
+        haptics.success();
+        setSaved(log);
+      },
+      onError: () => haptics.error(),
     });
   };
 
