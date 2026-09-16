@@ -12,23 +12,41 @@ export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [problem, setProblem] = useState<string | null>(null);
   const login = useLogin();
 
-  const canSubmit = email.trim().length > 0 && password.length > 0 && !login.isPending;
-
+  /**
+   * The button stays live even with the fields empty, and says what is missing
+   * when pressed.
+   *
+   * Disabling it until both fields were filled hid the affordance behind the
+   * very action it existed to invite: the disabled fill dropped to 1.39:1 in
+   * light theme, so someone looking at the screen before typing saw no button
+   * at all and reasonably concluded there wasn't one.
+   */
   const submit = () => {
-    if (!canSubmit) return;
+    if (login.isPending) return;
+    if (!email.trim()) {
+      setProblem('Enter the email you signed up with.');
+      return;
+    }
+    if (!password) {
+      setProblem('Enter your password.');
+      return;
+    }
+    setProblem(null);
     login.mutate({ email: email.trim(), password });
   };
 
+  const message = problem ?? (login.isError ? describeError(login.error) : null);
+
   return (
-    <Screen scroll bottomInset={spacing.xxl}>
-      <View style={{ gap: spacing.xl, paddingTop: spacing.lg }}>
+    <Screen scroll bottomInset={spacing.xxl} title="Sign in" onBack={() => router.back()}>
+      <View style={{ gap: spacing.xl, paddingTop: spacing.sm }}>
         <View style={{ gap: spacing.sm }}>
-          <Text style={[type.label, { color: colors.accent }]}>Forkast</Text>
-          <Text style={[type.display, { color: colors.text }]}>Eat{'\n'}on record.</Text>
+          <Text style={[type.display, { color: colors.text }]}>Welcome{'\n'}back.</Text>
           <Text style={[type.body, { color: colors.muted }]}>
-            Log what you eat, see the pattern, keep the fun in it.
+            Pick up where your last meal left off.
           </Text>
         </View>
 
@@ -36,7 +54,10 @@ export default function LoginScreen() {
           <Field
             label="Email"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(next) => {
+              setProblem(null);
+              setEmail(next);
+            }}
             placeholder="you@example.com"
             autoCapitalize="none"
             autoCorrect={false}
@@ -47,7 +68,10 @@ export default function LoginScreen() {
           <Field
             label="Password"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(next) => {
+              setProblem(null);
+              setPassword(next);
+            }}
             placeholder="Your password"
             autoCapitalize="none"
             autoCorrect={false}
@@ -57,31 +81,24 @@ export default function LoginScreen() {
             onSubmitEditing={submit}
           />
 
-          {login.isError ? (
-            <Text style={[type.caption, { color: colors.danger }]}>{describeError(login.error)}</Text>
-          ) : null}
+          {message ? <Text style={[type.caption, { color: colors.danger }]}>{message}</Text> : null}
 
-          {/*
-            Both ways in are buttons, side by side, and both sit above the fold
-            before the keyboard opens. This used to be one button plus a caption
-            sized text link at the bottom of a scrolling screen, which on a phone
-            put the only route to registration off screen. Someone arriving
-            without an account could not find how to make one.
-          */}
+          <Button label="Sign in" size="lg" full onPress={submit} loading={login.isPending} />
+        </View>
+
+        <View style={{ gap: spacing.sm, alignItems: 'stretch' }}>
+          <Text style={[type.caption, { color: colors.muted, textAlign: 'center' }]}>
+            New to Forkast?
+          </Text>
+          {/* Labelled with the word people actually look for. "Create an
+              account" was the old label, and it is not the phrase anyone scans
+              a screen hunting for. */}
           <Button
-            label="Sign in"
-            size="lg"
-            full
-            onPress={submit}
-            loading={login.isPending}
-            disabled={!canSubmit}
-          />
-          <Button
-            label="Create an account"
+            label="Sign up"
             variant="secondary"
             size="lg"
             full
-            onPress={() => router.push('/register')}
+            onPress={() => router.replace('/register')}
             disabled={login.isPending}
           />
         </View>

@@ -29,7 +29,9 @@ function RootNavigator() {
     const inAuthGroup = segments[0] === '(auth)';
 
     if (!signedIn && !inAuthGroup) {
-      router.replace('/login');
+      // The welcome screen, not the form. Someone who has never used
+      // Forkast should be told what it is before being asked who they are.
+      router.replace('/welcome');
     } else if (signedIn && inAuthGroup) {
       router.replace('/');
     }

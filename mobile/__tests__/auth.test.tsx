@@ -17,6 +17,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import LoginScreen from '../app/(auth)/login';
 import RegisterScreen from '../app/(auth)/register';
+import WelcomeScreen from '../app/(auth)/welcome';
 import { AuthProvider, useAuth } from '../hooks/useAuth';
 import { ThemeProvider } from '../theme';
 
@@ -108,57 +109,81 @@ beforeEach(() => {
   mockedApi.post.mockResolvedValue({ data: STORED });
 });
 
-describe('finding the way in', () => {
-  it('offers signing in and creating an account as two buttons', async () => {
-    const { getByRole } = render(<LoginScreen />, { wrapper });
+describe('the welcome screen', () => {
+  it('says what the app is before asking who you are', async () => {
+    const { getByText } = render(<WelcomeScreen />, { wrapper });
 
-    // Both by role, not by text: the complaint was that one of these was a
-    // caption sized Link, which reads as prose rather than as something to
-    // press, and a text query would have passed against it just the same.
-    await waitFor(() => expect(getByRole('button', { name: 'Sign in' })).toBeTruthy());
-    expect(getByRole('button', { name: 'Create an account' })).toBeTruthy();
+    await waitFor(() => expect(getByText(/Welcome/)).toBeTruthy());
+    expect(getByText('Eat now. Explain later.')).toBeTruthy();
+    // The three things the app actually does, which the login form said nothing about.
+    expect(getByText('Log it in seconds')).toBeTruthy();
+    expect(getByText('See it coming')).toBeTruthy();
+    expect(getByText('Get a plan that fits')).toBeTruthy();
   });
 
-  it('takes you to registration when you press it', async () => {
-    const { getByRole } = render(<LoginScreen />, { wrapper });
-    await waitFor(() => expect(getByRole('button', { name: 'Create an account' })).toBeTruthy());
+  it('offers both doors as buttons', async () => {
+    const { getByRole } = render(<WelcomeScreen />, { wrapper });
 
-    fireEvent.press(getByRole('button', { name: 'Create an account' }));
+    await waitFor(() => expect(getByRole('button', { name: 'Get started' })).toBeTruthy());
+    expect(getByRole('button', { name: 'Sign in' })).toBeTruthy();
+  });
 
+  it('sends you to sign up and to sign in', async () => {
+    const { getByRole } = render(<WelcomeScreen />, { wrapper });
+    await waitFor(() => expect(getByRole('button', { name: 'Get started' })).toBeTruthy());
+
+    fireEvent.press(getByRole('button', { name: 'Get started' }));
     expect(mockPush).toHaveBeenCalledWith('/register');
+
+    fireEvent.press(getByRole('button', { name: 'Sign in' }));
+    expect(mockPush).toHaveBeenCalledWith('/login');
+  });
+});
+
+describe('finding the way in', () => {
+  it('uses the words people scan for', async () => {
+    // "Create an account" was the old label. Nobody hunts a screen for that
+    // phrase; the reported complaint was literally "no button that says signup
+    // or sign in".
+    const login = render(<LoginScreen />, { wrapper });
+    await waitFor(() => expect(login.getByRole('button', { name: 'Sign in' })).toBeTruthy());
+    expect(login.getByRole('button', { name: 'Sign up' })).toBeTruthy();
+    expect(login.queryByText('Create an account')).toBeNull();
+
+    const reg = render(<RegisterScreen />, { wrapper });
+    await waitFor(() => expect(reg.getByRole('button', { name: 'Sign up' })).toBeTruthy());
+    expect(reg.getByRole('button', { name: 'Sign in' })).toBeTruthy();
   });
 
-  it('keeps the way back to signing in a button too', async () => {
-    const { getByRole } = render(<RegisterScreen />, { wrapper });
-
-    await waitFor(() => expect(getByRole('button', { name: 'Create account' })).toBeTruthy());
-    fireEvent.press(getByRole('button', { name: 'I already have an account' }));
-
-    expect(mockBack).toHaveBeenCalled();
-  });
-
-  it('still reaches login when registration was the entry route', async () => {
-    mockCanGoBack = false;
-    const { getByRole } = render(<RegisterScreen />, { wrapper });
-    await waitFor(() =>
-      expect(getByRole('button', { name: 'I already have an account' })).toBeTruthy(),
-    );
-
-    fireEvent.press(getByRole('button', { name: 'I already have an account' }));
-
-    // router.back() with nothing behind it is a no-op, which would strand
-    // someone who deep linked straight to registration.
-    expect(mockBack).not.toHaveBeenCalled();
-    expect(mockReplace).toHaveBeenCalledWith('/login');
-  });
-
-  it('will not submit an empty form', async () => {
+  it('keeps the submit button live with the form empty', async () => {
+    // It used to be disabled until both fields were filled, which meant the
+    // only thing that looked like a button appeared after the action it was
+    // there to invite. The disabled fill measured 1.39:1 in light theme.
     const { getByRole } = render(<LoginScreen />, { wrapper });
+
+    await waitFor(() => expect(getByRole('button', { name: 'Sign in' })).toBeTruthy());
+    expect(getByRole('button', { name: 'Sign in' }).props.accessibilityState.disabled).toBe(false);
+  });
+
+  it('says what is missing instead of silently doing nothing', async () => {
+    const { getByRole, getByText } = render(<LoginScreen />, { wrapper });
     await waitFor(() => expect(getByRole('button', { name: 'Sign in' })).toBeTruthy());
 
     fireEvent.press(getByRole('button', { name: 'Sign in' }));
 
     expect(mockedApi.post).not.toHaveBeenCalled();
+    expect(getByText(/Enter the email/)).toBeTruthy();
+  });
+
+  it('asks for the password once the email is there', async () => {
+    const { getByRole, getByPlaceholderText, getByText } = render(<LoginScreen />, { wrapper });
+    await waitFor(() => expect(getByPlaceholderText('you@example.com')).toBeTruthy());
+
+    fireEvent.changeText(getByPlaceholderText('you@example.com'), 'demo@forkast.app');
+    fireEvent.press(getByRole('button', { name: 'Sign in' }));
+
+    expect(mockedApi.post).not.toHaveBeenCalled();
+    expect(getByText(/Enter your password/)).toBeTruthy();
   });
 
   it('signs in with what was typed', async () => {
@@ -179,15 +204,44 @@ describe('finding the way in', () => {
     );
   });
 
+  it('swaps between the two forms rather than stacking them', async () => {
+    const { getByRole } = render(<LoginScreen />, { wrapper });
+    await waitFor(() => expect(getByRole('button', { name: 'Sign up' })).toBeTruthy());
+
+    fireEvent.press(getByRole('button', { name: 'Sign up' }));
+
+    // replace, not push: pushing would grow a login/register/login stack that
+    // the back gesture then has to walk all the way down.
+    expect(mockReplace).toHaveBeenCalledWith('/register');
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
   it('holds registration back until the password is long enough', async () => {
-    const { getByRole, getByPlaceholderText } = render(<RegisterScreen />, { wrapper });
+    const { getByRole, getByPlaceholderText, getByText } = render(<RegisterScreen />, { wrapper });
     await waitFor(() => expect(getByPlaceholderText('you@example.com')).toBeTruthy());
 
     fireEvent.changeText(getByPlaceholderText('you@example.com'), 'new@forkast.app');
     fireEvent.changeText(getByPlaceholderText('At least 8 characters'), 'short');
-    fireEvent.press(getByRole('button', { name: 'Create account' }));
+    fireEvent.press(getByRole('button', { name: 'Sign up' }));
 
     expect(mockedApi.post).not.toHaveBeenCalled();
+    expect(getByText(/at least 8 characters/i)).toBeTruthy();
+  });
+
+  it('registers once the password is long enough', async () => {
+    const { getByRole, getByPlaceholderText } = render(<RegisterScreen />, { wrapper });
+    await waitFor(() => expect(getByPlaceholderText('you@example.com')).toBeTruthy());
+
+    fireEvent.changeText(getByPlaceholderText('you@example.com'), 'new@forkast.app');
+    fireEvent.changeText(getByPlaceholderText('At least 8 characters'), 'longenough');
+    fireEvent.press(getByRole('button', { name: 'Sign up' }));
+
+    await waitFor(() =>
+      expect(mockedApi.post).toHaveBeenCalledWith('/auth/register', {
+        email: 'new@forkast.app',
+        password: 'longenough',
+      }),
+    );
   });
 });
 
