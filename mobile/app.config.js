@@ -39,7 +39,11 @@ const config = {
       "plugins": [
         "expo-router",
         "expo-status-bar",
-        "expo-secure-store"
+        "expo-secure-store",
+        // Pulled in by @expo/vector-icons. Listed explicitly so a native build
+        // bundles the icon fonts rather than shipping an app full of blanks.
+        "expo-font",
+        "expo-asset"
       ],
       "scheme": "forkast"
     };

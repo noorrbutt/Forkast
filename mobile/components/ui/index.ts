@@ -5,6 +5,7 @@ export { Empty } from './Empty';
 export { Field } from './Field';
 export { ErrorState } from './ErrorState';
 export { Frosted } from './Frosted';
+export { Icon, type IconName } from './Icon';
 export { Loading } from './Loading';
 export { Screen } from './Screen';
 export { SectionLabel } from './SectionLabel';
