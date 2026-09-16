@@ -48,7 +48,11 @@ with httpx.Client(timeout=30.0) as http:
     section("health")
     r = http.get(f"{BASE}/health")
     check("health returns ok", r.status_code == 200 and r.json()["status"] == "ok", r.text)
-    check("ai provider is the stub", r.json().get("ai_provider") == "fake", r.text)
+    provider = r.json().get("ai_provider")
+    # Not pinned to one value. Both are valid configurations, and the smoke test
+    # should work against whichever the server is actually running.
+    check("ai provider is a known one", provider in {"fake", "groq"}, str(provider))
+    print(f"        (running with ai_provider={provider})")
 
     section("auth")
     email = f"smoke-{int(time.time())}@forkast.app"
