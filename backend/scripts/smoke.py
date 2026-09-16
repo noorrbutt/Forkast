@@ -57,6 +57,21 @@ with httpx.Client(timeout=30.0) as http:
     section("auth")
     email = f"smoke-{int(time.time())}@forkast.app"
     r = http.post(f"{API}/auth/register", json={"email": email, "password": "password123"})
+
+    if r.status_code == 429:
+        # Registration is deliberately limited to a handful per window per
+        # address, and this script spends two of them. Running it back to back
+        # therefore trips it, which is the limiter working rather than a fault.
+        # Reporting that as a failed check would be misleading, and every
+        # subsequent check would fail for a reason that has nothing to do with
+        # what it tests.
+        wait = r.headers.get("Retry-After", "?")
+        print("")
+        print(f"  Rate limited before the run could start. Retry in {wait}s.")
+        print("  This is the limiter behaving correctly, not a broken server.")
+        print("  Raise REGISTER_RATE_LIMIT in backend/.env if you need to iterate faster.")
+        raise SystemExit(2)
+
     check("register returns 201", r.status_code == 201, r.text)
     tokens = r.json()
     access, refresh_token = tokens["access_token"], tokens["refresh_token"]
@@ -78,6 +93,20 @@ with httpx.Client(timeout=30.0) as http:
 
     r = http.post(f"{API}/auth/refresh", json={"refresh_token": refresh_token})
     check("the old refresh token is dead", r.status_code == 401, r.text)
+
+    # Replaying a spent refresh token is treated as evidence the chain leaked,
+    # so the whole session is revoked, which is RFC 9700 section 4.14.2 and the
+    # correct behaviour. It also means the tokens held above are now dead, so
+    # the rest of this run needs a fresh sign in. Checking that they really did
+    # die is worth doing explicitly rather than leaving implied.
+    r = http.get(f"{API}/auth/me", headers=auth)
+    check("replaying a spent token kills the whole session", r.status_code == 401, r.text)
+
+    r = http.post(f"{API}/auth/login", json={"email": email, "password": "password123"})
+    check("signing in again after a reuse revocation works", r.status_code == 200, r.text)
+    tokens = r.json()
+    access, rotated = tokens["access_token"], tokens["refresh_token"]
+    auth = {"Authorization": f"Bearer {access}"}
 
     r = http.get(f"{API}/auth/me", headers=auth)
     check("auth/me returns the user", r.status_code == 200 and r.json()["email"] == email, r.text)
