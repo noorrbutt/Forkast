@@ -149,3 +149,23 @@ async def test_a_real_timezone_is_accepted(auth_client: AsyncClient, timezone: s
     assert response.status_code == 200
     assert response.json()["timezone"] == timezone
 
+
+async def test_empty_states_are_not_labelled_as_sample_data(
+    auth_client: AsyncClient, monkeypatch
+) -> None:
+    """With no snapshot the figures are genuinely empty, not placeholders.
+
+    The client shows its sample data badge whenever the marker is present, so
+    labelling a real empty state as a seed snapshot would put the badge on a
+    screen that is simply showing zeroes.
+    """
+    monkeypatch.setattr("app.api.v1.insights.read_snapshot", lambda: None)
+
+    dashboard = (await auth_client.get("/api/v1/dashboard")).json()
+    streaks = (await auth_client.get("/api/v1/streaks")).json()
+
+    assert dashboard["_source"] is None
+    assert dashboard["logs_count"] == 0
+    assert streaks["_source"] is None
+    assert streaks["current_streak"] == 0
+

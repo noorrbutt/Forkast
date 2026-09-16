@@ -37,7 +37,11 @@ AIDep = Annotated[AIService, Depends(get_ai_service)]
 # enough to keep the prompt cheap once a real model is behind it.
 PLAN_LOG_WINDOW = 30
 
+# source is None here on purpose. These are genuine empty values because the
+# seed has not been run, not sample data, and the client badge keys off the
+# marker being present.
 _EMPTY_DASHBOARD = DashboardOut(
+    source=None,
     junk_ratio=0.0,
     total_calories=0,
     logs_count=0,
@@ -81,6 +85,7 @@ async def streaks(user: CurrentUser) -> StreaksOut:
     snapshot = read_snapshot()
     if snapshot is None or "streaks" not in snapshot:
         return StreaksOut(
+            source=None,
             current_streak=0,
             longest_streak=0,
             last_junk_date=None,

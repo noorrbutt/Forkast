@@ -427,7 +427,7 @@ def validate() -> None:
     """Assert the invariants the database would otherwise catch at seed time.
 
     Nothing calls this at import time on purpose: importing seed data must stay
-    free. The test suite calls it, so a bad slug fails in CI rather than
+    free. The test suite calls it, so a bad slug fails in the test suite rather than
     halfway through a migration.
     """
     cuisine_slugs: set[str] = set()

@@ -110,7 +110,7 @@ export default function LogScreen() {
         </Card>
 
         <Text style={[type.body, { color: colors.muted }]}>
-          That is on the board. Your streak and dashboard have already caught up.
+          That is on the board. The dashboard still shows sample figures for now.
         </Text>
 
         <View style={{ gap: spacing.md }}>

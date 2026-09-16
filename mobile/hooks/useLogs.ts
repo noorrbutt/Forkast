@@ -24,7 +24,9 @@ export function useCreateLog() {
       return response.data;
     },
     onSuccess: () => {
-      // The server recomputes calories, streaks and the dashboard, so drop all three.
+      // Drop all three so the client is ready for the day these are computed
+      // for real. Today the dashboard and streaks are seed snapshots and do
+      // not move when a log is added.
       void queryClient.invalidateQueries({ queryKey: ['logs'] });
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       void queryClient.invalidateQueries({ queryKey: ['streaks'] });
