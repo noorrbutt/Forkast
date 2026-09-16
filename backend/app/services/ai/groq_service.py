@@ -105,6 +105,47 @@ PLAN_SCHEMA: dict[str, Any] = {
 }
 
 
+# Typography the model reaches for and this product does not want. Left alone,
+# these land in stored plan text and in the app's own copy. An em dash is the
+# one that matters here; the rest come along for free because they break naive
+# encodings on Windows and look inconsistent next to hand written strings.
+_TYPOGRAPHY = {
+    "—": ", ",  # em dash, almost always joining two clauses
+    "–": ", ",  # en dash
+    "―": ", ",  # horizontal bar
+    "‐": "-",  # hyphen
+    "‑": "-",  # non-breaking hyphen, as in "three-day"
+    "‒": "-",  # figure dash
+    "−": "-",  # minus sign
+    "‘": "'",
+    "’": "'",
+    "“": '"',
+    "”": '"',
+    "…": "...",
+    " ": " ",  # non-breaking space
+}
+
+
+def normalise_text(value: str) -> str:
+    """Rewrite the model's typography into plain ASCII punctuation.
+
+    A prompt asking for this is a suggestion; a replacement table is a
+    guarantee. The model produced em dashes in four of five nudges on the first
+    live run, so asking nicely was never going to be enough.
+
+    Spacing is tidied afterwards because an em dash is often written tight
+    against both words, and a naive swap for ", " would otherwise leave
+    "week ,maybe".
+    """
+    for bad, good in _TYPOGRAPHY.items():
+        value = value.replace(bad, good)
+
+    value = value.replace(" ,", ",")
+    while ",  " in value:
+        value = value.replace(",  ", ", ")
+    return value.strip()
+
+
 class GroqResponseError(RuntimeError):
     """Groq answered, but not with something usable."""
 
@@ -217,7 +258,11 @@ class GroqAIService:
                 clamped,
             )
 
-        return CalorieAdjustResult(calories=clamped, reasoning=payload.get("reasoning"))
+        reasoning = payload.get("reasoning")
+        return CalorieAdjustResult(
+            calories=clamped,
+            reasoning=normalise_text(reasoning) if reasoning else None,
+        )
 
     async def generate_plan(self, req: PlanRequest) -> PlanResult:
         payload = await self._complete(
@@ -225,6 +270,16 @@ class GroqAIService:
         )
 
         try:
-            return PlanResult.model_validate({**payload, "model": self._model})
+            plan = PlanResult.model_validate({**payload, "model": self._model})
         except Exception as exc:
             raise GroqResponseError(f"Groq plan did not match the expected shape: {exc}") from exc
+
+        # Every string the user will read passes through the same filter.
+        plan.summary = normalise_text(plan.summary)
+        plan.nudges = [normalise_text(n) for n in plan.nudges]
+        for day in plan.days:
+            day.day = normalise_text(day.day)
+            for meal in day.meals:
+                meal.slot = normalise_text(meal.slot)
+                meal.suggestion = normalise_text(meal.suggestion)
+        return plan

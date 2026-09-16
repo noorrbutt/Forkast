@@ -19,6 +19,7 @@ from app.services.ai.groq_service import (
     PLAN_SCHEMA,
     GroqAIService,
     GroqResponseError,
+    normalise_text,
 )
 from app.services.ai.schemas import (
     CalorieAdjustRequest,
@@ -274,4 +275,75 @@ async def test_a_failed_estimate_does_not_leave_a_half_written_log(auth_client) 
         app.dependency_overrides.pop(get_ai_service, None)
 
     assert (await auth_client.get("/api/v1/logs")).json()["total"] == before
+
+
+# --- typography ---
+#
+# Not a style nit. On the first live run the model produced em dashes in four of
+# five nudges, and that text is stored and shown to the user.
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("pizza this week—maybe try veggie", "pizza this week, maybe try veggie"),
+        ("a three‑day menu", "a three-day menu"),
+        ("You’re cutting", "You're cutting"),
+        ("lemon‑olive oil", "lemon-olive oil"),
+        ("nothing to change here", "nothing to change here"),
+        ("spaced — dash", "spaced, dash"),
+    ],
+)
+def test_the_models_typography_is_rewritten(raw: str, expected: str) -> None:
+    assert normalise_text(raw) == expected
+
+
+def test_nothing_above_the_ascii_punctuation_range_survives() -> None:
+    messy = "love—pizza, three‑day, “quoted”, it’s… done now"
+    cleaned = normalise_text(messy)
+    assert not [c for c in cleaned if ord(c) > 0x2000], cleaned
+
+
+async def test_a_plan_is_cleaned_before_it_is_stored() -> None:
+    """Every string the user reads goes through the filter, not just the summary."""
+    client = _FakeClient(
+        json.dumps(
+            {
+                "summary": "A three‑day plan—lighter lunches.",
+                "days": [
+                    {
+                        "day": "Mon‑Tue",
+                        "meals": [
+                            {
+                                "slot": "Lunch",
+                                "suggestion": "Grilled boti—no naan.",
+                                "approx_calories": 600,
+                            }
+                        ],
+                    }
+                ],
+                "nudges": ["Pizza twice—try a veggie one."],
+            }
+        )
+    )
+
+    plan = await GroqAIService(client, model=MODEL).generate_plan(_plan_request())
+
+    everything = " ".join(
+        [plan.summary, *plan.nudges]
+        + [d.day for d in plan.days]
+        + [m.suggestion for d in plan.days for m in d.meals]
+    )
+    assert not [c for c in everything if ord(c) > 0x2000], everything
+    assert "three-day" in plan.summary
+
+
+async def test_the_calorie_reasoning_is_cleaned_too() -> None:
+    client = _FakeClient(
+        json.dumps({"calories": 700, "reasoning": "Cream—heavy, so upper end."})
+    )
+
+    result = await GroqAIService(client, model=MODEL).adjust_calories(_calorie_request())
+
+    assert result.reasoning == "Cream, heavy, so upper end."
 

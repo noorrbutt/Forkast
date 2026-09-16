@@ -16,6 +16,8 @@ Rules:
 - Skew high for cream, butter, cheese, frying, or heavy gravy.
 - Skew low for grilled, steamed, broth-based, or vegetable-forward dishes.
 - If the dish name tells you nothing useful, return the midpoint of the range.
+- Write the reasoning with plain ASCII punctuation: commas rather than em
+  dashes, plain hyphens, straight quotes.
 """
 
 PLAN_SYSTEM_PROMPT = """\
@@ -32,4 +34,7 @@ humour rather than as a warning.
 
 Also return two to four short behavioural nudges, each grounded in a specific
 pattern you can see in the logs (for example "pizza four times this week").
+
+Write with plain ASCII punctuation only. Use commas rather than em dashes, plain
+hyphens, and straight quotes.
 """

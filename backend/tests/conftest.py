@@ -40,6 +40,8 @@ sys.path.insert(0, str(BACKEND_DIR))
 from app.config import get_settings  # noqa: E402
 from app.db import get_session  # noqa: E402
 from app.main import app  # noqa: E402
+from app.services.ai.deps import get_ai_service  # noqa: E402
+from app.services.ai.fake import DeterministicAIService  # noqa: E402
 
 TEST_DATABASE_URL = get_settings().test_database_url
 
@@ -171,3 +173,20 @@ async def auth_client(client: AsyncClient) -> AsyncClient:
     tokens = response.json()
     client.headers["Authorization"] = f"Bearer {tokens['access_token']}"
     return client
+
+
+@pytest.fixture(autouse=True)
+def deterministic_ai() -> AsyncIterator[None]:
+    """Force the local estimator for every test, whatever .env says.
+
+    Without this the suite resolves the provider from configuration, so setting
+    AI_PROVIDER=groq for real use would silently point 160 tests at a paid API:
+    slow, billable, flaky, and dependent on a network. A test that needs a
+    different implementation overrides this one for its own duration.
+    """
+    app.dependency_overrides[get_ai_service] = DeterministicAIService
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(get_ai_service, None)
+
