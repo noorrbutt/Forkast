@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, Text, View, type StyleProp, type ViewStyl
 import Animated from 'react-native-reanimated';
 
 import { useTheme } from '../../theme';
+import { Icon, type IconName } from './Icon';
 import { usePressScale } from './usePressScale';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -22,8 +23,8 @@ type ButtonProps = {
   /** Stretch to the container width. Shorthand for align="stretch". */
   full?: boolean;
   align?: ButtonAlign;
-  /** Rendered before the label. A single glyph, not a sentence. */
-  icon?: string;
+  /** Rendered before the label, from the shared icon vocabulary. */
+  icon?: IconName;
   accessibilityHint?: string;
   style?: StyleProp<ViewStyle>;
 };
@@ -133,9 +134,7 @@ export function Button({
         </View>
       ) : (
         <>
-          {icon ? (
-            <Text style={[size === 'lg' ? type.subtitle : type.body, { color: ink }]}>{icon}</Text>
-          ) : null}
+          {icon ? <Icon name={icon} size={size === 'lg' ? 19 : 17} color={ink} /> : null}
           <Text style={[size === 'lg' ? type.subtitle : type.body, { color: ink, fontWeight: '600' }]}>
             {label}
           </Text>

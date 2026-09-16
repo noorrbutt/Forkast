@@ -137,7 +137,18 @@ export default function ProfileScreen() {
         </>
       ) : null}
 
-      <Button label="Sign out" variant="danger" size="lg" full onPress={() => void signOut()} />
+      {/* Centred at its natural width rather than stretched across the screen.
+          Signing out is a rare, destructive action, and a full bleed bar gave
+          it more weight than anything else on a tab that has no primary
+          action at all. */}
+      <Button
+        label="Sign out"
+        icon="signOut"
+        variant="danger"
+        size="lg"
+        align="center"
+        onPress={() => void signOut()}
+      />
 
       <Text style={[type.labelSoft, { color: colors.muted, textAlign: 'center' }]}>
         Forkast {appVersion}
