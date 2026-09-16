@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from httpx import AsyncClient
 
 from app.schemas.insights import PLACEHOLDER_SOURCE
@@ -133,3 +134,18 @@ async def test_plans_are_private_to_their_owner(client: AsyncClient) -> None:
         "/api/v1/plans", headers={"Authorization": f"Bearer {second['access_token']}"}
     )
     assert theirs.json() == []
+
+
+@pytest.mark.parametrize("timezone", ["Not/A_Real_Zone", "", "   ", "Mars/Olympus"])
+async def test_an_unusable_timezone_is_rejected(auth_client: AsyncClient, timezone: str) -> None:
+    """Streaks bucket logs into days using this value, so a bad string here
+    would fail later inside a feature that looks unrelated."""
+    assert (await auth_client.patch("/api/v1/me", json={"timezone": timezone})).status_code == 422
+
+
+@pytest.mark.parametrize("timezone", ["Asia/Karachi", "Asia/Dubai", "UTC", "Europe/London"])
+async def test_a_real_timezone_is_accepted(auth_client: AsyncClient, timezone: str) -> None:
+    response = await auth_client.patch("/api/v1/me", json={"timezone": timezone})
+    assert response.status_code == 200
+    assert response.json()["timezone"] == timezone
+

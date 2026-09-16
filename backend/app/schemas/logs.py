@@ -37,6 +37,12 @@ class FoodLogCreate(BaseModel):
         return self
 
 
+# Columns the database declares NOT NULL. Omitting them in a PATCH means "leave
+# alone", but sending an explicit null is a client mistake and has to be a 422
+# rather than an integrity error surfacing as a 500.
+NON_NULLABLE_FIELDS = frozenset({"dish_name", "category_id", "rating", "serving_size"})
+
+
 class FoodLogUpdate(BaseModel):
     dish_name: str | None = Field(default=None, min_length=1, max_length=200)
     category_id: int | None = Field(default=None, ge=1, le=SMALLINT_MAX)
@@ -46,6 +52,17 @@ class FoodLogUpdate(BaseModel):
     fun_scale: int | None = Field(default=None, ge=1, le=5)
     friend_scale: FriendScale | None = None
     serving_size: ServingSize | None = None
+
+    @model_validator(mode="after")
+    def _reject_explicit_nulls(self) -> FoodLogUpdate:
+        nulled = sorted(
+            name
+            for name in self.model_fields_set & NON_NULLABLE_FIELDS
+            if getattr(self, name) is None
+        )
+        if nulled:
+            raise ValueError(f"these fields cannot be set to null: {', '.join(nulled)}")
+        return self
 
 
 class FoodLogOut(BaseModel):

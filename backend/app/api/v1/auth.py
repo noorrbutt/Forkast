@@ -12,6 +12,7 @@ import datetime as dt
 
 from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import CurrentUser, SessionDep
 from app.models import RefreshToken, User
@@ -63,7 +64,18 @@ async def register(payload: RegisterRequest, session: SessionDep) -> TokenPair:
 
     user = User(email=email, password_hash=hash_password(payload.password))
     session.add(user)
-    await session.flush()
+
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        # The check above is not atomic. Two simultaneous registrations for the
+        # same address both pass it and the unique index on lower(email) catches
+        # the loser, which should still read as a conflict rather than a 500.
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with that email already exists",
+        ) from exc
 
     return await _issue_tokens(session, user)
 

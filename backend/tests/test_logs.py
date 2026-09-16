@@ -281,3 +281,73 @@ async def test_one_user_cannot_see_or_touch_another_users_log(client: AsyncClien
         await client.delete(f"{LOGS}/{created['id']}", headers=stranger_headers)
     ).status_code == 404
     assert (await client.get(LOGS, headers=stranger_headers)).json()["total"] == 0
+
+
+async def test_an_unknown_restaurant_id_is_rejected(auth_client: AsyncClient) -> None:
+    """Without validation the value reaches the foreign key and returns a 500."""
+    category = await _a_category(auth_client)
+
+    response = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "ghost restaurant",
+            "category_id": category["id"],
+            "restaurant_id": "00000000-0000-0000-0000-000000000000",
+            "rating": 4,
+            "serving_size": "medium",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("field", ["dish_name", "category_id", "rating", "serving_size"])
+async def test_patching_a_non_nullable_field_to_null_is_a_client_error(
+    auth_client: AsyncClient, field: str
+) -> None:
+    """Omitting a field means leave it alone. Sending an explicit null is a
+    mistake, and used to reach the database and return a 500."""
+    category = await _a_category(auth_client)
+    created = (
+        await auth_client.post(
+            LOGS,
+            json={
+                "dish_name": "nullable probe",
+                "category_id": category["id"],
+                "rating": 4,
+                "serving_size": "medium",
+            },
+        )
+    ).json()
+
+    response = await auth_client.patch(f"{LOGS}/{created['id']}", json={field: None})
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("field", ["fun_scale", "friend_scale", "area"])
+async def test_patching_a_nullable_field_to_null_still_clears_it(
+    auth_client: AsyncClient, field: str
+) -> None:
+    """The guard above must not block legitimately clearing an optional field."""
+    category = await _a_category(auth_client)
+    created = (
+        await auth_client.post(
+            LOGS,
+            json={
+                "dish_name": "clearable",
+                "category_id": category["id"],
+                "rating": 4,
+                "fun_scale": 5,
+                "friend_scale": "squad",
+                "area": "Clifton",
+                "serving_size": "medium",
+            },
+        )
+    ).json()
+
+    response = await auth_client.patch(f"{LOGS}/{created['id']}", json={field: None})
+
+    assert response.status_code == 200
+    assert response.json()[field] is None
+

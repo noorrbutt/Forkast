@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import func, or_, select
 
 from app.api.deps import CurrentUser, SessionDep
@@ -58,6 +58,11 @@ async def search(
     score.
     """
     term = q.strip()
+    if not term:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Search query cannot be blank",
+        )
     pattern = f"%{term}%"
 
     cuisine_stmt = (
@@ -149,8 +154,10 @@ async def upsert_restaurant(
     created_by,
     latitude=None,
     longitude=None,
-) -> Restaurant:
+) -> tuple[Restaurant, bool]:
     """Find a restaurant by case insensitive name and area, or create it.
+
+    Returns (restaurant, created).
 
     Mirrors the uq_restaurants_name_area_lower index exactly, including the
     coalesce on area, so a lookup miss here means the insert will genuinely
@@ -170,7 +177,7 @@ async def upsert_restaurant(
             existing.latitude = latitude
         if longitude is not None and existing.longitude is None:
             existing.longitude = longitude
-        return existing
+        return existing, False
 
     restaurant = Restaurant(
         name=name.strip(),
@@ -181,14 +188,14 @@ async def upsert_restaurant(
     )
     session.add(restaurant)
     await session.flush()
-    return restaurant
+    return restaurant, True
 
 
 @router.post("/restaurants", response_model=RestaurantOut, status_code=status.HTTP_201_CREATED)
 async def create_restaurant(
-    payload: RestaurantCreate, session: SessionDep, user: CurrentUser
+    payload: RestaurantCreate, session: SessionDep, user: CurrentUser, response: Response
 ) -> Restaurant:
-    restaurant = await upsert_restaurant(
+    restaurant, created = await upsert_restaurant(
         session,
         name=payload.name,
         area=payload.area,
@@ -197,4 +204,8 @@ async def create_restaurant(
         longitude=payload.longitude,
     )
     await session.commit()
+    # 201 only when a row was genuinely created. A deduped call is a successful
+    # lookup, not a creation, and telling the client otherwise is misleading.
+    if not created:
+        response.status_code = status.HTTP_200_OK
     return restaurant

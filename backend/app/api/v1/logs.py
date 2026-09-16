@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, SessionDep
 from app.api.v1.catalog import upsert_restaurant
-from app.models import FoodCategory, FoodLog
+from app.models import FoodCategory, FoodLog, Restaurant
 from app.schemas.logs import FoodLogCreate, FoodLogOut, FoodLogPage, FoodLogUpdate
 from app.services.ai.base import AIService
 from app.services.ai.deps import get_ai_service
@@ -27,10 +27,25 @@ async def _get_category(session: SessionDep, category_id: int) -> FoodCategory:
     category = await session.get(FoodCategory, category_id)
     if category is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Unknown category_id {category_id}",
         )
     return category
+
+
+async def _require_restaurant(session: SessionDep, restaurant_id: uuid.UUID | None) -> None:
+    """A restaurant id that does not exist is a client error, not a server one.
+
+    Without this the value reaches the foreign key and the integrity error
+    surfaces as a 500.
+    """
+    if restaurant_id is None:
+        return
+    if await session.get(Restaurant, restaurant_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Unknown restaurant_id {restaurant_id}",
+        )
 
 
 async def _estimate_calories(
@@ -42,15 +57,18 @@ async def _estimate_calories(
     is only ever to place the dish inside the category range, while a large
     portion is still allowed to exceed that range once scaled.
     """
-    adjustment = await ai.adjust_calories(
-        CalorieAdjustRequest(
-            dish_name=dish_name,
-            category_name=category.name,
-            base_calorie_min=category.base_calorie_min,
-            base_calorie_max=category.base_calorie_max,
-            serving_size=serving_size,
+    try:
+        adjustment = await ai.adjust_calories(
+            CalorieAdjustRequest(
+                dish_name=dish_name,
+                category_name=category.name,
+                base_calorie_min=category.base_calorie_min,
+                base_calorie_max=category.base_calorie_max,
+                serving_size=serving_size,
+            )
         )
-    )
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc)) from exc
     return finalise_estimate(
         adjustment.calories,
         category.base_calorie_min,
@@ -79,8 +97,9 @@ async def create_log(
     category = await _get_category(session, payload.category_id)
 
     restaurant_id = payload.restaurant_id
+    await _require_restaurant(session, restaurant_id)
     if payload.restaurant_name:
-        restaurant = await upsert_restaurant(
+        restaurant, _ = await upsert_restaurant(
             session,
             name=payload.restaurant_name,
             area=payload.area,
@@ -154,6 +173,8 @@ async def update_log(
 
     if "category_id" in changes:
         await _get_category(session, changes["category_id"])
+    if "restaurant_id" in changes:
+        await _require_restaurant(session, changes["restaurant_id"])
 
     for field, value in changes.items():
         setattr(log, field, value)

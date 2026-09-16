@@ -105,8 +105,8 @@ async def test_creating_the_same_restaurant_twice_returns_one_row(
         "/api/v1/restaurants", json={"name": "  kolachi", "area": "DO DARYA"}
     )
 
-    assert first.status_code == 201
-    assert second.status_code == 201
+    assert first.status_code == 201, "the first call genuinely creates the row"
+    assert second.status_code == 200, "a deduped call is a lookup, not a creation"
     assert first.json()["id"] == second.json()["id"]
 
 
@@ -138,3 +138,17 @@ async def test_restaurants_can_be_searched_by_name(auth_client: AsyncClient) -> 
     results = (await auth_client.get("/api/v1/restaurants", params={"q": "bbq"})).json()
 
     assert any(r["name"] == "BBQ Tonight" for r in results)
+
+
+async def test_a_blank_search_query_is_rejected(auth_client: AsyncClient) -> None:
+    """A whitespace-only query used to match every row, because the length check
+    ran against the unstripped string."""
+    assert (await auth_client.get("/api/v1/search", params={"q": "   "})).status_code == 422
+
+
+async def test_search_survives_hostile_input(auth_client: AsyncClient) -> None:
+    """The LIKE pattern is interpolated, so confirm it is parameterised."""
+    for query in ["%", "_", "'", "100%' OR '1'='1", "\\", "a'--"]:
+        response = await auth_client.get("/api/v1/search", params={"q": query})
+        assert response.status_code == 200, f"{query!r} returned {response.status_code}"
+

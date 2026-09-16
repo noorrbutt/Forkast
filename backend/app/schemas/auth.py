@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models.enums import Goal
 
@@ -45,3 +46,23 @@ class UserOut(BaseModel):
 class UserUpdate(BaseModel):
     goal: Goal | None = None
     timezone: str | None = Field(default=None, max_length=64)
+
+    @field_validator("timezone")
+    @classmethod
+    def _must_be_a_real_timezone(cls, value: str | None) -> str | None:
+        """Reject anything ZoneInfo cannot load.
+
+        The streak calculation buckets logs into calendar days using this value,
+        so an unusable string here would not fail now, it would fail later
+        inside a feature that looks unrelated.
+        """
+        if value is None:
+            return None
+        candidate = value.strip()
+        if not candidate:
+            raise ValueError("timezone cannot be blank")
+        try:
+            ZoneInfo(candidate)
+        except Exception as exc:
+            raise ValueError(f"unknown timezone {candidate!r}") from exc
+        return candidate
