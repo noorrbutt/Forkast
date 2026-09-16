@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import Date, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import FoodCategory, FoodLog, Restaurant, User
+from app.models import BurnLog, FoodCategory, FoodLog, Restaurant, User
 from app.schemas.insights import (
     BurnEquivalents,
     CaloriesByDay,
@@ -72,10 +72,25 @@ async def build_dashboard(session: AsyncSession, user: User) -> DashboardOut:
     ).one()
     logs_count, total_calories, junk_count = int(totals[0]), int(totals[1]), int(totals[2])
 
-    if logs_count == 0:
+    # Read before the early return below. Someone can record a walk on a day
+    # they have not logged any food, and returning zero for it because there
+    # happens to be no meal would hide the only thing they entered.
+    total_burned = int(
+        await session.scalar(
+            select(func.coalesce(func.sum(BurnLog.calories), 0)).where(BurnLog.user_id == user.id)
+        )
+        or 0
+    )
+
+    today = dt.datetime.now(ZoneInfo(user.timezone)).date()
+    window_start = today - dt.timedelta(days=CHART_DAYS - 1)
+
+    if logs_count == 0 and total_burned == 0:
         return DashboardOut(
             junk_ratio=0.0,
             total_calories=0,
+            total_burned=0,
+            net_calories=0,
             logs_count=0,
             calories_by_day=[],
             top_category=None,
@@ -85,9 +100,6 @@ async def build_dashboard(session: AsyncSession, user: User) -> DashboardOut:
                 walking_minutes=0, running_minutes=0, cycling_minutes=0
             ),
         )
-
-    today = dt.datetime.now(ZoneInfo(user.timezone)).date()
-    window_start = today - dt.timedelta(days=CHART_DAYS - 1)
 
     # The day expression goes in a subquery so the outer GROUP BY references a
     # real column. Grouping by the expression directly does not work: the
@@ -109,6 +121,15 @@ async def build_dashboard(session: AsyncSession, user: User) -> DashboardOut:
     ).all()
     by_day = {row.day: int(row.calories) for row in day_rows}
 
+    burned_rows = (
+        await session.execute(
+            select(BurnLog.day, BurnLog.calories).where(
+                BurnLog.user_id == user.id, BurnLog.day >= window_start
+            )
+        )
+    ).all()
+    burned_by_day = {row.day: int(row.calories) for row in burned_rows}
+
     # Every day in the window, including the ones with nothing logged. A gap
     # rendered as a missing bar reads as an app failure; a zero reads as a day
     # that was not logged.
@@ -116,6 +137,7 @@ async def build_dashboard(session: AsyncSession, user: User) -> DashboardOut:
         CaloriesByDay(
             day=window_start + dt.timedelta(days=offset),
             calories=by_day.get(window_start + dt.timedelta(days=offset), 0),
+            burned=burned_by_day.get(window_start + dt.timedelta(days=offset), 0),
         )
         for offset in range(CHART_DAYS)
     ]
@@ -170,8 +192,12 @@ async def build_dashboard(session: AsyncSession, user: User) -> DashboardOut:
     average_day = total_calories / distinct_days
 
     return DashboardOut(
-        junk_ratio=round(junk_count / logs_count, 4),
+        junk_ratio=round(junk_count / logs_count, 4) if logs_count else 0.0,
         total_calories=total_calories,
+        total_burned=total_burned,
+        # Allowed to go negative. Burning more than you ate is a real day, and
+        # clamping it to zero would hide exactly the thing the user logged it for.
+        net_calories=total_calories - total_burned,
         logs_count=logs_count,
         calories_by_day=calories_by_day,
         top_category=(

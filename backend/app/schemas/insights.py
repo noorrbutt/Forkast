@@ -20,6 +20,9 @@ from app.models.enums import Goal
 class CaloriesByDay(BaseModel):
     day: dt.date
     calories: int
+    # What the user said they burned that day. Zero when nothing was entered,
+    # which the chart draws the same way as a deliberate zero.
+    burned: int = 0
 
 
 class BurnEquivalents(BaseModel):
@@ -55,6 +58,11 @@ class FunMeal(BaseModel):
 class DashboardOut(BaseModel):
     junk_ratio: float
     total_calories: int
+    # Calories in, out, and the difference. net is computed rather than left to
+    # the client so every surface shows the same number, and it is allowed to go
+    # negative: a long walk on a light day is a real outcome, not an error.
+    total_burned: int = 0
+    net_calories: int = 0
     logs_count: int
     calories_by_day: list[CaloriesByDay] = Field(default_factory=list)
     top_category: TopCategory | None = None

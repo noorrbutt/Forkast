@@ -77,6 +77,19 @@ async def test_a_normal_body_is_unaffected(auth_client: AsyncClient) -> None:
     assert response.status_code == 201, response.text
 
 
+def burst_size(limit: int) -> int:
+    """How many attempts it takes to be certain of a 429.
+
+    A fixed window resets on a boundary, and the module being tested says so:
+    the worst case is a caller spending two windows' worth across one. A burst
+    of limit + 3 therefore proves nothing, because a boundary landing in the
+    middle can split it into two halves that each stay under the limit, and the
+    test fails for a reason that has nothing to do with the limiter being wrong.
+    Past 2 * limit no split can hide it.
+    """
+    return limit * 2 + 1
+
+
 async def test_repeated_failed_logins_are_eventually_refused(client: AsyncClient) -> None:
     """A password list used to be limited only by how fast Argon2 runs."""
     await client.post(REGISTER, json={"email": "brute@forkast.app", "password": "password123"})
@@ -88,7 +101,7 @@ async def test_repeated_failed_logins_are_eventually_refused(client: AsyncClient
                 LOGIN, json={"email": "brute@forkast.app", "password": f"wrong{i}"}
             )
         ).status_code
-        for i in range(limit + 3)
+        for i in range(burst_size(limit))
     ]
 
     assert 429 in statuses, f"no attempt was ever throttled: {statuses}"
@@ -98,7 +111,7 @@ async def test_repeated_failed_logins_are_eventually_refused(client: AsyncClient
 async def test_a_throttled_response_says_how_long_to_wait(client: AsyncClient) -> None:
     limit = get_settings().login_rate_limit
     last = None
-    for i in range(limit + 3):
+    for i in range(burst_size(limit)):
         last = await client.post(
             LOGIN, json={"email": "retry@forkast.app", "password": f"wrong{i}"}
         )
@@ -115,7 +128,10 @@ async def test_throttling_one_account_does_not_lock_another(client: AsyncClient)
     await client.post(REGISTER, json={"email": "target@forkast.app", "password": "password123"})
     await client.post(REGISTER, json={"email": "other@forkast.app", "password": "password123"})
 
-    for i in range(get_settings().login_rate_limit + 3):
+    # burst_size rather than a few over the limit: if a window boundary split
+    # this, the target would never actually be throttled and the test would pass
+    # while proving nothing, which is worse than failing.
+    for i in range(burst_size(get_settings().login_rate_limit)):
         await client.post(LOGIN, json={"email": "target@forkast.app", "password": f"no{i}"})
 
     unrelated = await client.post(
@@ -137,7 +153,7 @@ async def test_registration_is_throttled_too(client: AsyncClient) -> None:
                 REGISTER, json={"email": f"probe{i}@forkast.app", "password": "password123"}
             )
         ).status_code
-        for i in range(get_settings().register_rate_limit + 3)
+        for i in range(burst_size(get_settings().register_rate_limit))
     ]
 
     assert 429 in statuses, f"registration was never throttled: {statuses}"
@@ -149,7 +165,7 @@ async def test_x_forwarded_for_cannot_be_used_to_reset_the_limit(client: AsyncCl
     assert get_settings().trust_proxy_headers is False
 
     statuses = []
-    for i in range(get_settings().login_rate_limit + 3):
+    for i in range(burst_size(get_settings().login_rate_limit)):
         statuses.append(
             (
                 await client.post(
