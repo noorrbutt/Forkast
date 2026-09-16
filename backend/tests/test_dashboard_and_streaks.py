@@ -166,24 +166,35 @@ async def test_a_late_night_meal_counts_for_the_local_day_not_the_utc_one(
 ) -> None:
     """2am in Karachi is still the previous evening in UTC.
 
-    A log at 02:00 on the 11th local is 21:00 on the 10th in UTC, so bucketing
-    by UTC would file it under the wrong day. This is the exact case the plan
-    called out.
+    Karachi is UTC+5, so a log at 02:00 local is 21:00 the previous day in UTC,
+    and bucketing by UTC would file it under the wrong day. This is the exact
+    case the plan called out.
     """
     await _set_timezone(auth_client, "Asia/Karachi")
     categories = await _categories(auth_client)
 
     karachi = ZoneInfo("Asia/Karachi")
-    today = dt.datetime.now(karachi).date()
-    late_night = dt.datetime.combine(today, dt.time(2, 0), tzinfo=karachi)
+    now = dt.datetime.now(karachi)
+    # The hour is computed rather than written as a literal, because the API
+    # rejects a created_at in the future: run the suite at 00:30 local and
+    # today's 02:00 has not happened yet. Take the most recent 02:00 that has,
+    # which is today's once 02:00 is past and yesterday's before then.
+    late_night = dt.datetime.combine(now.date(), dt.time(2, 0), tzinfo=karachi)
+    if late_night > now:
+        late_night -= dt.timedelta(days=1)
+    local_day = late_night.date()
+
+    # The premise, stated rather than assumed: the instant only proves anything
+    # if its UTC date really is the day before its local one.
+    assert late_night.astimezone(dt.UTC).date() == local_day - dt.timedelta(days=1)
 
     await _log(auth_client, categories["biryani"], dish="late biryani", when=late_night)
 
     chart = {d["day"]: d["calories"] for d in (await auth_client.get(DASHBOARD)).json()["calories_by_day"]}
 
-    assert chart[today.isoformat()] > 0, "the 2am meal was filed under the wrong day"
-    yesterday = (today - dt.timedelta(days=1)).isoformat()
-    assert chart.get(yesterday, 0) == 0
+    assert chart[local_day.isoformat()] > 0, "the 2am meal was filed under the wrong day"
+    utc_day = (local_day - dt.timedelta(days=1)).isoformat()
+    assert chart.get(utc_day, 0) == 0
 
 
 async def test_changing_timezone_moves_which_day_a_log_belongs_to(
@@ -195,8 +206,20 @@ async def test_changing_timezone_moves_which_day_a_log_belongs_to(
     categories = await _categories(auth_client)
 
     karachi = ZoneInfo("Asia/Karachi")
-    today_karachi = dt.datetime.now(karachi).date()
-    instant = dt.datetime.combine(today_karachi, dt.time(3, 0), tzinfo=karachi)
+    honolulu = ZoneInfo("Pacific/Honolulu")
+    now = dt.datetime.now(karachi)
+    # Computed rather than a literal hour, because a created_at in the future is
+    # a 422 and today's 03:00 does not exist yet between midnight and 3am. Any
+    # Karachi wall time before 15:00 is still the previous day in Honolulu, so
+    # the most recent 03:00 straddles the boundary whatever time the suite runs.
+    instant = dt.datetime.combine(now.date(), dt.time(3, 0), tzinfo=karachi)
+    if instant > now:
+        instant -= dt.timedelta(days=1)
+
+    # The premise, stated rather than assumed: with an instant the two zones
+    # agree on, the comparison at the end of the test would hold for free.
+    assert instant.astimezone(honolulu).date() == instant.date() - dt.timedelta(days=1)
+
     await _log(auth_client, categories["biryani"], dish="boundary meal", when=instant)
 
     in_karachi = {
@@ -254,10 +277,18 @@ async def test_the_longest_streak_survives_a_later_break(auth_client: AsyncClien
     await _set_timezone(auth_client, "Asia/Karachi")
     categories = await _categories(auth_client)
     karachi = ZoneInfo("Asia/Karachi")
-    today = dt.datetime.now(karachi).date()
+    now = dt.datetime.now(karachi)
+    today = now.date()
 
     def at(days_ago: int) -> dt.datetime:
-        return dt.datetime.combine(today - dt.timedelta(days=days_ago), dt.time(13, 0), tzinfo=karachi)
+        """Anchored to the current local time, never to a literal hour.
+
+        The junk log has to land on today to reset the current streak, and the
+        API rejects a created_at in the future, so a fixed 13:00 fails every
+        morning. Stepping whole days back from now is in the past at any hour
+        and still puts each log on its own local day.
+        """
+        return now - dt.timedelta(days=days_ago)
 
     # Junk 20 days ago and again today, leaving a clean run in between.
     await _log(auth_client, categories["fries"], dish="old fries", when=at(20))
