@@ -28,6 +28,9 @@ export type User = {
   // Both are NOT NULL with a default on the server, so they always arrive.
   timezone: string;
   goal: Goal;
+  /** Null until someone sets one. Null and zero mean different things here:
+   *  null is "no target", and there is no way to store a zero one. */
+  daily_calorie_target: number | null;
   created_at: string;
 };
 
@@ -153,6 +156,36 @@ export type FunMeal = {
   restaurant_name: string | null;
 };
 
+/** Today on its own, which is the only window a progress bar can honestly describe. */
+export type Today = {
+  target: number | null;
+  consumed: number;
+  burned: number;
+  net: number;
+  /** Null when no target is set. Negative once the day has gone over it. */
+  remaining: number | null;
+};
+
+export type MonthTotals = {
+  month: string;
+  total_calories: number;
+  meals_logged: number;
+  junk_ratio: number;
+  avg_calories_per_day: number;
+  days_counted: number;
+};
+
+export type Trend = {
+  this_month: MonthTotals;
+  last_month: MonthTotals;
+  change: {
+    total_calories: number;
+    meals_logged: number;
+    junk_ratio: number;
+    avg_calories_per_day: number;
+  };
+};
+
 export type Dashboard = {
   junk_ratio: number;
   total_calories: number;
@@ -160,6 +193,7 @@ export type Dashboard = {
   /** Eaten minus burned. Negative is a real result, not an error. */
   net_calories: number;
   logs_count: number;
+  today: Today;
   calories_by_day: CaloriesByDay[];
   top_category: TopCategory | null;
   top_restaurant: TopRestaurant | null;

@@ -6,6 +6,7 @@ import type { Goal, User } from '../lib/types';
 type ProfilePatch = {
   goal?: Goal;
   timezone?: string;
+  daily_calorie_target?: number | null;
 };
 
 export function useUpdateProfile() {
@@ -19,6 +20,8 @@ export function useUpdateProfile() {
       queryClient.setQueryData(['me'], user);
       // The plan generator reads the goal, so any cached plan advice is stale now.
       void queryClient.invalidateQueries({ queryKey: ['plans'] });
+      // The dashboard measures today against the target, so it is stale too.
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }

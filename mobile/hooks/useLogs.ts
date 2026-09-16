@@ -78,3 +78,27 @@ export function useDeleteLog() {
     },
   });
 }
+
+/**
+ * Log the same meal again.
+ *
+ * The server copies the old row rather than the client resubmitting a form,
+ * which is what makes this one tap: nothing has to be re-derived here, and the
+ * calorie figure is guaranteed to match the meal it was copied from.
+ */
+export function useRepeatLog() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: Uuid) => {
+      const response = await api.post<FoodLog>(`/logs/${id}/repeat`);
+      return response.data;
+    },
+    onSuccess: () => {
+      // A new meal on today, so every derived figure moves.
+      void queryClient.invalidateQueries({ queryKey: ['logs'] });
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      void queryClient.invalidateQueries({ queryKey: ['streaks'] });
+      void queryClient.invalidateQueries({ queryKey: ['trend'] });
+    },
+  });
+}
