@@ -164,16 +164,21 @@ with httpx.Client(timeout=30.0) as http:
     check("log deleted", r.status_code == 204, r.text)
 
     section("insights")
+    # This account logged one meal and then deleted it, so the dashboard has to
+    # come back empty. That is a stronger check than a non-zero number: it only
+    # holds if the figures are really computed from this user's own rows.
     r = http.get(f"{API}/dashboard", headers=auth)
     dash = r.json()
     check("dashboard responds", r.status_code == 200, r.text)
-    check("dashboard is marked as placeholder", dash.get("_source") == "seed-snapshot", r.text)
+    check("dashboard has no placeholder marker", "_source" not in dash, str(dash)[:120])
+    check("dashboard reflects this account only", dash["logs_count"] == 0, str(dash["logs_count"]))
     check("burn equivalents present", "walking_minutes" in dash["burn_equivalents"], r.text)
 
     r = http.get(f"{API}/streaks", headers=auth)
     streaks = r.json()
     check("streaks responds", r.status_code == 200, r.text)
-    check("streaks is marked as placeholder", streaks.get("_source") == "seed-snapshot", r.text)
+    check("streaks has no placeholder marker", "_source" not in streaks, str(streaks)[:120])
+    check("streaks message is present", bool(streaks["message"]), r.text)
 
     r = http.post(f"{API}/plans", headers=auth, json={"goal": "cut"})
     check("plan generated", r.status_code == 201, r.text)
@@ -193,6 +198,14 @@ with httpx.Client(timeout=30.0) as http:
         check("demo account has seeded history", r.json()["total"] >= 100, str(r.json()["total"]))
         r = http.get(f"{API}/search", headers=demo_auth, params={"q": "biry"})
         check("demo dish history is searchable", len(r.json()["dishes"]) > 0, r.text)
+
+        d = http.get(f"{API}/dashboard", headers=demo_auth).json()
+        check("demo dashboard is computed from the seeded logs", d["logs_count"] >= 100, str(d["logs_count"]))
+        check("demo junk ratio is a real fraction", 0 < d["junk_ratio"] < 1, str(d["junk_ratio"]))
+        check("demo calorie chart covers 14 days", len(d["calories_by_day"]) == 14, str(len(d["calories_by_day"])))
+        check("demo top category resolved", bool(d["top_category"]), str(d["top_category"]))
+        s2 = http.get(f"{API}/streaks", headers=demo_auth).json()
+        check("demo streak is computed", s2["longest_streak"] > 0, str(s2))
 
     r = http.post(f"{API}/auth/logout", headers=auth, json={"refresh_token": rotated})
     check("logout succeeds", r.status_code == 204, r.text)
