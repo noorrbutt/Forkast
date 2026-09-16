@@ -116,7 +116,7 @@ export default function LogScreen() {
         </Card>
 
         <Text style={[type.body, { color: colors.muted }]}>
-          That is on the board. The dashboard still shows sample figures for now.
+          That is on the board, and your dashboard and streak have already moved.
         </Text>
 
         <View style={{ gap: spacing.md }}>

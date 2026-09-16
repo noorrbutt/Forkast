@@ -4,6 +4,7 @@ import { Text, View } from 'react-native';
 import { Button, Card, Chip, ErrorState, Loading, Screen, SectionLabel } from '../../components/ui';
 import { useAuth, useMe } from '../../hooks/useAuth';
 import { useUpdateProfile } from '../../hooks/useProfile';
+import { useReminders } from '../../hooks/useReminders';
 import { describeError } from '../../lib/api';
 import { GOAL_BLURBS, GOAL_LABELS, formatDate } from '../../lib/format';
 import { GOALS, type Goal } from '../../lib/types';
@@ -32,6 +33,7 @@ export default function ProfileScreen() {
   const { signOut } = useAuth();
   const me = useMe();
   const updateProfile = useUpdateProfile();
+  const reminders = useReminders();
 
   const user = me.data;
   const goal = user?.goal ?? null;
@@ -87,6 +89,30 @@ export default function ProfileScreen() {
               {updateProfile.isError ? (
                 <Text style={[type.caption, { color: colors.danger }]}>
                   {describeError(updateProfile.error)}
+                </Text>
+              ) : null}
+            </View>
+          </Card>
+
+          <Card>
+            <View style={{ gap: spacing.md }}>
+              <SectionLabel>Reminders</SectionLabel>
+              <Text style={[type.caption, { color: colors.muted }]}>
+                {reminders.enabled
+                  ? 'On. A nudge if you go quiet, and an evening reminder while a streak is running.'
+                  : 'Off. Turn them on for a nudge when you go quiet and a heads up before a streak breaks.'}
+              </Text>
+              <Button
+                label={reminders.enabled ? 'Turn reminders off' : 'Turn reminders on'}
+                variant="secondary"
+                onPress={() => {
+                  void (reminders.enabled ? reminders.disable() : reminders.enable());
+                }}
+              />
+              {reminders.enabled === false ? (
+                <Text style={[type.caption, { color: colors.muted }]}>
+                  If nothing happens, notifications are blocked for Forkast in your
+                  device settings.
                 </Text>
               ) : null}
             </View>

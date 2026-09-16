@@ -165,6 +165,16 @@ export default function DashboardScreen() {
       ) : null}
 
       <View style={{ gap: spacing.md }}>
+        <Card onPress={() => router.push('/history')}>
+          <View style={{ gap: spacing.xs }}>
+            <SectionLabel>Everything you logged</SectionLabel>
+            <Text style={[type.title, { color: colors.text }]}>Your diary</Text>
+            <Text style={[type.caption, { color: colors.muted }]}>
+              Browse past meals, fix a typo, or delete one you logged twice.
+            </Text>
+          </View>
+        </Card>
+
         <Card onPress={() => router.push('/map')}>
           <View style={{ gap: spacing.xs }}>
             <SectionLabel>Where you eat</SectionLabel>

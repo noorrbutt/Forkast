@@ -24,3 +24,18 @@ jest.mock('expo-haptics', () => ({
   NotificationFeedbackType: { Success: 'success', Warning: 'warning', Error: 'error' },
   ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
 }));
+
+// No notification service in a test runner, and the real module throws on
+// import outside a native host. lib/notifications.ts swallows those failures by
+// design, so without this mock the reminder tests would pass while asserting
+// nothing at all.
+jest.mock('expo-notifications', () => ({
+  setNotificationHandler: jest.fn(),
+  setNotificationChannelAsync: jest.fn().mockResolvedValue(undefined),
+  getPermissionsAsync: jest.fn().mockResolvedValue({ granted: true, canAskAgain: true }),
+  requestPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+  scheduleNotificationAsync: jest.fn().mockResolvedValue('id'),
+  cancelScheduledNotificationAsync: jest.fn().mockResolvedValue(undefined),
+  AndroidImportance: { DEFAULT: 3 },
+  SchedulableTriggerInputTypes: { TIME_INTERVAL: 'timeInterval', DAILY: 'daily' },
+}));

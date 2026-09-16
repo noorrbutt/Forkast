@@ -97,6 +97,22 @@ export type LogInput = {
   serving_size: ServingSize;
 };
 
+/**
+ * A partial update. Omitting a field leaves it alone; sending null on a
+ * nullable one clears it. The server rejects an explicit null on anything it
+ * stores NOT NULL, so those are simply never sent as null from here.
+ */
+export type LogPatch = {
+  dish_name?: string;
+  category_id?: RefId;
+  restaurant_id?: Uuid | null;
+  area?: string | null;
+  rating?: number;
+  fun_scale?: number | null;
+  friend_scale?: FriendScale | null;
+  serving_size?: ServingSize;
+};
+
 export type LogPage = {
   items: FoodLog[];
   total: number;

@@ -4,7 +4,7 @@ import { Platform, Text, View } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 
 import { useLogs } from '../hooks/useLogs';
-import { useRestaurants } from '../hooks/useRestaurants';
+import { useVisitedRestaurants } from '../hooks/useRestaurants';
 import { describeError } from '../lib/api';
 import { formatNumber } from '../lib/format';
 import type { FoodLog, Restaurant } from '../lib/types';
@@ -168,7 +168,7 @@ function regionFor(pins: Pin[]) {
  */
 export function MapScreen() {
   const { colors, radius, spacing, type } = useTheme();
-  const restaurants = useRestaurants();
+  const restaurants = useVisitedRestaurants();
   const logs = useLogs(100, 0);
 
   const groups = useMemo(
@@ -282,8 +282,8 @@ export function MapScreen() {
                   <Text style={[type.body, { color: colors.text, flex: 1 }]} numberOfLines={1}>
                     {spot.name}
                   </Text>
-                  <Text style={[type.label, { color: spot.count > 0 ? colors.accent : colors.muted }]}>
-                    {spot.count > 0 ? `${spot.count}x` : 'New'}
+                  <Text style={[type.label, { color: colors.accent }]}>
+                    {`${spot.count}x`}
                   </Text>
                 </View>
               ))}
