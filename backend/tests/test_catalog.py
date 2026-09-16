@@ -226,3 +226,109 @@ async def test_a_nul_byte_in_a_restaurant_name_is_a_client_error(
     response = await auth_client.post("/api/v1/restaurants", json={"name": "Kol\x00achi"})
 
     assert response.status_code == 422
+
+
+async def test_the_restaurant_list_is_shared_by_default(client: AsyncClient) -> None:
+    """The registry is deliberately shared: the autocomplete on the log screen
+    is what stops one place being typed in five slightly different ways."""
+    mine = (
+        await client.post(
+            "/api/v1/auth/register", json={"email": "r1@forkast.app", "password": "password123"}
+        )
+    ).json()
+    theirs = (
+        await client.post(
+            "/api/v1/auth/register", json={"email": "r2@forkast.app", "password": "password123"}
+        )
+    ).json()
+
+    await client.post(
+        "/api/v1/restaurants",
+        headers={"Authorization": f"Bearer {theirs['access_token']}"},
+        json={"name": "Someone Elses Place", "area": "Clifton"},
+    )
+
+    listed = await client.get(
+        "/api/v1/restaurants", headers={"Authorization": f"Bearer {mine['access_token']}"}
+    )
+
+    assert "Someone Elses Place" in [r["name"] for r in listed.json()]
+
+
+async def test_mine_narrows_the_list_to_places_this_user_has_eaten_at(
+    client: AsyncClient,
+) -> None:
+    """The map is a personal food heatmap. Listing the whole registry there
+    pinned places the user had never been and showed them which restaurants
+    other people had been adding."""
+    mine = (
+        await client.post(
+            "/api/v1/auth/register", json={"email": "m1@forkast.app", "password": "password123"}
+        )
+    ).json()
+    theirs = (
+        await client.post(
+            "/api/v1/auth/register", json={"email": "m2@forkast.app", "password": "password123"}
+        )
+    ).json()
+    categories = (
+        await client.get(
+            "/api/v1/categories", headers={"Authorization": f"Bearer {mine['access_token']}"}
+        )
+    ).json()
+
+    await client.post(
+        "/api/v1/logs",
+        headers={"Authorization": f"Bearer {theirs['access_token']}"},
+        json={
+            "dish_name": "their dinner",
+            "category_id": categories[0]["id"],
+            "rating": 4,
+            "serving_size": "medium",
+            "restaurant_name": "Their Local",
+        },
+    )
+    await client.post(
+        "/api/v1/logs",
+        headers={"Authorization": f"Bearer {mine['access_token']}"},
+        json={
+            "dish_name": "my dinner",
+            "category_id": categories[0]["id"],
+            "rating": 4,
+            "serving_size": "medium",
+            "restaurant_name": "My Local",
+        },
+    )
+
+    visited = await client.get(
+        "/api/v1/restaurants",
+        headers={"Authorization": f"Bearer {mine['access_token']}"},
+        params={"mine": True},
+    )
+
+    assert [r["name"] for r in visited.json()] == ["My Local"]
+
+
+async def test_mine_returns_a_restaurant_once_however_often_it_was_visited(
+    auth_client: AsyncClient,
+) -> None:
+    """An EXISTS rather than a join, or a favourite place would be pinned once
+    per visit."""
+    categories = (await auth_client.get("/api/v1/categories")).json()
+    for _ in range(3):
+        await auth_client.post(
+            "/api/v1/logs",
+            json={
+                "dish_name": "the usual",
+                "category_id": categories[0]["id"],
+                "rating": 5,
+                "serving_size": "medium",
+                "restaurant_name": "Kolachi",
+            },
+        )
+
+    visited = (
+        await auth_client.get("/api/v1/restaurants", params={"mine": True})
+    ).json()
+
+    assert [r["name"] for r in visited] == ["Kolachi"]

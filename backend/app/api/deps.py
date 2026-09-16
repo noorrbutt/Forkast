@@ -9,8 +9,9 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_session
-from app.models import User
+from app.db import get_session, get_session_factory
+from app.models import RefreshToken, User
+from app.services.rate_limit import RateLimiter
 from app.services.security import decode_access_token
 
 # HTTPBearer rather than OAuth2PasswordBearer: the mobile client posts JSON to
@@ -19,6 +20,15 @@ from app.services.security import decode_access_token
 bearer_scheme = HTTPBearer(auto_error=False)
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+
+def get_rate_limiter(
+    session_factory=Depends(get_session_factory),
+) -> RateLimiter:
+    return RateLimiter(session_factory)
+
+
+RateLimiterDep = Annotated[RateLimiter, Depends(get_rate_limiter)]
 
 _UNAUTHORIZED = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -34,13 +44,26 @@ async def get_current_user(
     if credentials is None or not credentials.credentials:
         raise _UNAUTHORIZED
 
-    user_id = decode_access_token(credentials.credentials)
-    if user_id is None:
+    claims = decode_access_token(credentials.credentials)
+    if claims is None:
         raise _UNAUTHORIZED
 
-    user = await session.scalar(select(User).where(User.id == user_id))
+    # One query, not two. The join is what enforces that the session behind this
+    # token is still live: signing out revokes every refresh token carrying that
+    # session_id, so the access token issued beside it stops working at the same
+    # moment instead of outliving the logout by up to half an hour.
+    user = await session.scalar(
+        select(User)
+        .join(RefreshToken, RefreshToken.user_id == User.id)
+        .where(
+            User.id == claims.user_id,
+            RefreshToken.session_id == claims.session_id,
+            RefreshToken.revoked_at.is_(None),
+        )
+        .limit(1)
+    )
     if user is None:
-        # The token verified but the account is gone. Same 401, no hint.
+        # Either the account is gone or the session was ended. Same 401, no hint.
         raise _UNAUTHORIZED
     return user
 

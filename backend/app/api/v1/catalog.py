@@ -162,8 +162,21 @@ async def list_restaurants(
     # A blank q folds to None, so "?q=   " lists rather than matching every
     # row through an empty LIKE pattern.
     q: Annotated[optional_text_field(max_length=100), Query()] = None,
+    mine: bool = Query(
+        default=False,
+        description="Only restaurants this user has actually logged a meal at.",
+    ),
     limit: int = Query(default=20, ge=1, le=100),
 ) -> list[Restaurant]:
+    """The registry is shared, so by default this lists every restaurant.
+
+    That is right for the autocomplete on the log screen, where the point is to
+    find a place someone else already added rather than create a duplicate. It
+    is wrong for the map, which the brief calls a personal food heatmap: listing
+    the whole registry there pins places the user has never been, and tells them
+    which restaurants other people have been adding. `mine=true` narrows it to
+    the ones they have actually logged a meal at.
+    """
     stmt = select(Restaurant).order_by(Restaurant.name).limit(limit)
     if q:
         await _apply_similarity_threshold(session)
@@ -182,6 +195,16 @@ async def list_restaurants(
             )
             .limit(limit)
         )
+
+    if mine:
+        # An EXISTS rather than a join, so a restaurant visited fifty times
+        # still comes back once and the ORDER BY does not need a DISTINCT.
+        stmt = stmt.where(
+            select(FoodLog.id)
+            .where(FoodLog.restaurant_id == Restaurant.id, FoodLog.user_id == user.id)
+            .exists()
+        )
+
     result = await session.scalars(stmt)
     return list(result)
 

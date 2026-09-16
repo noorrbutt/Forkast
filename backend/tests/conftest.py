@@ -38,7 +38,7 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND_DIR))
 
 from app.config import get_settings  # noqa: E402
-from app.db import get_session  # noqa: E402
+from app.db import get_session, get_session_factory  # noqa: E402
 from app.main import app  # noqa: E402
 from app.services.ai.deps import get_ai_service  # noqa: E402
 from app.services.ai.fake import DeterministicAIService  # noqa: E402
@@ -46,7 +46,16 @@ from app.services.ai.fake import DeterministicAIService  # noqa: E402
 TEST_DATABASE_URL = get_settings().test_database_url
 
 # Everything a test can create. Reference tables are excluded on purpose.
-MUTABLE_TABLES = ("food_logs", "ai_plans", "refresh_tokens", "restaurants", "users")
+MUTABLE_TABLES = (
+    "food_logs",
+    "ai_plans",
+    "refresh_tokens",
+    "restaurants",
+    "users",
+    # Truncated like the rest, or one test's failed logins spend the next
+    # test's allowance and the suite fails depending on ordering.
+    "rate_limit_counters",
+)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -75,22 +84,31 @@ def migrated_database() -> None:
 
 
 async def _truncate_if_present() -> None:
-    """Empty the mutable tables, tolerating a database with no schema at all."""
+    """Empty whichever mutable tables exist right now.
+
+    Runs before the migrations, against whatever schema the previous session
+    happened to leave behind, so it cannot assume the current table list. A
+    table added by a later migration is simply absent here, and naming it in a
+    TRUNCATE would fail the fixture and error every test in the suite.
+    """
     engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
     try:
         async with engine.begin() as connection:
-            await connection.execute(
-                text(
-                    f"""
-                    DO $$
-                    BEGIN
-                        IF to_regclass('public.{MUTABLE_TABLES[0]}') IS NOT NULL THEN
-                            TRUNCATE {", ".join(MUTABLE_TABLES)} CASCADE;
-                        END IF;
-                    END $$;
-                    """
+            present = (
+                await connection.scalars(
+                    text(
+                        """
+                        SELECT table_name FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name = ANY(:names)
+                        """
+                    ),
+                    {"names": list(MUTABLE_TABLES)},
                 )
-            )
+            ).all()
+            if present:
+                await connection.execute(
+                    text(f"TRUNCATE {', '.join(present)} CASCADE")
+                )
     finally:
         await engine.dispose()
 
@@ -148,6 +166,11 @@ async def client(session_factory) -> AsyncIterator[AsyncClient]:
                 raise
 
     app.dependency_overrides[get_session] = _override_session
+    # The rate limiter deliberately opens its own transaction rather than
+    # joining the request's, so it resolves the factory separately. Without
+    # this override it would count attempts in the development database while
+    # the rest of the test ran against the test one.
+    app.dependency_overrides[get_session_factory] = lambda: session_factory
     try:
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://testserver"

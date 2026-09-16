@@ -28,6 +28,20 @@ SessionLocal = async_sessionmaker(
 )
 
 
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    """The session factory itself, for work that needs its own transaction.
+
+    The rate limiter is the only caller. It cannot share the request's session:
+    a rejected login raises, `get_session` rolls back, and the attempt that was
+    just counted would be rolled back with it -- leaving a limiter that only
+    counts the attempts that succeeded, which is exactly backwards.
+
+    It exists as a dependency rather than as a direct `SessionLocal` import so
+    tests can point it at the test database along with everything else.
+    """
+    return SessionLocal
+
+
 async def get_session() -> AsyncIterator[AsyncSession]:
     """Provide a session. Writing routes commit explicitly before returning.
 

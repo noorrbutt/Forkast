@@ -1,20 +1,27 @@
 """Registration, login, refresh and logout.
 
-Access tokens are short lived JWTs. Refresh tokens are opaque, stored as a
-SHA-256 hash, and rotated on every use: presenting a refresh token revokes it
-and issues a new one. That way a stolen refresh token stops working as soon as
-the legitimate client refreshes.
+Access tokens are short lived JWTs carrying a `sid` claim. Refresh tokens are
+opaque, stored as a SHA-256 hash, and rotated on every use: presenting one
+revokes it and issues a new one carrying the same session_id. A stolen refresh
+token therefore stops working as soon as the legitimate client refreshes, and
+signing out ends the access token at the same moment rather than leaving it
+usable until it expires.
+
+Every route here is unauthenticated, which makes them the only ones an attacker
+can hammer for free, so they are the ones that are rate limited.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+import uuid
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, RateLimiterDep, SessionDep
+from app.config import get_settings
 from app.models import RefreshToken, User
 from app.schemas.auth import (
     LoginRequest,
@@ -23,6 +30,7 @@ from app.schemas.auth import (
     TokenPair,
     UserOut,
 )
+from app.services.rate_limit import client_identity
 from app.services.security import (
     create_access_token,
     create_refresh_token,
@@ -35,12 +43,51 @@ from app.services.security import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-async def _issue_tokens(session: SessionDep, user: User) -> TokenPair:
-    access_token, _ = create_access_token(user.id)
+async def _throttle_login(limiter: RateLimiterDep, request: Request, email: str) -> None:
+    """Count one login attempt, against two separate allowances.
+
+    Keyed on the address alone, one attacker locks out every account whose
+    address they know. Keyed on the peer alone, a botnet spreads guesses and
+    never trips anything. Keyed on both together -- which is the per-address
+    bucket here -- a spray that tries one password against a thousand different
+    accounts still spends nothing, because each account is only touched once.
+    So both are counted: a tight limit per address, and a loose one per peer
+    that only a spray can reach.
+
+    Called before the password is checked, so a wrong guess and a right one cost
+    the same and the limit cannot be probed by watching which attempts counted.
+    """
+    settings = get_settings()
+    await limiter.hit(
+        "login",
+        client_identity(request, subject=email),
+        limit=settings.login_rate_limit,
+        window_seconds=settings.login_rate_window_seconds,
+    )
+    await limiter.hit(
+        "login-peer",
+        client_identity(request),
+        limit=settings.login_peer_rate_limit,
+        window_seconds=settings.login_rate_window_seconds,
+    )
+
+
+async def _issue_tokens(
+    session: SessionDep, user: User, *, session_id: uuid.UUID | None = None
+) -> TokenPair:
+    """Issue a pair. Pass session_id to continue an existing session on refresh,
+    or leave it out to start a new one on register and login."""
+    session_id = session_id or uuid.uuid4()
+    access_token, _ = create_access_token(user.id, session_id)
     raw_refresh, refresh_hash, refresh_expires = create_refresh_token()
 
     session.add(
-        RefreshToken(user_id=user.id, token_hash=refresh_hash, expires_at=refresh_expires)
+        RefreshToken(
+            user_id=user.id,
+            session_id=session_id,
+            token_hash=refresh_hash,
+            expires_at=refresh_expires,
+        )
     )
     # Commit here rather than in the session dependency: a yield dependency's
     # exit code runs after the response is sent, so the client could present
@@ -51,8 +98,25 @@ async def _issue_tokens(session: SessionDep, user: User) -> TokenPair:
 
 
 @router.post("/register", response_model=TokenPair, status_code=status.HTTP_201_CREATED)
-async def register(payload: RegisterRequest, session: SessionDep) -> TokenPair:
+async def register(
+    payload: RegisterRequest, session: SessionDep, request: Request, limiter: RateLimiterDep
+) -> TokenPair:
     email = payload.email.strip()
+    # Registration answers 409 for an address that already exists, which is a
+    # working account existence oracle. Removing it entirely needs an email
+    # round trip this project has no infrastructure for, so the limit is what
+    # stops it being run against a list.
+    #
+    # Counted per peer, NOT per address: enumeration walks a list and uses a
+    # different address every time, so keying on the address would give every
+    # probe its own fresh allowance and never trip.
+    settings = get_settings()
+    await limiter.hit(
+        "register",
+        client_identity(request),
+        limit=settings.register_rate_limit,
+        window_seconds=settings.login_rate_window_seconds,
+    )
 
     existing = await session.scalar(
         select(User).where(func.lower(User.email) == email.lower())
@@ -82,7 +146,14 @@ async def register(payload: RegisterRequest, session: SessionDep) -> TokenPair:
 
 
 @router.post("/login", response_model=TokenPair)
-async def login(payload: LoginRequest, session: SessionDep) -> TokenPair:
+async def login(
+    payload: LoginRequest, session: SessionDep, request: Request, limiter: RateLimiterDep
+) -> TokenPair:
+    await _throttle_login(limiter, request, payload.email)
+    # Cheap to do here and there is no cron to install: the table only grows
+    # while someone is failing to authenticate.
+    await limiter.prune()
+
     user = await session.scalar(
         select(User).where(func.lower(User.email) == payload.email.strip().lower())
     )
@@ -138,9 +209,21 @@ async def _revoke_family_on_reuse(
 
 
 @router.post("/refresh", response_model=TokenPair)
-async def refresh(payload: RefreshRequest, session: SessionDep) -> TokenPair:
+async def refresh(
+    payload: RefreshRequest, session: SessionDep, request: Request, limiter: RateLimiterDep
+) -> TokenPair:
     token_hash = hash_refresh_token(payload.refresh_token)
     now = dt.datetime.now(dt.UTC)
+
+    # Keyed on the peer alone: the refresh token is the subject here and it must
+    # not become a rate-limit identity, or an attacker gets a fresh allowance
+    # for every random string they try.
+    await limiter.hit(
+        "refresh",
+        client_identity(request),
+        limit=get_settings().login_peer_rate_limit,
+        window_seconds=get_settings().login_rate_window_seconds,
+    )
 
     # Claim the token in a single conditional UPDATE rather than reading it,
     # checking it, then writing it back. Two requests arriving together with the
@@ -155,7 +238,7 @@ async def refresh(payload: RefreshRequest, session: SessionDep) -> TokenPair:
             RefreshToken.expires_at > now,
         )
         .values(revoked_at=now)
-        .returning(RefreshToken.user_id)
+        .returning(RefreshToken.user_id, RefreshToken.session_id)
     )
     row = claimed.first()
     if row is None:
@@ -179,18 +262,35 @@ async def refresh(payload: RefreshRequest, session: SessionDep) -> TokenPair:
             detail="Invalid or expired refresh token",
         )
 
-    return await _issue_tokens(session, user)
+    # The same session continues across the rotation, so the client is not
+    # treated as having signed in again and access tokens keep naming one
+    # session for the life of that sign-in.
+    return await _issue_tokens(session, user, session_id=row[1])
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(payload: RefreshRequest, session: SessionDep) -> Response:
     token_hash = hash_refresh_token(payload.refresh_token)
     stored = await session.scalar(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
-    if stored is not None and stored.revoked_at is None:
-        stored.revoked_at = dt.datetime.now(dt.UTC)
+
+    if stored is not None:
+        # Revoke the whole session, not just the row presented. Every refresh
+        # token the session ever rotated through shares its session_id, and the
+        # access token names it, so this is what makes the access token stop
+        # working now rather than whenever it happens to expire.
+        await session.execute(
+            update(RefreshToken)
+            .where(
+                RefreshToken.session_id == stored.session_id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=dt.datetime.now(dt.UTC))
+        )
+
     await session.commit()
     # Always 204. Logging out an already dead token is not an error worth
-    # telling the caller about.
+    # telling the caller about, and answering differently would say whether the
+    # token was real.
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

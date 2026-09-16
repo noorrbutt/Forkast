@@ -12,7 +12,7 @@ import datetime as dt
 import hashlib
 import secrets
 import uuid
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 
 import jwt
 from jwt.exceptions import InvalidTokenError
@@ -61,11 +61,21 @@ def _now() -> dt.datetime:
     return dt.datetime.now(dt.UTC)
 
 
-def create_access_token(user_id: uuid.UUID) -> tuple[str, dt.datetime]:
+def create_access_token(user_id: uuid.UUID, session_id: uuid.UUID) -> tuple[str, dt.datetime]:
+    """Issue an access token bound to a session.
+
+    The `sid` claim is what makes logout actually log out. Without it an access
+    token is a bearer credential nothing can withdraw, so signing out revoked
+    the refresh token and left the access token working until it expired --
+    up to ACCESS_TOKEN_EXPIRE_MINUTES of access after the user asked for it to
+    stop. Verifying `sid` against the session on each request costs nothing
+    extra, because the request already loads the user row.
+    """
     settings = get_settings()
     expires_at = _now() + dt.timedelta(minutes=settings.access_token_expire_minutes)
     payload: dict[str, Any] = {
         "sub": str(user_id),
+        "sid": str(session_id),
         "type": "access",
         "iat": int(_now().timestamp()),
         "exp": int(expires_at.timestamp()),
@@ -96,9 +106,18 @@ def hash_refresh_token(raw: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def decode_access_token(token: str) -> uuid.UUID | None:
-    """Return the user id, or None if the token is invalid, expired or the
-    wrong type. Never raises -- callers turn None into a 401."""
+class AccessClaims(NamedTuple):
+    user_id: uuid.UUID
+    session_id: uuid.UUID
+
+
+def decode_access_token(token: str) -> AccessClaims | None:
+    """Return the user and session ids, or None if the token is unusable.
+
+    Never raises -- callers turn None into a 401. A token with no `sid` is
+    rejected rather than waved through: those were issued before sessions
+    existed, and accepting them would leave exactly the hole `sid` closes.
+    """
     settings = get_settings()
     try:
         payload = jwt.decode(
@@ -112,9 +131,10 @@ def decode_access_token(token: str) -> uuid.UUID | None:
     if payload.get("type") != "access":
         return None
     subject = payload.get("sub")
-    if not subject:
+    session = payload.get("sid")
+    if not subject or not session:
         return None
     try:
-        return uuid.UUID(subject)
+        return AccessClaims(uuid.UUID(subject), uuid.UUID(session))
     except ValueError:
         return None

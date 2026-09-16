@@ -64,6 +64,11 @@ class RefreshToken(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
+    # Stable across rotation: refreshing revokes this row and inserts a new one
+    # carrying the same session_id, so one sign-in is one session however many
+    # times its token has rotated. Access tokens name it in their `sid` claim,
+    # which is what lets logout end them early.
+    session_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
@@ -73,4 +78,9 @@ class RefreshToken(Base):
 
     user: Mapped[User] = relationship(back_populates="refresh_tokens")
 
-    __table_args__ = (Index("ix_refresh_tokens_user_id", "user_id"),)
+    __table_args__ = (
+        Index("ix_refresh_tokens_user_id", "user_id"),
+        # Every authenticated request checks this session is still live, so it
+        # is the hottest lookup in the schema.
+        Index("ix_refresh_tokens_session_id", "session_id"),
+    )

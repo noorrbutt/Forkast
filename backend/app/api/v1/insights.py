@@ -8,13 +8,15 @@ only the text generation comes from the AI seam.
 
 from __future__ import annotations
 
+import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, RateLimiterDep, SessionDep
+from app.config import get_settings
 from app.models import AIPlan, FoodCategory, FoodLog, User
 from app.schemas.auth import UserOut, UserUpdate
 from app.schemas.insights import DashboardOut, PlanCreate, PlanOut, StreaksOut
@@ -23,6 +25,7 @@ from app.services.ai.deps import get_ai_service
 from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import PlanLogSummary, PlanRequest
 from app.services.insights import build_dashboard, compute_streaks
+from app.services.rate_limit import client_identity
 
 router = APIRouter(tags=["insights"])
 
@@ -61,8 +64,24 @@ async def streaks(session: SessionDep, user: CurrentUser) -> StreaksOut:
 
 @router.post("/plans", response_model=PlanOut, status_code=status.HTTP_201_CREATED)
 async def create_plan(
-    payload: PlanCreate, session: SessionDep, user: CurrentUser, ai: AIDep
+    payload: PlanCreate,
+    session: SessionDep,
+    user: CurrentUser,
+    ai: AIDep,
+    request: Request,
+    limiter: RateLimiterDep,
 ) -> AIPlan:
+    # The only route that costs real money once Groq is behind it, and the only
+    # one where an authenticated user can run up someone else's bill. Keyed on
+    # the user id rather than the peer, because the account is who pays.
+    settings = get_settings()
+    await limiter.hit(
+        "plan",
+        client_identity(request, subject=str(user.id)),
+        limit=settings.plan_rate_limit,
+        window_seconds=settings.plan_rate_window_seconds,
+    )
+
     goal = payload.goal or user.goal
 
     recent = await session.scalars(
@@ -113,3 +132,27 @@ async def list_plans(session: SessionDep, user: CurrentUser) -> list[AIPlan]:
         select(AIPlan).where(AIPlan.user_id == user.id).order_by(AIPlan.created_at.desc()).limit(20)
     )
     return list(rows)
+
+
+async def _load_plan(session: SessionDep, user: CurrentUser, plan_id: uuid.UUID) -> AIPlan:
+    plan = await session.scalar(
+        select(AIPlan).where(AIPlan.id == plan_id, AIPlan.user_id == user.id)
+    )
+    if plan is None:
+        # 404 rather than 403 for someone else's plan: no reason to confirm
+        # that an id exists.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+    return plan
+
+
+@router.get("/plans/{plan_id}", response_model=PlanOut)
+async def get_plan(plan_id: uuid.UUID, session: SessionDep, user: CurrentUser) -> AIPlan:
+    return await _load_plan(session, user, plan_id)
+
+
+@router.delete("/plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_plan(plan_id: uuid.UUID, session: SessionDep, user: CurrentUser) -> Response:
+    plan = await _load_plan(session, user, plan_id)
+    await session.delete(plan)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

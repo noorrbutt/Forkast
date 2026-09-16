@@ -17,18 +17,26 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import api_router
 from app.config import get_settings
+from app.middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
 
 settings = get_settings()
 
 app = FastAPI(
     title="Forkast API",
     version="0.1.0",
+    # The interactive docs enumerate every route, schema and example, which is
+    # free reconnaissance on a public host and genuinely useful on a laptop.
+    # ENVIRONMENT=production turns all three off together.
+    docs_url="/docs" if settings.docs_enabled else None,
+    redoc_url="/redoc" if settings.docs_enabled else None,
+    openapi_url="/openapi.json" if settings.docs_enabled else None,
     description=(
         "Food logging, calorie forecasting and AI driven meal planning. "
         "Auth, food log CRUD, search, the dashboard and streaks are all real, "
-        "with streak days bucketed in each user's own timezone. The Groq "
-        "integration is still a TODO stub: AI_PROVIDER=groq answers 501, and "
-        "AI_PROVIDER=fake serves the deterministic estimator and planner."
+        "with streak days bucketed in each user's own timezone. AI_PROVIDER "
+        "selects the estimator and planner: groq calls the real API, fake uses "
+        "a deterministic local one that needs no key. An upstream AI failure is "
+        "reported as 502, since the provider is not this service."
     ),
 )
 
@@ -45,6 +53,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Added after CORS, so it runs outermost and its headers reach even the
+# responses CORS short-circuits.
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_request_bytes)
 
 app.include_router(api_router)
 
