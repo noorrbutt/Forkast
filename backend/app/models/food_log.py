@@ -61,6 +61,17 @@ class FoodLog(Base):
 
     category: Mapped[FoodCategory] = relationship(lazy="joined")
     restaurant: Mapped[Restaurant | None] = relationship(lazy="joined")
+    # raise_on_sql, not joined: the bytes must never ride along with a list of
+    # logs. The routes that serve an image load it deliberately, and anything
+    # that touches this by accident fails loudly instead of quietly shipping
+    # megabytes per row.
+    photo: Mapped["FoodLogPhoto | None"] = relationship(  # noqa: F821
+        back_populates="log",
+        cascade="all, delete-orphan",
+        lazy="raise_on_sql",
+        uselist=False,
+    )
+
 
     __table_args__ = (
         CheckConstraint("rating BETWEEN 1 AND 5", name="rating_range"),

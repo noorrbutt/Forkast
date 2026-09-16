@@ -111,6 +111,9 @@ class FoodLogOut(BaseModel):
     friend_scale: FriendScale | None = None
     serving_size: ServingSize
     estimated_calories: int
+    # Computed by the database as part of the same SELECT, so a list of logs
+    # never loads a byte of image data to answer it.
+    has_photo: bool = False
     created_at: dt.datetime
 
     # Joined in so the client can render a log row without a second request.

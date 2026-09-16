@@ -11,13 +11,13 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, SessionDep
 from app.api.v1.catalog import upsert_restaurant
-from app.models import FoodCategory, FoodLog, Restaurant
+from app.models import MAX_PHOTO_BYTES, FoodCategory, FoodLog, FoodLogPhoto, Restaurant
 from app.schemas.insights import TrendOut
 from app.schemas.logs import FoodLogCreate, FoodLogOut, FoodLogPage, FoodLogUpdate
 from app.services.ai.base import AIService
@@ -267,6 +267,131 @@ async def repeat_log(log_id: uuid.UUID, session: SessionDep, user: CurrentUser) 
     created = await _load_log(session, user.id, repeated.id)
     await session.commit()
     return created
+
+
+# What a phone camera and an image picker actually produce. Checked by magic
+# bytes rather than by the declared content type, because the header is whatever
+# the client says it is and this content is served straight back to other users
+# of the same account.
+# Written as hex rather than as escaped byte strings. These signatures
+# contain CR, LF and SUB, which do not survive being copied through a text
+# editor intact, and a silently mangled signature here would reject every
+# valid PNG.
+_MAGIC: tuple[tuple[bytes, str], ...] = (
+    (bytes.fromhex("ffd8ff"), "image/jpeg"),
+    (bytes.fromhex("89504e470d0a1a0a"), "image/png"),
+    (bytes.fromhex("52494646"), "image/webp"),
+)
+
+
+def _sniff(data: bytes) -> str | None:
+    """The real type of these bytes, or None if it is not an image we accept."""
+    for prefix, content_type in _MAGIC:
+        if not data.startswith(prefix):
+            continue
+        # RIFF alone is any RIFF container, including audio. Only WEBP counts.
+        if content_type == "image/webp" and data[8:12] != bytes.fromhex("57454250"):
+            return None
+        return content_type
+    return None
+
+
+@logs_router.put("/{log_id}/photo", response_model=FoodLogOut)
+async def set_photo(
+    log_id: uuid.UUID,
+    session: SessionDep,
+    user: CurrentUser,
+    file: Annotated[UploadFile, File()],
+) -> FoodLog:
+    """Attach or replace the picture on a meal.
+
+    PUT rather than POST: there is one photo per meal, so uploading twice leaves
+    the same state instead of stacking a second image. A retry after a dropped
+    connection is then safe by construction.
+    """
+    log = await _load_log(session, user.id, log_id)
+
+    # Read with one byte of headroom so a file on the limit passes and anything
+    # over it is caught here rather than by the CHECK constraint, which would
+    # surface as a 500.
+    data = await file.read(MAX_PHOTO_BYTES + 1)
+    if len(data) > MAX_PHOTO_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"Photos must be {MAX_PHOTO_BYTES // 1024} KB or smaller.",
+        )
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="That file was empty.",
+        )
+
+    content_type = _sniff(data)
+    if content_type is None:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Photos must be JPEG, PNG or WebP.",
+        )
+
+    existing = await session.scalar(
+        select(FoodLogPhoto).where(FoodLogPhoto.food_log_id == log.id)
+    )
+    if existing is None:
+        session.add(
+            FoodLogPhoto(
+                food_log_id=log.id,
+                content_type=content_type,
+                byte_size=len(data),
+                data=data,
+            )
+        )
+    else:
+        existing.content_type = content_type
+        existing.byte_size = len(data)
+        existing.data = data
+
+    await session.commit()
+    return await _load_log(session, user.id, log_id)
+
+
+@logs_router.get("/{log_id}/photo")
+async def get_photo(log_id: uuid.UUID, session: SessionDep, user: CurrentUser) -> Response:
+    """The image bytes.
+
+    Deliberately returns the file rather than a URL. That keeps the storage
+    decision behind this route: moving the bytes to object storage later becomes
+    a redirect from here, and no client changes.
+    """
+    # Goes through _load_log first, so a meal belonging to someone else 404s on
+    # the same path reading it does and never reveals that the id exists.
+    await _load_log(session, user.id, log_id)
+
+    photo = await session.scalar(select(FoodLogPhoto).where(FoodLogPhoto.food_log_id == log_id))
+    if photo is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No photo on that meal")
+
+    return Response(
+        content=photo.data,
+        media_type=photo.content_type,
+        headers={
+            # The bytes for a given photo never change; a replacement is a new
+            # row with a new id, so this is safe to hold onto.
+            "Cache-Control": "private, max-age=86400",
+            "Content-Length": str(photo.byte_size),
+        },
+    )
+
+
+@logs_router.delete("/{log_id}/photo", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_photo(log_id: uuid.UUID, session: SessionDep, user: CurrentUser) -> Response:
+    await _load_log(session, user.id, log_id)
+    photo = await session.scalar(select(FoodLogPhoto).where(FoodLogPhoto.food_log_id == log_id))
+    # Deleting a photo that is not there is the state the caller asked for, so
+    # it is not an error.
+    if photo is not None:
+        await session.delete(photo)
+        await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @trend_router.get("/trend", response_model=TrendOut)
