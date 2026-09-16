@@ -10,12 +10,23 @@ const DEFAULT_BASE_URL = 'http://localhost:8010';
  * so this prefix is reserved for the API origin and nothing else. No secret
  * may ever be given an EXPO_PUBLIC_ name.
  */
+/**
+ * How long a request waits before giving up.
+ *
+ * Generous on purpose: this runs on a phone, sometimes on a slow connection,
+ * and a request that would have succeeded in eight seconds should not be
+ * abandoned at three. The cost is that an unreachable server takes this long to
+ * report itself, which is why the message below names the address rather than
+ * saying only that something timed out.
+ */
+export const REQUEST_TIMEOUT_MS = 15000;
+
 export const API_ORIGIN = (process.env.EXPO_PUBLIC_API_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
 export const API_BASE_URL = `${API_ORIGIN}/api/v1`;
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: REQUEST_TIMEOUT_MS,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -96,7 +107,7 @@ async function performRefresh(): Promise<TokenPair> {
   const response = await axios.post<TokenPair>(
     `${API_BASE_URL}/auth/refresh`,
     { refresh_token: current },
-    { timeout: 15000, headers: { 'Content-Type': 'application/json' } },
+    { timeout: REQUEST_TIMEOUT_MS, headers: { 'Content-Type': 'application/json' } },
   );
   if (generation !== tokenGeneration) {
     // Signed out while this was in flight. Throwing rather than storing keeps
@@ -171,8 +182,17 @@ export function describeError(error: unknown): string {
       const first = detail[0] as { msg?: unknown };
       if (typeof first?.msg === 'string') return first.msg;
     }
-    if (error.code === 'ECONNABORTED') return 'The request timed out.';
-    if (!error.response) return `Could not reach the server at ${API_ORIGIN}.`;
+    // A timeout with no response is a "could not reach it" case, so say which
+    // address was not reached. On a phone the cause is almost always a stale
+    // LAN address, a server that is not running, or a firewall in between, and
+    // a bare "the request timed out" points at none of them.
+    if (!error.response) {
+      const seconds = Math.round(REQUEST_TIMEOUT_MS / 1000);
+      const timedOut = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT';
+      return timedOut
+        ? `Could not reach ${API_ORIGIN} within ${seconds}s. Check the API is running and that this device can reach that address.`
+        : `Could not reach the server at ${API_ORIGIN}.`;
+    }
     return `Request failed with status ${error.response.status}.`;
   }
   if (error instanceof Error) return error.message;
