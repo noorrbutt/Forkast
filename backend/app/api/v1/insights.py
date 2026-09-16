@@ -20,6 +20,7 @@ from app.schemas.auth import UserOut, UserUpdate
 from app.schemas.insights import DashboardOut, PlanCreate, PlanOut, StreaksOut
 from app.services.ai.base import AIService
 from app.services.ai.deps import get_ai_service
+from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import PlanLogSummary, PlanRequest
 from app.services.insights import build_dashboard, compute_streaks
 
@@ -89,12 +90,10 @@ async def create_plan(
         result = await ai.generate_plan(
             PlanRequest(goal=goal, timezone=user.timezone, recent_logs=summaries)
         )
-    except NotImplementedError as exc:
-        # The Groq implementation is still a stub. Say so plainly instead of
-        # returning a 500 with no explanation.
+    except GroqResponseError as exc:
         raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail=str(exc),
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"The plan generator is unavailable: {exc}",
         ) from exc
 
     plan = AIPlan(

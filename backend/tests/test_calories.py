@@ -100,19 +100,19 @@ async def test_the_stub_skews_rich_dishes_higher_than_light_ones() -> None:
     assert creamy.calories > grilled.calories
 
 
-async def test_the_groq_implementation_is_still_a_stub() -> None:
-    """Guards against the TODO being quietly forgotten or half finished."""
+async def test_the_deterministic_stub_and_the_groq_client_are_interchangeable() -> None:
+    """The seam only pays off if both sides really satisfy the same Protocol.
+
+    This used to assert the Groq class raised NotImplementedError. It is
+    implemented now, so the thing worth guarding is that it still matches the
+    interface the routes depend on.
+    """
+    from app.services.ai.base import AIService
     from app.services.ai.groq_service import GroqAIService
 
-    service = GroqAIService(client=None, model="openai/gpt-oss-20b")
+    stub = DeterministicAIService()
+    real = GroqAIService(client=None, model="openai/gpt-oss-20b")
 
-    with pytest.raises(NotImplementedError):
-        await service.adjust_calories(
-            CalorieAdjustRequest(
-                dish_name="x",
-                category_name="Pasta",
-                base_calorie_min=1,
-                base_calorie_max=2,
-                serving_size=ServingSize.medium,
-            )
-        )
+    assert isinstance(stub, AIService)
+    assert isinstance(real, AIService)
+

@@ -15,6 +15,7 @@ from app.models import FoodCategory, FoodLog, Restaurant
 from app.schemas.logs import FoodLogCreate, FoodLogOut, FoodLogPage, FoodLogUpdate
 from app.services.ai.base import AIService
 from app.services.ai.deps import get_ai_service
+from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import CalorieAdjustRequest
 from app.services.calories import finalise_estimate
 
@@ -67,8 +68,14 @@ async def _estimate_calories(
                 serving_size=serving_size,
             )
         )
-    except NotImplementedError as exc:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc)) from exc
+    except GroqResponseError as exc:
+        # The AI provider is upstream of us, so its failure is a 502 rather than
+        # a 500. The log still gets written by the caller's retry; nothing here
+        # has been persisted yet.
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"The calorie estimator is unavailable: {exc}",
+        ) from exc
     return finalise_estimate(
         adjustment.calories,
         category.base_calorie_min,

@@ -1,52 +1,37 @@
-"""Real Groq implementation.
+"""The real Groq implementation of the AI seam.
 
-TODO: NOT IMPLEMENTED YET. Every method below raises NotImplementedError.
+Both calls use strict structured output rather than asking for JSON in the
+prompt and hoping. Groq validates the reply against the schema, so the failure
+mode becomes a refusal we can catch instead of a plausible-looking string that
+breaks json.loads in production.
 
-The call shape sketched here is correct and current as of 2026-09-16, so
-finishing this is a matter of replacing the raise with the commented body:
+Three details that are easy to get wrong and are not guessable from the SDK
+signature:
 
-    resp = await self._client.chat.completions.create(
-        model=self._model,
-        messages=[
-            {"role": "system", "content": CALORIE_SYSTEM_PROMPT},
-            {"role": "user", "content": user_payload},
-        ],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "calorie_estimate",
-                "strict": True,
-                "schema": {...},
-            },
-        },
-        temperature=0.2,
-        max_completion_tokens=512,
-        seed=1337,
-    )
-    raw = resp.choices[0].message.content
+* The parameter is ``max_completion_tokens``. ``max_tokens`` is still accepted
+  as a legacy alias but should not be used in new code.
+* Strict structured output is supported only on the gpt-oss models and
+  qwen3.8-27b, and it is mutually exclusive with tool use. This seam needs
+  structured output and no tools, so that trade costs nothing.
+* The reply content is a JSON *string*. There is no ``.parse()`` helper, so it
+  has to be json.loads'd and validated here.
 
-Four things that are easy to get wrong:
+Do not switch the model to ``llama-3.3-70b-versatile`` or
+``llama-3.1-8b-instant``: both were shut down on 2026-08-16 even though they
+lingered on the models page.
 
-1. Model id. Use openai/gpt-oss-20b, or openai/gpt-oss-120b for the plan seam
-   if 20b underperforms. Do NOT use llama-3.3-70b-versatile or
-   llama-3.1-8b-instant: Groq's deprecation table gives them a shutdown date of
-   2026-08-16, even though the models page still lists them as production.
-2. The parameter is max_completion_tokens, not max_tokens. The old name is
-   still accepted as a legacy alias but should not be used in new code.
-3. Strict structured output is supported only on the gpt-oss pair and
-   qwen/qwen3.8-27b, and it is mutually exclusive with tool use. This seam
-   needs structured output and no tools, so that trade costs nothing.
-4. The response content is a JSON string. There is no .parse() helper, so
-   json.loads it and validate with the pydantic models in schemas.py.
-
-The result must still be clamped into the category range on our side. A strict
-schema constrains the shape of the reply, never the value inside it.
+The model is never trusted to respect the calorie range. It is asked to stay
+inside it, the schema constrains the shape of the reply, and then the caller
+clamps the value anyway. A schema constrains structure, never the number inside.
 """
 
 from __future__ import annotations
 
+import json
+import logging
 from typing import Any
 
+from app.services.ai.prompts import CALORIE_SYSTEM_PROMPT, PLAN_SYSTEM_PROMPT
 from app.services.ai.schemas import (
     CalorieAdjustRequest,
     CalorieAdjustResult,
@@ -54,22 +39,192 @@ from app.services.ai.schemas import (
     PlanResult,
 )
 
+logger = logging.getLogger(__name__)
+
+# How many recent logs to describe to the planner. The window is already capped
+# upstream; this is a second bound so a future caller cannot accidentally send a
+# year of history and blow up the prompt.
+MAX_LOGS_IN_PROMPT = 40
+
+CALORIE_SCHEMA: dict[str, Any] = {
+    "name": "calorie_estimate",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "calories": {
+                "type": "integer",
+                "description": "Calories for one serving, inside the given range",
+            },
+            "reasoning": {
+                "type": "string",
+                "description": "One short sentence on what drove the number",
+            },
+        },
+        "required": ["calories", "reasoning"],
+        "additionalProperties": False,
+    },
+}
+
+PLAN_SCHEMA: dict[str, Any] = {
+    "name": "eating_plan",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "summary": {"type": "string"},
+            "days": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "day": {"type": "string"},
+                        "meals": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "slot": {"type": "string"},
+                                    "suggestion": {"type": "string"},
+                                    "approx_calories": {"type": "integer"},
+                                },
+                                "required": ["slot", "suggestion", "approx_calories"],
+                                "additionalProperties": False,
+                            },
+                        },
+                    },
+                    "required": ["day", "meals"],
+                    "additionalProperties": False,
+                },
+            },
+            "nudges": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["summary", "days", "nudges"],
+        "additionalProperties": False,
+    },
+}
+
+
+class GroqResponseError(RuntimeError):
+    """Groq answered, but not with something usable."""
+
+
+def _calorie_prompt(req: CalorieAdjustRequest) -> str:
+    return (
+        f"Dish: {req.dish_name}\n"
+        f"Category: {req.category_name}\n"
+        f"Range for this category: {req.base_calorie_min} to {req.base_calorie_max} kcal\n"
+        "Place this dish inside that range. Ignore portion size, the caller "
+        "applies it separately."
+    )
+
+
+def _plan_prompt(req: PlanRequest) -> str:
+    if not req.recent_logs:
+        history = "They have not logged anything yet."
+    else:
+        lines = [
+            f"- {log.logged_at.date().isoformat()} {log.dish_name} "
+            f"({log.category_name}, {log.cuisine_name}, "
+            f"{'junk' if log.is_junk else 'regular'}, {log.estimated_calories} kcal)"
+            for log in req.recent_logs[:MAX_LOGS_IN_PROMPT]
+        ]
+        history = "Recent meals, newest first:\n" + "\n".join(lines)
+
+    return (
+        f"Goal: {req.goal.value}\n"
+        f"Their timezone: {req.timezone}\n\n"
+        f"{history}\n\n"
+        "Write a three day plan that fits the way they already eat."
+    )
+
 
 class GroqAIService:
-    """Implements AIService against the Groq API. Not yet implemented."""
+    """Implements AIService against the Groq API.
+
+    The client is injected rather than constructed here, which keeps this class
+    testable without a network call or an API key: a test passes a stand-in that
+    returns a canned completion.
+    """
 
     def __init__(self, client: Any, model: str) -> None:
         self._client = client
         self._model = model
 
+    async def _complete(self, system: str, user: str, schema: dict[str, Any], max_tokens: int) -> Any:
+        try:
+            response = await self._client.chat.completions.create(
+                model=self._model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                response_format={"type": "json_schema", "json_schema": schema},
+                temperature=0.2,
+                max_completion_tokens=max_tokens,
+                # A fixed seed makes the same dish tend to produce the same
+                # number, which matters because the estimate is stored and a
+                # user seeing a different figure for the same meal reads it as
+                # a bug.
+                seed=1337,
+            )
+        except Exception as exc:
+            # Everything the SDK can raise, from a timeout to a rate limit to a
+            # bad key, becomes one exception type. The routes should not have to
+            # know what Groq is in order to return a sensible status code, and
+            # the seam exists precisely so a second provider would not change
+            # their error handling.
+            logger.warning("Groq request failed: %s: %s", type(exc).__name__, exc)
+            raise GroqResponseError(f"Groq request failed: {exc}") from exc
+
+        try:
+            content = response.choices[0].message.content
+        except (AttributeError, IndexError, KeyError) as exc:
+            raise GroqResponseError("Groq returned no completion") from exc
+
+        if not content:
+            raise GroqResponseError("Groq returned an empty completion")
+
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError as exc:
+            # Strict schemas make this unlikely rather than impossible, and a
+            # raw JSONDecodeError three frames down says nothing useful.
+            logger.warning("Groq returned unparseable JSON: %r", content[:200])
+            raise GroqResponseError("Groq returned content that was not JSON") from exc
+
     async def adjust_calories(self, req: CalorieAdjustRequest) -> CalorieAdjustResult:
-        raise NotImplementedError(
-            "GroqAIService.adjust_calories is a TODO stub. "
-            "Set AI_PROVIDER=fake to use the deterministic estimator."
+        payload = await self._complete(
+            CALORIE_SYSTEM_PROMPT, _calorie_prompt(req), CALORIE_SCHEMA, max_tokens=256
         )
 
+        try:
+            calories = float(payload["calories"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise GroqResponseError(f"Groq reply had no usable calories: {payload!r}") from exc
+
+        # The caller clamps as well. Doing it here too means the reasoning text
+        # matches the number actually returned, and keeps this class honest if
+        # it is ever used outside that caller.
+        clamped = max(float(req.base_calorie_min), min(float(req.base_calorie_max), calories))
+        if clamped != calories:
+            logger.info(
+                "Groq returned %s for %r, outside %s-%s, clamped to %s",
+                calories,
+                req.dish_name,
+                req.base_calorie_min,
+                req.base_calorie_max,
+                clamped,
+            )
+
+        return CalorieAdjustResult(calories=clamped, reasoning=payload.get("reasoning"))
+
     async def generate_plan(self, req: PlanRequest) -> PlanResult:
-        raise NotImplementedError(
-            "GroqAIService.generate_plan is a TODO stub. "
-            "Set AI_PROVIDER=fake to use the deterministic planner."
+        payload = await self._complete(
+            PLAN_SYSTEM_PROMPT, _plan_prompt(req), PLAN_SCHEMA, max_tokens=2048
         )
+
+        try:
+            return PlanResult.model_validate({**payload, "model": self._model})
+        except Exception as exc:
+            raise GroqResponseError(f"Groq plan did not match the expected shape: {exc}") from exc
