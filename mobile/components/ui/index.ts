@@ -6,7 +6,6 @@ export { Field } from './Field';
 export { ErrorState } from './ErrorState';
 export { Frosted } from './Frosted';
 export { Loading } from './Loading';
-export { SampleBadge } from './SampleBadge';
 export { Screen } from './Screen';
 export { SectionLabel } from './SectionLabel';
 export { StatTile } from './StatTile';

@@ -189,3 +189,40 @@ async def test_both_cuisine_parameter_spellings_filter(auth_client: AsyncClient)
     assert len(by_plan_spelling) == len(by_id)
     assert {c["id"] for c in by_plan_spelling} == {c["id"] for c in by_id}
 
+
+
+async def test_a_nul_byte_in_a_search_term_is_a_client_error(auth_client: AsyncClient) -> None:
+    """The term reaches PostgreSQL as an ILIKE pattern and a trigram operand,
+    and \x00 in either one used to surface as a 500."""
+    assert (await auth_client.get("/api/v1/search", params={"q": "bir\x00yani"})).status_code == 422
+    assert (
+        await auth_client.get("/api/v1/restaurants", params={"q": "kol\x00achi"})
+    ).status_code == 422
+
+
+async def test_a_blank_restaurant_query_lists_rather_than_matching_everything(
+    auth_client: AsyncClient,
+) -> None:
+    """"?q=   " used to build an empty LIKE pattern that matched every row
+    through the slow path instead of just listing."""
+    await auth_client.post("/api/v1/restaurants", json={"name": "Kolachi", "area": "Do Darya"})
+
+    blank = await auth_client.get("/api/v1/restaurants", params={"q": "   "})
+    listed = await auth_client.get("/api/v1/restaurants")
+
+    assert blank.status_code == 200
+    assert blank.json() == listed.json()
+
+
+async def test_a_whitespace_only_restaurant_name_is_rejected(auth_client: AsyncClient) -> None:
+    response = await auth_client.post("/api/v1/restaurants", json={"name": "   "})
+
+    assert response.status_code == 422
+
+
+async def test_a_nul_byte_in_a_restaurant_name_is_a_client_error(
+    auth_client: AsyncClient,
+) -> None:
+    response = await auth_client.post("/api/v1/restaurants", json={"name": "Kol\x00achi"})
+
+    assert response.status_code == 422

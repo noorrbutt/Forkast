@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { RefreshControl, Text, View } from 'react-native';
 
-import { Button, Card, ErrorState, Loading, SampleBadge, Screen, SectionLabel } from '../../components/ui';
+import { Button, Card, ErrorState, Loading, Screen, SectionLabel } from '../../components/ui';
 import { useStreaks } from '../../hooks/useInsights';
 import { describeError } from '../../lib/api';
 import { formatDate } from '../../lib/format';
@@ -59,7 +59,7 @@ export default function StreaksScreen() {
         <>
           <Card>
             <View style={{ gap: spacing.xs }}>
-              <SectionLabel right={<SampleBadge source={data._source} />}>Current streak</SectionLabel>
+              <SectionLabel>Current streak</SectionLabel>
               <Text style={[type.display, { color: current > 0 ? colors.accent : colors.text }]}>
                 {current}
               </Text>

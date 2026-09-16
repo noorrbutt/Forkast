@@ -1,15 +1,14 @@
-"""Seed demo content and write the dashboard/streak snapshot.
+"""Seed demo content: a demo user, restaurants and a believable log history.
 
-    python -m app.seed.run            # reseed demo data, then write the snapshot
-    python -m app.seed.run --reset    # remove demo data and the snapshot, then stop
+    python -m app.seed.run            # reseed demo data
+    python -m app.seed.run --reset    # remove demo data, then stop
 
 Cuisines and food categories are NOT created here: they are reference data and
 live in migration 0002. This script only creates the things a real user would
 have created, so wiping it never leaves the app unusable.
 
 Deterministic by design. The generator is seeded with a fixed value, so the same
-history comes out on every run and screenshots, tests and the snapshot all stay
-stable. Only the anchor date moves, because the logs are positioned relative to
+history comes out on every run and screenshots and tests stay stable. Only the anchor date moves, because the logs are positioned relative to
 today so the dashboard never looks abandoned.
 """
 
@@ -30,10 +29,10 @@ from app.db import SessionLocal
 from app.models import Cuisine, FoodCategory, FoodLog, Restaurant, User
 from app.models.enums import FriendScale, Goal, ServingSize
 from app.seed.data import DISH_NAMES, RESTAURANTS
-from app.seed.snapshot import SNAPSHOT_PATH, write_snapshot
 from app.services.ai.fake import DeterministicAIService
 from app.services.ai.schemas import CalorieAdjustRequest
 from app.services.calories import finalise_estimate
+from app.services.insights import KCAL_PER_MINUTE
 from app.services.security import hash_password
 
 DEMO_EMAIL = "demo@forkast.app"
@@ -41,11 +40,6 @@ DEMO_PASSWORD = "demo1234"
 DAYS_OF_HISTORY = 90
 TARGET_LOGS = 120
 RANDOM_SEED = 20260916
-
-# MET values for a 70kg adult, used for the burn-it-off row. Rough on purpose:
-# this is an intuition pump, not a prescription.
-KCAL_PER_MINUTE = {"walking": 4.4, "running": 11.7, "cycling": 8.2}
-
 
 async def _clear_demo_data(session: AsyncSession) -> None:
     """Remove the demo user and the seeded restaurants.
@@ -165,12 +159,13 @@ async def _generate_logs(
     return logs
 
 
-def _build_snapshot(user: User, logs: list[FoodLog], categories: list[FoodCategory]) -> dict:
-    """Compute the placeholder dashboard and streak figures from the seeded logs.
+def _summarise(user: User, logs: list[FoodLog], categories: list[FoodCategory]) -> dict:
+    """Summarise what was just seeded, for the console output only.
 
-    This is the logic the real endpoints will eventually run as SQL. It lives
-    here for now so the placeholder numbers at least agree with the data sitting
-    in the database.
+    The endpoints compute their own figures in SQL now. This exists so the seed
+    prints something meaningful about the history it created, and it doubles as
+    an independent second implementation: if the printed streak disagrees with
+    what /streaks returns, one of the two is wrong.
     """
     tz = ZoneInfo(user.timezone)
     cat_by_id = {c.id: c for c in categories}
@@ -294,8 +289,7 @@ async def seed(reset_only: bool = False) -> None:
 
         if reset_only:
             await session.commit()
-            SNAPSHOT_PATH.unlink(missing_ok=True)
-            print("Demo data and snapshot removed.")
+            print("Demo data removed.")
             return
 
         categories = list(await session.scalars(select(FoodCategory)))
@@ -316,8 +310,7 @@ async def seed(reset_only: bool = False) -> None:
         restaurants = await _ensure_restaurants(session, created_by=user.id)
         logs = await _generate_logs(session, user, categories, restaurants)
 
-        snapshot = _build_snapshot(user, logs, categories)
-        write_snapshot(snapshot)
+        summary = _summarise(user, logs, categories)
 
         await session.commit()
 
@@ -327,18 +320,17 @@ async def seed(reset_only: bool = False) -> None:
         print(f"      categories   {len(categories)}")
         print(f"     restaurants   {len(restaurants)}")
         print(f"       food logs   {len(logs)} across {DAYS_OF_HISTORY} days")
-        print(f"        snapshot   {SNAPSHOT_PATH.name}")
         print(
-            f"          streak   current {snapshot['streaks']['current_streak']}, "
-            f"longest {snapshot['streaks']['longest_streak']}"
+            f"          streak   current {summary['streaks']['current_streak']}, "
+            f"longest {summary['streaks']['longest_streak']}"
         )
-        print(f"       junk ratio   {snapshot['dashboard']['junk_ratio']:.0%}")
+        print(f"       junk ratio   {summary['dashboard']['junk_ratio']:.0%}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed Forkast demo data.")
     parser.add_argument(
-        "--reset", action="store_true", help="Remove demo data and the snapshot, then stop."
+        "--reset", action="store_true", help="Remove the demo user and the seeded restaurants, then stop."
     )
     args = parser.parse_args()
     asyncio.run(seed(reset_only=args.reset))

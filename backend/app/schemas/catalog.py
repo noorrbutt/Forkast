@@ -6,6 +6,8 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.text import optional_text_field, text_field
+
 # cuisines.id and food_categories.id are smallint. Without this bound an
 # oversized id reaches the database and fails as a 500 DataError instead of a
 # clean 422.
@@ -60,7 +62,7 @@ class RestaurantOut(BaseModel):
 
 
 class RestaurantCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
-    area: str | None = Field(default=None, max_length=120)
+    name: text_field(max_length=200)
+    area: optional_text_field(max_length=120) = None
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)

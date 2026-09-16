@@ -1,8 +1,9 @@
 """Dashboard, streaks, profile and AI plans.
 
-Dashboard and streaks are placeholders served from the seed snapshot. Plans are
-real: the logs are really read, the plan is really stored, and only the text
-generation itself comes from the stubbed AI service.
+All real now. Dashboard and streaks are computed from food_logs on every
+request, bucketed into the user's own calendar days; see services/insights.py
+for why that matters. Plans read the real log history and store the result, and
+only the text generation comes from the AI seam.
 """
 
 from __future__ import annotations
@@ -16,18 +17,11 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import CurrentUser, SessionDep
 from app.models import AIPlan, FoodCategory, FoodLog, User
 from app.schemas.auth import UserOut, UserUpdate
-from app.schemas.insights import (
-    PLACEHOLDER_SOURCE,
-    BurnEquivalents,
-    DashboardOut,
-    PlanCreate,
-    PlanOut,
-    StreaksOut,
-)
-from app.seed.snapshot import read_snapshot
+from app.schemas.insights import DashboardOut, PlanCreate, PlanOut, StreaksOut
 from app.services.ai.base import AIService
 from app.services.ai.deps import get_ai_service
 from app.services.ai.schemas import PlanLogSummary, PlanRequest
+from app.services.insights import build_dashboard, compute_streaks
 
 router = APIRouter(tags=["insights"])
 
@@ -37,20 +31,6 @@ AIDep = Annotated[AIService, Depends(get_ai_service)]
 # enough to keep the prompt cheap once a real model is behind it.
 PLAN_LOG_WINDOW = 30
 
-# source is None here on purpose. These are genuine empty values because the
-# seed has not been run, not sample data, and the client badge keys off the
-# marker being present.
-_EMPTY_DASHBOARD = DashboardOut(
-    source=None,
-    junk_ratio=0.0,
-    total_calories=0,
-    logs_count=0,
-    calories_by_day=[],
-    top_category=None,
-    top_restaurant=None,
-    best_fun_meals=[],
-    burn_equivalents=BurnEquivalents(walking_minutes=0, running_minutes=0, cycling_minutes=0),
-)
 
 
 @router.get("/me", response_model=UserOut)
@@ -69,29 +49,13 @@ async def update_me(payload: UserUpdate, session: SessionDep, user: CurrentUser)
 
 
 @router.get("/dashboard", response_model=DashboardOut)
-async def dashboard(user: CurrentUser) -> DashboardOut:
-    # TODO: replace with real aggregation over food_logs. See the module
-    # docstring for why this reads a snapshot for now.
-    snapshot = read_snapshot()
-    if snapshot is None or "dashboard" not in snapshot:
-        return _EMPTY_DASHBOARD
-    return DashboardOut.model_validate({**snapshot["dashboard"], "source": PLACEHOLDER_SOURCE})
+async def dashboard(session: SessionDep, user: CurrentUser) -> DashboardOut:
+    return await build_dashboard(session, user)
 
 
 @router.get("/streaks", response_model=StreaksOut)
-async def streaks(user: CurrentUser) -> StreaksOut:
-    # TODO: replace with a real on the fly computation from food_logs, bucketed
-    # into calendar days in the user's own timezone.
-    snapshot = read_snapshot()
-    if snapshot is None or "streaks" not in snapshot:
-        return StreaksOut(
-            source=None,
-            current_streak=0,
-            longest_streak=0,
-            last_junk_date=None,
-            message="No logs yet. Your first one starts the streak.",
-        )
-    return StreaksOut.model_validate({**snapshot["streaks"], "source": PLACEHOLDER_SOURCE})
+async def streaks(session: SessionDep, user: CurrentUser) -> StreaksOut:
+    return await compute_streaks(session, user)
 
 
 @router.post("/plans", response_model=PlanOut, status_code=status.HTTP_201_CREATED)

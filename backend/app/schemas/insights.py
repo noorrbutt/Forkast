@@ -1,11 +1,9 @@
 """Dashboard, streaks and AI plan models.
 
-Dashboard and streaks are placeholders in this scaffold. They are served from a
-snapshot written by the seed script rather than queried, so every response
-carries a `_source` marker. That marker is deliberate: the numbers match the
-seeded history and will drift as soon as a new log is added, and the client
-shows a "sample data" badge whenever it is present so nobody mistakes the
-values for real analytics.
+These were served from a seed snapshot while the scaffold was being built, and
+every response carried a `_source` marker so the client could badge them as
+sample data. Both are computed from food_logs now, so the marker and the badge
+are gone rather than left behind as a field that is permanently null.
 """
 
 from __future__ import annotations
@@ -17,8 +15,6 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import Goal
-
-PLACEHOLDER_SOURCE = "seed-snapshot"
 
 
 class CaloriesByDay(BaseModel):
@@ -57,9 +53,6 @@ class FunMeal(BaseModel):
 
 
 class DashboardOut(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    source: str | None = Field(default=PLACEHOLDER_SOURCE, serialization_alias="_source")
     junk_ratio: float
     total_calories: int
     logs_count: int
@@ -71,9 +64,6 @@ class DashboardOut(BaseModel):
 
 
 class StreaksOut(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    source: str | None = Field(default=PLACEHOLDER_SOURCE, serialization_alias="_source")
     current_streak: int
     longest_streak: int
     last_junk_date: dt.date | None = None

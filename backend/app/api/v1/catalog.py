@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from typing import Annotated
+
+from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import func, or_, select, text
 
 from app.api.deps import CurrentUser, SessionDep
@@ -16,6 +18,7 @@ from app.schemas.catalog import (
     RestaurantOut,
     SearchResults,
 )
+from app.schemas.text import optional_text_field, text_field
 
 router = APIRouter(tags=["catalog"])
 
@@ -81,7 +84,10 @@ async def list_categories(
 async def search(
     session: SessionDep,
     user: CurrentUser,
-    q: str = Query(min_length=1, max_length=100),
+    # text_field strips and rejects control characters before the length bound
+    # runs, so a whitespace-only or NUL-bearing query is a 422 here rather than
+    # a blank LIKE pattern or a 500 out of the database.
+    q: Annotated[text_field(max_length=100), Query()],
     limit: int = Query(default=10, ge=1, le=50),
 ) -> SearchResults:
     """Typo tolerant search across cuisines, categories and the user's own dishes.
@@ -93,12 +99,7 @@ async def search(
     """
     await _apply_similarity_threshold(session)
 
-    term = q.strip()
-    if not term:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Search query cannot be blank",
-        )
+    term = q
     pattern = f"%{term}%"
 
     cuisine_stmt = (
@@ -158,13 +159,15 @@ async def search(
 async def list_restaurants(
     session: SessionDep,
     user: CurrentUser,
-    q: str | None = Query(default=None, max_length=100),
+    # A blank q folds to None, so "?q=   " lists rather than matching every
+    # row through an empty LIKE pattern.
+    q: Annotated[optional_text_field(max_length=100), Query()] = None,
     limit: int = Query(default=20, ge=1, le=100),
 ) -> list[Restaurant]:
     stmt = select(Restaurant).order_by(Restaurant.name).limit(limit)
     if q:
         await _apply_similarity_threshold(session)
-        term = q.strip()
+        term = q
         stmt = (
             select(Restaurant)
             .where(

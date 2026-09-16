@@ -1,11 +1,29 @@
-"""Profile, the placeholder dashboard and streak endpoints, and AI plans."""
+"""Profile and AI plans.
+
+Dashboard and streak behaviour lives in test_dashboard_and_streaks.py; only the
+"no sample-data marker survives" check stays here, because it is about the shape
+of the response rather than about aggregation.
+"""
 
 from __future__ import annotations
 
 import pytest
 from httpx import AsyncClient
 
-from app.schemas.insights import PLACEHOLDER_SOURCE
+
+async def _log_pizza(client: AsyncClient) -> None:
+    categories = (await client.get("/api/v1/categories")).json()
+    pizza = next(c for c in categories if c["slug"] == "pizza")
+    response = await client.post(
+        "/api/v1/logs",
+        json={
+            "dish_name": "pepperoni pizza",
+            "category_id": pizza["id"],
+            "rating": 4,
+            "serving_size": "medium",
+        },
+    )
+    assert response.status_code == 201, response.text
 
 
 async def test_profile_returns_the_current_user(auth_client: AsyncClient) -> None:
@@ -29,29 +47,19 @@ async def test_an_invalid_goal_is_rejected(auth_client: AsyncClient) -> None:
     assert (await auth_client.patch("/api/v1/me", json={"goal": "shred"})).status_code == 422
 
 
-async def test_dashboard_is_marked_as_placeholder_data(auth_client: AsyncClient) -> None:
-    """The scaffold serves a seed snapshot here rather than real aggregation.
+async def test_no_sample_data_marker_survives_anywhere(auth_client: AsyncClient) -> None:
+    """Both endpoints are computed from food_logs now.
 
-    The marker is the contract: the client shows a "sample data" badge whenever
-    it is present, so these numbers are never mistaken for real analytics.
+    They used to serve one seeded snapshot to every account, marked with a
+    `_source` field that the client turned into a "sample data" badge. The
+    marker and the badge are gone rather than left behind as a field that is
+    permanently null.
     """
-    body = (await auth_client.get("/api/v1/dashboard")).json()
+    dashboard = (await auth_client.get("/api/v1/dashboard")).json()
+    streaks = (await auth_client.get("/api/v1/streaks")).json()
 
-    assert body["_source"] == PLACEHOLDER_SOURCE
-    assert "junk_ratio" in body
-    assert "burn_equivalents" in body
-    assert {"walking_minutes", "running_minutes", "cycling_minutes"} <= set(
-        body["burn_equivalents"]
-    )
-
-
-async def test_streaks_is_marked_as_placeholder_data(auth_client: AsyncClient) -> None:
-    body = (await auth_client.get("/api/v1/streaks")).json()
-
-    assert body["_source"] == PLACEHOLDER_SOURCE
-    assert isinstance(body["current_streak"], int)
-    assert isinstance(body["longest_streak"], int)
-    assert body["message"]
+    assert "_source" not in dashboard
+    assert "_source" not in streaks
 
 
 async def test_generating_a_plan_stores_it(auth_client: AsyncClient) -> None:
@@ -93,18 +101,8 @@ async def test_the_plan_goal_is_a_snapshot_not_a_live_pointer(auth_client: Async
 
 
 async def test_a_plan_reflects_the_users_actual_logs(auth_client: AsyncClient) -> None:
-    categories = (await auth_client.get("/api/v1/categories")).json()
-    pizza = next(c for c in categories if c["slug"] == "pizza")
     for _ in range(4):
-        await auth_client.post(
-            "/api/v1/logs",
-            json={
-                "dish_name": "pepperoni pizza",
-                "category_id": pizza["id"],
-                "rating": 4,
-                "serving_size": "medium",
-            },
-        )
+        await _log_pizza(auth_client)
 
     plan = (await auth_client.post("/api/v1/plans", json={})).json()
 
@@ -148,24 +146,3 @@ async def test_a_real_timezone_is_accepted(auth_client: AsyncClient, timezone: s
     response = await auth_client.patch("/api/v1/me", json={"timezone": timezone})
     assert response.status_code == 200
     assert response.json()["timezone"] == timezone
-
-
-async def test_empty_states_are_not_labelled_as_sample_data(
-    auth_client: AsyncClient, monkeypatch
-) -> None:
-    """With no snapshot the figures are genuinely empty, not placeholders.
-
-    The client shows its sample data badge whenever the marker is present, so
-    labelling a real empty state as a seed snapshot would put the badge on a
-    screen that is simply showing zeroes.
-    """
-    monkeypatch.setattr("app.api.v1.insights.read_snapshot", lambda: None)
-
-    dashboard = (await auth_client.get("/api/v1/dashboard")).json()
-    streaks = (await auth_client.get("/api/v1/streaks")).json()
-
-    assert dashboard["_source"] is None
-    assert dashboard["logs_count"] == 0
-    assert streaks["_source"] is None
-    assert streaks["current_streak"] == 0
-

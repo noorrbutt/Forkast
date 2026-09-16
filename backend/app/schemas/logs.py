@@ -9,18 +9,19 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.models.enums import FriendScale, ServingSize
 from app.schemas.catalog import SMALLINT_MAX, CategoryOut, RestaurantOut
+from app.schemas.text import optional_text_field, text_field
 
 
 class FoodLogCreate(BaseModel):
-    dish_name: str = Field(min_length=1, max_length=200)
+    dish_name: text_field(max_length=200)
     category_id: int = Field(ge=1, le=SMALLINT_MAX)
 
     # Either point at an existing restaurant or give a name and let the server
     # dedupe it into the registry. Both may be omitted: a home cooked meal
     # should never be blocked from being logged.
     restaurant_id: uuid.UUID | None = None
-    restaurant_name: str | None = Field(default=None, max_length=200)
-    area: str | None = Field(default=None, max_length=120)
+    restaurant_name: optional_text_field(max_length=200) = None
+    area: optional_text_field(max_length=120) = None
 
     rating: int = Field(ge=1, le=5)
     fun_scale: int | None = Field(default=None, ge=1, le=5)
@@ -72,10 +73,14 @@ NON_NULLABLE_FIELDS = frozenset({"dish_name", "category_id", "rating", "serving_
 
 
 class FoodLogUpdate(BaseModel):
-    dish_name: str | None = Field(default=None, min_length=1, max_length=200)
+    # Required-shaped rather than optional-shaped: blanking a dish name has to
+    # read as a length error, and _reject_explicit_nulls below turns an
+    # explicit null into a 422. area is genuinely nullable, so there a blank
+    # does mean "clear it".
+    dish_name: text_field(max_length=200) | None = None
     category_id: int | None = Field(default=None, ge=1, le=SMALLINT_MAX)
     restaurant_id: uuid.UUID | None = None
-    area: str | None = Field(default=None, max_length=120)
+    area: optional_text_field(max_length=120) = None
     rating: int | None = Field(default=None, ge=1, le=5)
     fun_scale: int | None = Field(default=None, ge=1, le=5)
     friend_scale: FriendScale | None = None

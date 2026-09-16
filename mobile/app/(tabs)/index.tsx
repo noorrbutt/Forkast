@@ -7,7 +7,6 @@ import {
   Empty,
   ErrorState,
   Loading,
-  SampleBadge,
   Screen,
   SectionLabel,
   StatTile,
@@ -63,7 +62,7 @@ export default function DashboardScreen() {
         <>
           <Card>
             <View style={{ gap: spacing.xs }}>
-              <SectionLabel right={<SampleBadge source={data._source} />}>Total calories</SectionLabel>
+              <SectionLabel>Total calories</SectionLabel>
               <Text style={[type.display, { color: colors.text }]}>{formatNumber(data.total_calories)}</Text>
               <Text style={[type.caption, { color: colors.muted }]}>
                 Across {formatNumber(data.logs_count)} logged {data.logs_count === 1 ? 'meal' : 'meals'}.

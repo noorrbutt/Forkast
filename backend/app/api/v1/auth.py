@@ -106,6 +106,37 @@ async def login(payload: LoginRequest, session: SessionDep) -> TokenPair:
     return await _issue_tokens(session, user)
 
 
+async def _revoke_family_on_reuse(
+    session: SessionDep, token_hash: str, now: dt.datetime
+) -> None:
+    """Kill every live token for the owner of an already-spent refresh token.
+
+    Silent by design: the caller still gets the same "invalid or expired"
+    message it would have got for a token that never existed, because telling
+    an attacker which of the two happened is telling them their token was real.
+    An expired-but-unrevoked token is left alone -- that is an idle client, not
+    evidence of a leak.
+    """
+    reused = await session.scalar(
+        select(RefreshToken).where(
+            RefreshToken.token_hash == token_hash,
+            RefreshToken.revoked_at.is_not(None),
+        )
+    )
+    if reused is None:
+        return
+
+    await session.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == reused.user_id,
+            RefreshToken.revoked_at.is_(None),
+        )
+        .values(revoked_at=now)
+    )
+    await session.commit()
+
+
 @router.post("/refresh", response_model=TokenPair)
 async def refresh(payload: RefreshRequest, session: SessionDep) -> TokenPair:
     token_hash = hash_refresh_token(payload.refresh_token)
@@ -128,6 +159,14 @@ async def refresh(payload: RefreshRequest, session: SessionDep) -> TokenPair:
     )
     row = claimed.first()
     if row is None:
+        # Nothing matched. Either the token never existed, or it did and has
+        # already been spent -- and the second case is the interesting one.
+        # Rotation alone does not help if the thief refreshes first: the victim
+        # gets a 401 and the thief holds a chain that keeps rotating forever.
+        # A replay of an already-revoked token is the signal that the chain
+        # leaked, so every live token for that account goes with it and both
+        # sides have to log in again. RFC 9700 section 4.14.2.
+        await _revoke_family_on_reuse(session, token_hash, now)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",

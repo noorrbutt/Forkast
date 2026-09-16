@@ -25,8 +25,10 @@ app = FastAPI(
     version="0.1.0",
     description=(
         "Food logging, calorie forecasting and AI driven meal planning. "
-        "Food log CRUD and auth are real; dashboard and streaks are placeholders "
-        "served from the seed snapshot, and the Groq integration is a TODO stub."
+        "Auth, food log CRUD, search, the dashboard and streaks are all real, "
+        "with streak days bucketed in each user's own timezone. The Groq "
+        "integration is still a TODO stub: AI_PROVIDER=groq answers 501, and "
+        "AI_PROVIDER=fake serves the deterministic estimator and planner."
     ),
 )
 

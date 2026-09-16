@@ -136,8 +136,6 @@ export type FunMeal = {
 };
 
 export type Dashboard = {
-  /** Present while the backend is serving the seeded snapshot rather than real analytics. */
-  _source?: string | null;
   junk_ratio: number;
   total_calories: number;
   logs_count: number;
@@ -149,7 +147,6 @@ export type Dashboard = {
 };
 
 export type Streaks = {
-  _source?: string | null;
   current_streak: number;
   longest_streak: number;
   last_junk_date: string | null;

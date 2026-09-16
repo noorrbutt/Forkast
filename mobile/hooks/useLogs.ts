@@ -24,9 +24,8 @@ export function useCreateLog() {
       return response.data;
     },
     onSuccess: () => {
-      // Drop all three so the client is ready for the day these are computed
-      // for real. Today the dashboard and streaks are seed snapshots and do
-      // not move when a log is added.
+      // The dashboard and streaks are aggregated from food_logs on the
+      // server, so adding a log really does move both of them.
       void queryClient.invalidateQueries({ queryKey: ['logs'] });
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       void queryClient.invalidateQueries({ queryKey: ['streaks'] });

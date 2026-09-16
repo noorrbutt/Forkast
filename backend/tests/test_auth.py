@@ -94,12 +94,16 @@ async def test_refresh_rotates_the_token_and_kills_the_old_one(client: AsyncClie
     rotated = first.json()["refresh_token"]
     assert rotated != original_refresh
 
-    # Replaying the original must now fail, which is the whole point of rotation.
+    # The rotated one works, and rotates again. Checked before the replay
+    # below, because a replay is treated as evidence that the chain leaked and
+    # deliberately takes every live token for the account with it -- see
+    # test_replaying_a_spent_refresh_token_kills_the_whole_chain.
+    second = await client.post(REFRESH, json={"refresh_token": rotated})
+    assert second.status_code == 200
+
+    # Replaying the original must fail, which is the whole point of rotation.
     replay = await client.post(REFRESH, json={"refresh_token": original_refresh})
     assert replay.status_code == 401
-
-    # The rotated one still works.
-    assert (await client.post(REFRESH, json={"refresh_token": rotated})).status_code == 200
 
 
 async def test_refresh_tokens_are_stored_only_as_a_hash(
@@ -270,3 +274,58 @@ async def test_login_does_not_answer_faster_for_an_unknown_email(client: AsyncCl
         "which leaks which addresses exist"
     )
 
+
+
+async def test_replaying_a_spent_refresh_token_kills_the_whole_chain(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    """Rotation alone does not help if the thief refreshes first.
+
+    The victim gets a 401 and the thief holds a chain that keeps rotating
+    forever. A replay of an already-revoked token is the signal that the chain
+    leaked, so every live token for that account goes with it. RFC 9700 4.14.2.
+    """
+    tokens = (
+        await client.post(
+            REGISTER, json={"email": "reuse@forkast.app", "password": "password123"}
+        )
+    ).json()
+
+    rotated = (await client.post(REFRESH, json={"refresh_token": tokens["refresh_token"]})).json()
+
+    # The stolen, already-spent token is presented again.
+    replay = await client.post(REFRESH, json={"refresh_token": tokens["refresh_token"]})
+    assert replay.status_code == 401
+
+    # The chain that replaced it must now be dead too, not merely the replay.
+    after = await client.post(REFRESH, json={"refresh_token": rotated["refresh_token"]})
+    assert after.status_code == 401, "the leaked chain kept working after a detected replay"
+
+    live = (
+        await session.scalars(
+            select(RefreshToken).join(User).where(User.email == "reuse@forkast.app")
+        )
+    ).all()
+    assert all(token.revoked_at is not None for token in live)
+
+
+async def test_an_unrelated_account_is_not_logged_out_by_someone_elses_replay(
+    client: AsyncClient,
+) -> None:
+    """Family revocation has to stop at the owner of the replayed token."""
+    victim = (
+        await client.post(
+            REGISTER, json={"email": "victim@forkast.app", "password": "password123"}
+        )
+    ).json()
+    bystander = (
+        await client.post(
+            REGISTER, json={"email": "bystander@forkast.app", "password": "password123"}
+        )
+    ).json()
+
+    await client.post(REFRESH, json={"refresh_token": victim["refresh_token"]})
+    await client.post(REFRESH, json={"refresh_token": victim["refresh_token"]})
+
+    still_fine = await client.post(REFRESH, json={"refresh_token": bystander["refresh_token"]})
+    assert still_fine.status_code == 200

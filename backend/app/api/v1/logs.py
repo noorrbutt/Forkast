@@ -119,7 +119,7 @@ async def create_log(
 
     log = FoodLog(
         user_id=user.id,
-        dish_name=payload.dish_name.strip(),
+        dish_name=payload.dish_name,
         category_id=category.id,
         restaurant_id=restaurant_id,
         area=payload.area,

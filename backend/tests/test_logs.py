@@ -483,3 +483,124 @@ async def test_a_reasonable_backfill_is_accepted(auth_client: AsyncClient) -> No
 
     assert response.status_code == 201
 
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["dish_name", "restaurant_name", "area"],
+)
+async def test_a_nul_byte_in_any_text_field_is_a_client_error(
+    auth_client: AsyncClient, field: str
+) -> None:
+    """PostgreSQL text cannot hold \x00.
+
+    Before the shared text validator this reached asyncpg and came back as a
+    500 CharacterNotInRepertoireError, taking the pooled connection with it.
+    """
+    category = await _a_category(auth_client)
+    payload = {
+        "dish_name": "nul test",
+        "category_id": category["id"],
+        "rating": 4,
+        "serving_size": "medium",
+        field: "bad\x00value",
+    }
+
+    response = await auth_client.post(LOGS, json=payload)
+
+    assert response.status_code == 422, response.text
+
+
+async def test_a_whitespace_only_dish_name_is_rejected_not_stored_empty(
+    auth_client: AsyncClient,
+) -> None:
+    """min_length counted the raw string, so "   " passed it and the handler's
+    strip() then wrote an empty dish_name to a NOT NULL column."""
+    category = await _a_category(auth_client)
+
+    response = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "   ",
+            "category_id": category["id"],
+            "rating": 4,
+            "serving_size": "medium",
+        },
+    )
+
+    assert response.status_code == 422, response.text
+
+
+async def test_surrounding_whitespace_is_trimmed_on_create_and_on_update(
+    auth_client: AsyncClient,
+) -> None:
+    """Create stripped dish_name and PATCH did not, so editing a log could
+    reintroduce padding that creating one could not."""
+    category = await _a_category(auth_client)
+
+    created = (
+        await auth_client.post(
+            LOGS,
+            json={
+                "dish_name": "  chicken biryani  ",
+                "category_id": category["id"],
+                "rating": 4,
+                "serving_size": "medium",
+                "area": "  Clifton  ",
+            },
+        )
+    ).json()
+    assert created["dish_name"] == "chicken biryani"
+    assert created["area"] == "Clifton"
+
+    updated = (
+        await auth_client.patch(
+            f"{LOGS}/{created['id']}", json={"dish_name": "  mutton biryani  "}
+        )
+    ).json()
+    assert updated["dish_name"] == "mutton biryani"
+
+
+async def test_blanking_an_optional_field_clears_it(auth_client: AsyncClient) -> None:
+    """A user emptying the area box means "no area", not the empty string."""
+    category = await _a_category(auth_client)
+    created = (
+        await auth_client.post(
+            LOGS,
+            json={
+                "dish_name": "biryani",
+                "category_id": category["id"],
+                "rating": 4,
+                "serving_size": "medium",
+                "area": "Clifton",
+            },
+        )
+    ).json()
+
+    updated = (await auth_client.patch(f"{LOGS}/{created['id']}", json={"area": "   "})).json()
+
+    assert updated["area"] is None
+
+
+async def test_a_whitespace_only_restaurant_name_does_not_create_a_nameless_row(
+    auth_client: AsyncClient,
+) -> None:
+    """It used to create a restaurant called "", which then deduped every
+    other blank-named submission onto the same junk row."""
+    category = await _a_category(auth_client)
+
+    created = (
+        await auth_client.post(
+            LOGS,
+            json={
+                "dish_name": "home cooked",
+                "category_id": category["id"],
+                "rating": 4,
+                "serving_size": "medium",
+                "restaurant_name": "   ",
+            },
+        )
+    ).json()
+
+    assert created["restaurant_id"] is None
+    assert created["restaurant"] is None
