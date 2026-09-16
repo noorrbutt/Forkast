@@ -44,6 +44,17 @@ class UserOut(BaseModel):
     created_at: dt.datetime
 
 
+class AccountDelete(BaseModel):
+    """Deleting an account asks for the password again.
+
+    Not because the session is in doubt, but because this is irreversible and a
+    phone left unlocked on a table is the realistic threat. It is the same
+    reason the action is a separate endpoint rather than a flag on PATCH /me.
+    """
+
+    password: str
+
+
 class UserUpdate(BaseModel):
     goal: Goal | None = None
     timezone: str | None = Field(default=None, max_length=64)

@@ -18,13 +18,14 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import CurrentUser, RateLimiterDep, SessionDep
 from app.config import get_settings
 from app.models import AIPlan, FoodCategory, FoodLog, User
-from app.schemas.auth import UserOut, UserUpdate
+from app.schemas.auth import AccountDelete, UserOut, UserUpdate
 from app.schemas.insights import DashboardOut, PlanCreate, PlanOut, StreaksOut
 from app.services.ai.base import AIService
 from app.services.ai.deps import get_ai_service
 from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import PlanContext, PlanLogSummary, PlanRequest
 from app.services.insights import build_dashboard, compute_streaks
+from app.services.security import verify_password_async
 from app.services.rate_limit import client_identity
 
 router = APIRouter(tags=["insights"])
@@ -50,6 +51,36 @@ async def update_me(payload: UserUpdate, session: SessionDep, user: CurrentUser)
             setattr(user, field, value)
     await session.commit()
     return user
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_me(
+    payload: AccountDelete,
+    session: SessionDep,
+    user: CurrentUser,
+) -> Response:
+    """Delete the account and everything belonging to it.
+
+    Every table that holds this user's own data cascades from users: food_logs,
+    burn_logs, ai_plans and refresh_tokens. Restaurants deliberately do not.
+    They are a shared registry keyed on name and area, so created_by is SET NULL
+    and the place survives; removing it would delete a landmark other people
+    have logged against because one of them closed their account.
+
+    Cascading the refresh tokens is what ends every other signed in device, so
+    there is no need to revoke them separately.
+    """
+    # Irreversible, so prove it is the account holder and not someone holding an
+    # unlocked phone. The comparison is the same constant time one login uses.
+    if not await verify_password_async(payload.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="That password does not match, so nothing was deleted.",
+        )
+
+    await session.delete(user)
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/dashboard", response_model=DashboardOut)
