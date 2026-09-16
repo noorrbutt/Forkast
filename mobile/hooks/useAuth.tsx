@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import axios from 'axios';
+
 import {
   api,
   clearTokens,
@@ -31,17 +33,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    hydrateTokens()
-      .then((pair) => {
-        if (!active) return;
-        setToken(pair?.access_token ?? null);
-      })
-      .catch(() => {
+
+    void (async () => {
+      let pair: TokenPair | null = null;
+      try {
+        pair = await hydrateTokens();
+      } catch {
         // A keystore read failure just means we start signed out.
-      })
-      .finally(() => {
-        if (active) setReady(true);
-      });
+      }
+      if (!active) return;
+
+      // Open the app on what the keystore said, and let the check below run
+      // behind it. Waiting on the network here would put the request timeout
+      // in front of every cold start, which is a long blank spinner on a
+      // phone that happens to be offline.
+      setToken(pair?.access_token ?? null);
+      setReady(true);
+      if (!pair) return;
+
+      // A stored token is not the same as a live session. The account can be
+      // gone, or the whole token family revoked, and until something asks the
+      // server the app carries on believing it is signed in: it routes to the
+      // tabs, so no sign in screen is reachable, and every request underneath
+      // fails. Asking once on boot is what turns that into a trip to login.
+      try {
+        await api.get('/me');
+      } catch (error) {
+        // Only a refusal ends the session. A timeout means we could not ask,
+        // which is not the same answer as being told no, and signing someone
+        // out because their train went into a tunnel would be worse than
+        // letting them keep a session that may well still be good.
+        const refused = axios.isAxiosError(error) && error.response?.status === 401;
+        if (!refused) return;
+        await clearTokens();
+        if (active) setToken(null);
+      }
+    })();
+
     return () => {
       active = false;
     };

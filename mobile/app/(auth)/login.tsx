@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
@@ -9,6 +9,7 @@ import { useTheme } from '../../theme';
 
 export default function LoginScreen() {
   const { colors, spacing, type } = useTheme();
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const login = useLogin();
@@ -22,7 +23,7 @@ export default function LoginScreen() {
 
   return (
     <Screen scroll bottomInset={spacing.xxl}>
-      <View style={{ gap: spacing.xxl, paddingTop: spacing.xxxl }}>
+      <View style={{ gap: spacing.xl, paddingTop: spacing.lg }}>
         <View style={{ gap: spacing.sm }}>
           <Text style={[type.label, { color: colors.accent }]}>Forkast</Text>
           <Text style={[type.display, { color: colors.text }]}>Eat{'\n'}on record.</Text>
@@ -60,6 +61,13 @@ export default function LoginScreen() {
             <Text style={[type.caption, { color: colors.danger }]}>{describeError(login.error)}</Text>
           ) : null}
 
+          {/*
+            Both ways in are buttons, side by side, and both sit above the fold
+            before the keyboard opens. This used to be one button plus a caption
+            sized text link at the bottom of a scrolling screen, which on a phone
+            put the only route to registration off screen. Someone arriving
+            without an account could not find how to make one.
+          */}
           <Button
             label="Sign in"
             size="lg"
@@ -68,13 +76,14 @@ export default function LoginScreen() {
             loading={login.isPending}
             disabled={!canSubmit}
           />
-        </View>
-
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-          <Text style={[type.caption, { color: colors.muted }]}>New to Forkast?</Text>
-          <Link href="/register" style={[type.caption, { color: colors.accent, fontWeight: '600' }]}>
-            Create an account
-          </Link>
+          <Button
+            label="Create an account"
+            variant="secondary"
+            size="lg"
+            full
+            onPress={() => router.push('/register')}
+            disabled={login.isPending}
+          />
         </View>
       </View>
     </Screen>

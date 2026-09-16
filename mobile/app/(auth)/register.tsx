@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
@@ -11,6 +11,7 @@ const MIN_PASSWORD = 8;
 
 export default function RegisterScreen() {
   const { colors, spacing, type } = useTheme();
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const register = useRegister();
@@ -25,7 +26,7 @@ export default function RegisterScreen() {
 
   return (
     <Screen scroll bottomInset={spacing.xxl}>
-      <View style={{ gap: spacing.xxl, paddingTop: spacing.xxxl }}>
+      <View style={{ gap: spacing.xl, paddingTop: spacing.lg }}>
         <View style={{ gap: spacing.sm }}>
           <Text style={[type.label, { color: colors.accent }]}>Forkast</Text>
           <Text style={[type.display, { color: colors.text }]}>Start{'\n'}the streak.</Text>
@@ -72,13 +73,14 @@ export default function RegisterScreen() {
             loading={register.isPending}
             disabled={!canSubmit}
           />
-        </View>
-
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-          <Text style={[type.caption, { color: colors.muted }]}>Already have one?</Text>
-          <Link href="/login" style={[type.caption, { color: colors.accent, fontWeight: '600' }]}>
-            Sign in
-          </Link>
+          <Button
+            label="I already have an account"
+            variant="secondary"
+            size="lg"
+            full
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/login'))}
+            disabled={register.isPending}
+          />
         </View>
       </View>
     </Screen>
