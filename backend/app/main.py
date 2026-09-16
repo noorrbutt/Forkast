@@ -3,7 +3,11 @@
 Run it bound to all interfaces, not loopback, or a phone running Expo Go will
 not be able to reach it:
 
-    uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    uvicorn app.main:app --host 0.0.0.0 --port 8010 --reload
+
+Port 8010 rather than the usual 8000, which is taken by another project on this
+machine. Windows lets two processes bind the same port, so the clash shows up as
+requests being answered by the wrong server rather than as a bind error.
 """
 
 from __future__ import annotations

@@ -17,6 +17,7 @@ from typing import Any, Literal
 import jwt
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
+from starlette.concurrency import run_in_threadpool
 
 from app.config import get_settings
 
@@ -26,11 +27,34 @@ TokenType = Literal["access", "refresh"]
 
 
 def hash_password(password: str) -> str:
+    """Synchronous hash. Use hash_password_async from a request handler."""
     return _password_hash.hash(password)
 
 
 def verify_password(password: str, password_hash: str) -> bool:
     return _password_hash.verify(password, password_hash)
+
+
+# Argon2 is deliberately slow, around 100ms. Called directly from an async
+# handler it blocks the whole event loop for that time, so every other in flight
+# request stalls behind one login. These wrappers push it onto a worker thread.
+async def hash_password_async(password: str) -> str:
+    return await run_in_threadpool(hash_password, password)
+
+
+async def verify_password_async(password: str, password_hash: str) -> bool:
+    return await run_in_threadpool(verify_password, password, password_hash)
+
+
+# A real Argon2 hash of a value nobody can present, used to burn the same amount
+# of time when the email is unknown. Without it, a fast rejection means "no such
+# account" and a slow one means "wrong password", which is a working user
+# enumeration oracle no matter how careful the error message is.
+_DUMMY_HASH = hash_password("forkast-timing-equaliser")
+
+
+async def waste_time_like_a_verify() -> None:
+    await verify_password_async("not-the-password", _DUMMY_HASH)
 
 
 def _now() -> dt.datetime:

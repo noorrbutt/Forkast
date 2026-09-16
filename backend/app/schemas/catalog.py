@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -54,12 +53,14 @@ class RestaurantOut(BaseModel):
     id: uuid.UUID
     name: str
     area: str | None = None
-    latitude: Decimal | None = None
-    longitude: Decimal | None = None
+    # float, not Decimal: pydantic serialises a Decimal as a JSON string, and a
+    # map needs a number. The column stays Numeric so the stored value is exact.
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class RestaurantCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     area: str | None = Field(default=None, max_length=120)
-    latitude: Decimal | None = Field(default=None, ge=-90, le=90)
-    longitude: Decimal | None = Field(default=None, ge=-180, le=180)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)

@@ -23,11 +23,17 @@ export function formatNumber(value: number | null | undefined): string {
   return Math.round(value).toLocaleString('en-US');
 }
 
-/** junk_ratio may arrive as a fraction (0 to 1) or as an already scaled percent. */
+/**
+ * Render a 0 to 1 fraction as a percentage.
+ *
+ * The backend always sends a fraction, so this does not guess. Guessing would
+ * disagree with the callers that compare the raw value against a fraction
+ * threshold, and two readings of one field in the same screen is how a display
+ * bug hides.
+ */
 export function formatRatio(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '0%';
-  const percent = value <= 1 ? value * 100 : value;
-  return `${Math.round(percent)}%`;
+  return `${Math.round(Math.min(Math.max(value, 0), 1) * 100)}%`;
 }
 
 export function formatMinutes(value: number | null | undefined): string {

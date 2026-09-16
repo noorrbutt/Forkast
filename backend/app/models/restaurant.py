@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from decimal import Decimal
 
 from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, Uuid, func, text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -27,8 +28,10 @@ class Restaurant(Base):
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     area: Mapped[str | None] = mapped_column(String(120))
-    latitude: Mapped[float | None] = mapped_column(Numeric(9, 6))
-    longitude: Mapped[float | None] = mapped_column(Numeric(9, 6))
+    # Numeric comes back as Decimal, not float. The API layer converts to a
+    # JSON number; the column stays exact.
+    latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
+    longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )

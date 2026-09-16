@@ -9,7 +9,7 @@ type StarRatingProps = {
 };
 
 export function StarRating({ value, onChange, max = 5 }: StarRatingProps) {
-  const { colors, spacing, isDark } = useTheme();
+  const { colors, spacing, isDark, type } = useTheme();
 
   return (
     <View style={{ flexDirection: 'row', gap: spacing.sm }} accessibilityRole="radiogroup">
@@ -26,11 +26,10 @@ export function StarRating({ value, onChange, max = 5 }: StarRatingProps) {
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
           >
             <Text
-              style={{
-                fontSize: 28,
-                lineHeight: 34,
-                color: filled ? colors.accent : isDark ? colors.border : colors.muted,
-              }}
+              style={[
+                type.star,
+                { color: filled ? colors.accent : isDark ? colors.border : colors.muted },
+              ]}
             >
               {filled ? '★' : '☆'}
             </Text>

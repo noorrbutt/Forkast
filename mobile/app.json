@@ -20,11 +20,6 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.forkast.app"
     },
-    "web": {
-      "favicon": "./assets/favicon.png",
-      "bundler": "metro",
-      "output": "single"
-    },
     "plugins": [
       "expo-router",
       "expo-status-bar",

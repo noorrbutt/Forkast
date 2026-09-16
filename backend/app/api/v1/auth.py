@@ -11,7 +11,7 @@ from __future__ import annotations
 import datetime as dt
 
 from fastapi import APIRouter, HTTPException, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import CurrentUser, SessionDep
@@ -26,9 +26,10 @@ from app.schemas.auth import (
 from app.services.security import (
     create_access_token,
     create_refresh_token,
-    hash_password,
+    hash_password_async,
     hash_refresh_token,
-    verify_password,
+    verify_password_async,
+    waste_time_like_a_verify,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -62,7 +63,7 @@ async def register(payload: RegisterRequest, session: SessionDep) -> TokenPair:
             detail="An account with that email already exists",
         )
 
-    user = User(email=email, password_hash=hash_password(payload.password))
+    user = User(email=email, password_hash=await hash_password_async(payload.password))
     session.add(user)
 
     try:
@@ -85,9 +86,18 @@ async def login(payload: LoginRequest, session: SessionDep) -> TokenPair:
     user = await session.scalar(
         select(User).where(func.lower(User.email) == payload.email.strip().lower())
     )
-    # Same message whether the email is unknown or the password is wrong, so the
-    # endpoint cannot be used to enumerate registered addresses.
-    if user is None or not verify_password(payload.password, user.password_hash):
+    # Same message whether the email is unknown or the password is wrong. The
+    # matching hash below is just as important: replying quickly for an unknown
+    # address and slowly for a known one leaks exactly what the shared message
+    # is trying to hide.
+    if user is None:
+        await waste_time_like_a_verify()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+        )
+
+    if not await verify_password_async(payload.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -99,24 +109,37 @@ async def login(payload: LoginRequest, session: SessionDep) -> TokenPair:
 @router.post("/refresh", response_model=TokenPair)
 async def refresh(payload: RefreshRequest, session: SessionDep) -> TokenPair:
     token_hash = hash_refresh_token(payload.refresh_token)
-    stored = await session.scalar(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
-
     now = dt.datetime.now(dt.UTC)
-    if stored is None or stored.revoked_at is not None or stored.expires_at <= now:
+
+    # Claim the token in a single conditional UPDATE rather than reading it,
+    # checking it, then writing it back. Two requests arriving together with the
+    # same token would both pass a read-then-check and both be issued a new pair,
+    # which quietly defeats the point of rotation. Here exactly one wins, because
+    # only one UPDATE can match a row that is still unrevoked.
+    claimed = await session.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.token_hash == token_hash,
+            RefreshToken.revoked_at.is_(None),
+            RefreshToken.expires_at > now,
+        )
+        .values(revoked_at=now)
+        .returning(RefreshToken.user_id)
+    )
+    row = claimed.first()
+    if row is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
 
-    user = await session.get(User, stored.user_id)
+    user = await session.get(User, row[0])
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
 
-    # Rotation: the presented token dies here and a fresh pair is issued.
-    stored.revoked_at = now
     return await _issue_tokens(session, user)
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -216,3 +218,55 @@ async def test_a_token_works_immediately_after_registering(client: AsyncClient) 
         "/api/v1/auth/me", headers={"Authorization": f"Bearer {registered['access_token']}"}
     )
     assert me.status_code == 200
+
+
+async def test_two_simultaneous_refreshes_of_one_token_yield_exactly_one_new_pair(
+    client: AsyncClient,
+) -> None:
+    """Rotation has to be atomic, not read-then-check-then-write.
+
+    Two requests arriving together with the same token both pass a plain read
+    and check, and both get issued a fresh pair, which quietly defeats rotation.
+    Claiming the row with a single conditional UPDATE means only one can win.
+    """
+    registered = (
+        await client.post(
+            REGISTER, json={"email": "racer@forkast.app", "password": "password123"}
+        )
+    ).json()
+    token = registered["refresh_token"]
+
+    first, second = await asyncio.gather(
+        client.post(REFRESH, json={"refresh_token": token}),
+        client.post(REFRESH, json={"refresh_token": token}),
+        return_exceptions=True,
+    )
+
+    statuses = sorted(
+        r.status_code for r in (first, second) if not isinstance(r, BaseException)
+    )
+    assert statuses.count(200) == 1, f"expected exactly one winner, got {statuses}"
+
+
+async def test_login_does_not_answer_faster_for_an_unknown_email(client: AsyncClient) -> None:
+    """A fast rejection for an unknown address and a slow one for a known address
+    is a working user enumeration oracle, whatever the error message says.
+
+    The bound is deliberately loose. This is checking that the unknown-email path
+    still performs a hash at all, not asserting constant time.
+    """
+    await client.post(REGISTER, json={"email": "known@forkast.app", "password": "password123"})
+
+    async def time_login(email: str) -> float:
+        start = asyncio.get_running_loop().time()
+        await client.post(LOGIN, json={"email": email, "password": "wrongpassword"})
+        return asyncio.get_running_loop().time() - start
+
+    known = await time_login("known@forkast.app")
+    unknown = await time_login("definitely-not-registered@forkast.app")
+
+    assert unknown > known / 4, (
+        f"unknown email answered in {unknown:.3f}s against {known:.3f}s for a known one, "
+        "which leaks which addresses exist"
+    )
+

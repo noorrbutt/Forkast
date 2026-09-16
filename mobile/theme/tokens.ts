@@ -155,6 +155,11 @@ export const type = {
     lineHeight: 15,
     textTransform: 'uppercase',
   } satisfies TextStyle,
+  /** 28. The star glyphs on the rating control, sized to be a comfortable tap. */
+  star: {
+    fontSize: 28,
+    lineHeight: 34,
+  } satisfies TextStyle,
   /** Same metrics as label but a touch softer, for inline meta text. */
   labelSoft: {
     fontSize: 11,

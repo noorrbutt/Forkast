@@ -152,3 +152,20 @@ async def test_search_survives_hostile_input(auth_client: AsyncClient) -> None:
         response = await auth_client.get("/api/v1/search", params={"q": query})
         assert response.status_code == 200, f"{query!r} returned {response.status_code}"
 
+
+async def test_coordinates_are_json_numbers_not_strings(auth_client: AsyncClient) -> None:
+    """The column is Numeric, which pydantic would serialise as a string.
+
+    A map cannot use a string, and the mismatch is invisible until someone plots
+    a pin, so it is pinned down here.
+    """
+    created = await auth_client.post(
+        "/api/v1/restaurants",
+        json={"name": "Coordinate Probe", "area": "Clifton", "latitude": 24.8185, "longitude": 67.0335},
+    )
+
+    body = created.json()
+    assert isinstance(body["latitude"], float), f"got {type(body['latitude']).__name__}"
+    assert isinstance(body["longitude"], float), f"got {type(body['longitude']).__name__}"
+    assert abs(body["latitude"] - 24.8185) < 0.0001
+

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 
 from app.api.deps import CurrentUser, SessionDep
 from app.models import Cuisine, FoodCategory, FoodLog, Restaurant
@@ -22,6 +22,31 @@ router = APIRouter(tags=["catalog"])
 # Trigram similarity below this is noise. 0.2 is loose enough to survive a
 # genuine misspelling such as "biriani" for "Biryani".
 SIMILARITY_THRESHOLD = 0.2
+
+
+def _fuzzy(column, term: str):
+    """A trigram match that the GIN indexes can actually serve.
+
+    `similarity(col, term) > threshold` is not indexable: PostgreSQL has to
+    compute it for every row. The `%` operator is the indexable form, so the
+    threshold is set per statement and `%` does the filtering. similarity() is
+    still used for ordering, where the cost is bounded by the rows `%` returned.
+    """
+    return column.op("%")(term)
+
+
+async def _apply_similarity_threshold(session: SessionDep) -> None:
+    """Set the threshold the % operator compares against, for this transaction.
+
+    pg_trgm defaults to 0.3, which is tight enough to drop real misspellings:
+    "biriani" against "Biryani" scores below it. SET LOCAL keeps the change
+    scoped to this transaction so a pooled connection does not carry it into an
+    unrelated request. The value is a module constant, never user input, so
+    inlining it is safe.
+    """
+    await session.execute(
+        text(f"SET LOCAL pg_trgm.similarity_threshold = {SIMILARITY_THRESHOLD}")
+    )
 
 
 @router.get("/cuisines", response_model=list[CuisineOut])
@@ -57,6 +82,8 @@ async def search(
     ranked first because an exact fragment is a stronger signal than a fuzzy
     score.
     """
+    await _apply_similarity_threshold(session)
+
     term = q.strip()
     if not term:
         raise HTTPException(
@@ -70,7 +97,7 @@ async def search(
         .where(
             or_(
                 Cuisine.name.ilike(pattern),
-                func.similarity(Cuisine.name, term) > SIMILARITY_THRESHOLD,
+                _fuzzy(Cuisine.name, term),
             )
         )
         .order_by(Cuisine.name.ilike(pattern).desc(), func.similarity(Cuisine.name, term).desc())
@@ -82,7 +109,7 @@ async def search(
         .where(
             or_(
                 FoodCategory.name.ilike(pattern),
-                func.similarity(FoodCategory.name, term) > SIMILARITY_THRESHOLD,
+                _fuzzy(FoodCategory.name, term),
             )
         )
         .order_by(
@@ -99,7 +126,7 @@ async def search(
             FoodLog.user_id == user.id,
             or_(
                 FoodLog.dish_name.ilike(pattern),
-                func.similarity(FoodLog.dish_name, term) > SIMILARITY_THRESHOLD,
+                _fuzzy(FoodLog.dish_name, term),
             ),
         )
         .group_by(FoodLog.dish_name, FoodLog.category_id)
@@ -127,13 +154,14 @@ async def list_restaurants(
 ) -> list[Restaurant]:
     stmt = select(Restaurant).order_by(Restaurant.name).limit(limit)
     if q:
+        await _apply_similarity_threshold(session)
         term = q.strip()
         stmt = (
             select(Restaurant)
             .where(
                 or_(
                     Restaurant.name.ilike(f"%{term}%"),
-                    func.similarity(Restaurant.name, term) > SIMILARITY_THRESHOLD,
+                    _fuzzy(Restaurant.name, term),
                 )
             )
             .order_by(

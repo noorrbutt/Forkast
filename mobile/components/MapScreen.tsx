@@ -104,7 +104,9 @@ export function MapScreen() {
   );
 
   const loading = restaurants.isLoading || logs.isLoading;
-  const failed = restaurants.isError && logs.isError;
+  // Either query failing leaves the map wrong, not merely thinner. Requiring
+  // both to fail would render a partial outage as an innocent empty state.
+  const failed = restaurants.isError || logs.isError;
 
   if (loading) return <Loading label="Finding your spots" />;
 

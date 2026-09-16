@@ -25,8 +25,9 @@ export type TokenPair = {
 export type User = {
   id: Uuid;
   email: string;
-  timezone: string | null;
-  goal: Goal | null;
+  // Both are NOT NULL with a default on the server, so they always arrive.
+  timezone: string;
+  goal: Goal;
   created_at: string;
 };
 
@@ -144,7 +145,7 @@ export type Dashboard = {
   top_category: TopCategory | null;
   top_restaurant: TopRestaurant | null;
   best_fun_meals: FunMeal[];
-  burn_equivalents: BurnEquivalents | null;
+  burn_equivalents: BurnEquivalents;
 };
 
 export type Streaks = {
@@ -152,7 +153,7 @@ export type Streaks = {
   current_streak: number;
   longest_streak: number;
   last_junk_date: string | null;
-  message: string | null;
+  message: string;
 };
 
 export type PlanMeal = {
@@ -176,5 +177,7 @@ export type Plan = {
   id: Uuid;
   goal: Goal;
   generated_plan: GeneratedPlan;
+  /** Which model produced it. "stub" while the Groq integration is a TODO. */
+  model: string | null;
   created_at: string;
 };
