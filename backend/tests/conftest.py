@@ -45,6 +45,18 @@ from app.services.ai.fake import DeterministicAIService  # noqa: E402
 
 TEST_DATABASE_URL = get_settings().test_database_url
 
+# This suite truncates every mutable table, so it must never be pointed at a
+# database anyone cares about. A single wrong line in .env would otherwise
+# empty the development database silently, and the first sign of it would be a
+# real account failing to log in. Refusing to collect is the cheapest possible
+# place to catch that.
+if TEST_DATABASE_URL.strip() == get_settings().database_url.strip():
+    raise RuntimeError(
+        "TEST_DATABASE_URL and DATABASE_URL are the same database. Running the "
+        "suite would truncate the development data. Point TEST_DATABASE_URL at "
+        "forkast_test."
+    )
+
 # Everything a test can create. Reference tables are excluded on purpose.
 MUTABLE_TABLES = (
     "food_logs",
