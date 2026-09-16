@@ -286,12 +286,12 @@ async def test_a_failed_estimate_does_not_leave_a_half_written_log(auth_client) 
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
-        ("pizza this week—maybe try veggie", "pizza this week, maybe try veggie"),
-        ("a three‑day menu", "a three-day menu"),
-        ("You’re cutting", "You're cutting"),
-        ("lemon‑olive oil", "lemon-olive oil"),
+        ("pizza this week\u2014maybe try veggie", "pizza this week, maybe try veggie"),
+        ("a three\u2011day menu", "a three-day menu"),
+        ("You\u2019re cutting", "You're cutting"),
+        ("lemon\u2011olive oil", "lemon-olive oil"),
         ("nothing to change here", "nothing to change here"),
-        ("spaced — dash", "spaced, dash"),
+        ("spaced \u2014 dash", "spaced, dash"),
     ],
 )
 def test_the_models_typography_is_rewritten(raw: str, expected: str) -> None:
@@ -299,7 +299,7 @@ def test_the_models_typography_is_rewritten(raw: str, expected: str) -> None:
 
 
 def test_nothing_above_the_ascii_punctuation_range_survives() -> None:
-    messy = "love—pizza, three‑day, “quoted”, it’s… done now"
+    messy = "love\u2014pizza, three\u2011day, \u201cquoted\u201d, it\u2019s\u2026 done\u00a0now"
     cleaned = normalise_text(messy)
     assert not [c for c in cleaned if ord(c) > 0x2000], cleaned
 
@@ -309,20 +309,20 @@ async def test_a_plan_is_cleaned_before_it_is_stored() -> None:
     client = _FakeClient(
         json.dumps(
             {
-                "summary": "A three‑day plan—lighter lunches.",
+                "summary": "A three\u2011day plan\u2014lighter lunches.",
                 "days": [
                     {
-                        "day": "Mon‑Tue",
+                        "day": "Mon\u2011Tue",
                         "meals": [
                             {
                                 "slot": "Lunch",
-                                "suggestion": "Grilled boti—no naan.",
+                                "suggestion": "Grilled boti\u2014no naan.",
                                 "approx_calories": 600,
                             }
                         ],
                     }
                 ],
-                "nudges": ["Pizza twice—try a veggie one."],
+                "nudges": ["Pizza twice\u2014try a veggie one."],
             }
         )
     )
@@ -340,7 +340,7 @@ async def test_a_plan_is_cleaned_before_it_is_stored() -> None:
 
 async def test_the_calorie_reasoning_is_cleaned_too() -> None:
     client = _FakeClient(
-        json.dumps({"calories": 700, "reasoning": "Cream—heavy, so upper end."})
+        json.dumps({"calories": 700, "reasoning": "Cream\u2014heavy, so upper end."})
     )
 
     result = await GroqAIService(client, model=MODEL).adjust_calories(_calorie_request())

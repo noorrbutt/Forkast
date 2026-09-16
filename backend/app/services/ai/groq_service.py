@@ -110,19 +110,19 @@ PLAN_SCHEMA: dict[str, Any] = {
 # one that matters here; the rest come along for free because they break naive
 # encodings on Windows and look inconsistent next to hand written strings.
 _TYPOGRAPHY = {
-    "—": ", ",  # em dash, almost always joining two clauses
-    "–": ", ",  # en dash
-    "―": ", ",  # horizontal bar
-    "‐": "-",  # hyphen
-    "‑": "-",  # non-breaking hyphen, as in "three-day"
-    "‒": "-",  # figure dash
-    "−": "-",  # minus sign
-    "‘": "'",
-    "’": "'",
-    "“": '"',
-    "”": '"',
-    "…": "...",
-    " ": " ",  # non-breaking space
+    "\u2014": ", ",  # em dash, almost always joining two clauses
+    "\u2013": ", ",  # en dash
+    "\u2015": ", ",  # horizontal bar
+    "\u2010": "-",  # hyphen
+    "\u2011": "-",  # non-breaking hyphen, as in "three-day"
+    "\u2012": "-",  # figure dash
+    "\u2212": "-",  # minus sign
+    "\u2018": "'",
+    "\u2019": "'",
+    "\u201c": '"',
+    "\u201d": '"',
+    "\u2026": "...",
+    "\u00a0": " ",  # non-breaking space
 }
 
 
