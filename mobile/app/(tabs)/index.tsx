@@ -15,6 +15,7 @@ import { useDashboard } from '../../hooks/useInsights';
 import { describeError } from '../../lib/api';
 import { formatMinutes, formatNumber, formatRatio, labelOf } from '../../lib/format';
 import { Appear } from '../../components/ui/Appear';
+import { BurnCard } from '../../components/BurnCard';
 import { CountUp } from '../../components/ui/CountUp';
 import { useTheme } from '../../theme';
 
@@ -65,10 +66,15 @@ export default function DashboardScreen() {
           <Appear index={0}>
             <Card>
               <View style={{ gap: spacing.xs }}>
-                <SectionLabel>Total calories</SectionLabel>
-                <CountUp value={data.total_calories} style={[type.display, { color: colors.text }]} />
+                <SectionLabel>{data.total_burned > 0 ? 'Net calories' : 'Total calories'}</SectionLabel>
+                <CountUp
+                  value={data.total_burned > 0 ? data.net_calories : data.total_calories}
+                  style={[type.display, { color: colors.text }]}
+                />
                 <Text style={[type.caption, { color: colors.muted }]}>
-                  Across {formatNumber(data.logs_count)} logged {data.logs_count === 1 ? 'meal' : 'meals'}.
+                  {data.total_burned > 0
+                    ? `${formatNumber(data.total_calories)} eaten, ${formatNumber(data.total_burned)} burned.`
+                    : `Across ${formatNumber(data.logs_count)} logged ${data.logs_count === 1 ? 'meal' : 'meals'}.`}
                 </Text>
               </View>
             </Card>
@@ -81,7 +87,16 @@ export default function DashboardScreen() {
               hint="of your meals"
               tone={(data.junk_ratio ?? 0) > 0.5 ? 'danger' : 'success'}
             />
-            <StatTile label="Meals logged" value={formatNumber(data.logs_count)} hint="this period" />
+            {data.total_burned > 0 ? (
+              <StatTile
+                label="Burned"
+                value={formatNumber(data.total_burned)}
+                hint="kcal, by you"
+                tone="success"
+              />
+            ) : (
+              <StatTile label="Meals logged" value={formatNumber(data.logs_count)} hint="this period" />
+            )}
           </Appear>
 
           <Appear index={2} style={{ flexDirection: 'row', gap: spacing.md }}>
@@ -90,6 +105,10 @@ export default function DashboardScreen() {
           </Appear>
 
           <Appear index={3}>
+            <BurnCard />
+          </Appear>
+
+          <Appear index={4}>
             <Card>
               <View style={{ gap: spacing.lg }}>
                 <SectionLabel>Calories by day</SectionLabel>
@@ -101,7 +120,7 @@ export default function DashboardScreen() {
           {burnRows.length > 0 ? (
             <Card>
               <View style={{ gap: spacing.lg }}>
-                <SectionLabel>Burn it off</SectionLabel>
+                <SectionLabel>How long it would take</SectionLabel>
                 <View style={{ flexDirection: 'row', gap: spacing.md }}>
                   {burnRows.map((row) => (
                     <View

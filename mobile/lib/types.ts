@@ -121,6 +121,8 @@ export type LogPage = {
 export type CaloriesByDay = {
   day: string;
   calories: number;
+  /** What the user said they burned. Zero when nothing was entered. */
+  burned: number;
 };
 
 export type BurnEquivalents = {
@@ -154,12 +156,23 @@ export type FunMeal = {
 export type Dashboard = {
   junk_ratio: number;
   total_calories: number;
+  total_burned: number;
+  /** Eaten minus burned. Negative is a real result, not an error. */
+  net_calories: number;
   logs_count: number;
   calories_by_day: CaloriesByDay[];
   top_category: TopCategory | null;
   top_restaurant: TopRestaurant | null;
   best_fun_meals: FunMeal[];
   burn_equivalents: BurnEquivalents;
+};
+
+/** One day's burned calories. There is at most one of these per day. */
+export type BurnEntry = {
+  id: Uuid;
+  day: string;
+  calories: number;
+  updated_at: string;
 };
 
 export type Streaks = {
