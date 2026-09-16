@@ -12,12 +12,25 @@ export type Palette = {
   bg: string;
   surface: string;
   surfaceAlt: string;
+  /** Hairline between surfaces. Decorative, never the only thing defining a control. */
   border: string;
+  /**
+   * The border a control uses to prove it is a control. Held at 3:1 or better
+   * against bg, which `border` is not and was never meant to be.
+   */
+  outline: string;
   text: string;
   muted: string;
+  /** Saffron as ink: text, icons, the selected label. Legible on bg and surface. */
   accent: string;
+  /** Saffron as a solid fill. Held at 3:1 against bg so the shape itself is visible. */
+  accentFill: string;
   accentSoft: string;
+  /** The label printed on accentFill. */
   accentInk: string;
+  /** Fill for a control that is present but inactive. Solid, never a faded copy. */
+  disabledFill: string;
+  disabledInk: string;
   success: string;
   successSoft: string;
   danger: string;
@@ -30,7 +43,21 @@ export type Palette = {
   scrim: string;
 };
 
-const ACCENT = '#F5A524';
+/**
+ * Saffron has to be two colours, not one.
+ *
+ * #F5A524 sits at 9.26:1 on the dark background and at 1.95:1 on the light one.
+ * A single brand hex therefore cannot both fill a button and be read on paper
+ * white: in light mode the enabled primary button was invisible as a shape and
+ * its label unreadable as text. The dark palette keeps the original saffron and
+ * the light palette uses a deeper burnt amber, which is the same colour family
+ * at a luminance the light background can actually show.
+ *
+ * Every pairing here is asserted in __tests__/contrast.test.ts rather than
+ * eyeballed. Change a value and that test tells you what it broke.
+ */
+const SAFFRON = '#F5A524';
+const SAFFRON_DEEP = '#B45309';
 
 export const palettes: Record<ThemeName, Palette> = {
   dark: {
@@ -38,11 +65,15 @@ export const palettes: Record<ThemeName, Palette> = {
     surface: '#18181B',
     surfaceAlt: '#202024',
     border: '#26262B',
+    outline: '#8B8B93',
     text: '#FAFAF7',
     muted: '#8B8B93',
-    accent: ACCENT,
+    accent: SAFFRON,
+    accentFill: SAFFRON,
     accentSoft: 'rgba(245, 165, 36, 0.16)',
     accentInk: '#0E0E10',
+    disabledFill: '#26262B',
+    disabledInk: '#9A9AA2',
     success: '#4ADE80',
     successSoft: 'rgba(74, 222, 128, 0.16)',
     danger: '#F87171',
@@ -56,15 +87,19 @@ export const palettes: Record<ThemeName, Palette> = {
     surface: '#FFFFFF',
     surfaceAlt: '#F2F2EF',
     border: '#E8E8E4',
+    outline: '#6E6E76',
     text: '#0E0E10',
     muted: '#6E6E76',
-    accent: ACCENT,
-    accentSoft: 'rgba(245, 165, 36, 0.14)',
-    accentInk: '#0E0E10',
-    success: '#4ADE80',
-    successSoft: 'rgba(74, 222, 128, 0.18)',
-    danger: '#F87171',
-    dangerSoft: 'rgba(248, 113, 113, 0.18)',
+    accent: SAFFRON_DEEP,
+    accentFill: SAFFRON_DEEP,
+    accentSoft: 'rgba(180, 83, 9, 0.12)',
+    accentInk: '#FFFFFF',
+    disabledFill: '#E4E4E0',
+    disabledInk: '#55555C',
+    success: '#15803D',
+    successSoft: 'rgba(21, 128, 61, 0.14)',
+    danger: '#B91C1C',
+    dangerSoft: 'rgba(185, 28, 28, 0.12)',
     blurFallback: 'rgba(250, 250, 247, 0.72)',
     blurTint: 'light',
     scrim: 'rgba(14, 14, 16, 0.35)',

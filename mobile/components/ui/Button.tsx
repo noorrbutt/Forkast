@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { ActivityIndicator, Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated from 'react-native-reanimated';
 
@@ -8,6 +9,8 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type ButtonSize = 'md' | 'lg';
+/** Where the button sits when it is not stretched across its container. */
+type ButtonAlign = 'start' | 'center' | 'stretch';
 
 type ButtonProps = {
   label: string;
@@ -16,7 +19,12 @@ type ButtonProps = {
   size?: ButtonSize;
   disabled?: boolean;
   loading?: boolean;
+  /** Stretch to the container width. Shorthand for align="stretch". */
   full?: boolean;
+  align?: ButtonAlign;
+  /** Rendered before the label. A single glyph, not a sentence. */
+  icon?: string;
+  accessibilityHint?: string;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -28,37 +36,62 @@ export function Button({
   disabled = false,
   loading = false,
   full = false,
+  align,
+  icon,
+  accessibilityHint,
   style,
 }: ButtonProps) {
   const { colors, radius, spacing, type } = useTheme();
   const inactive = disabled || loading;
   // No tick on a primary action: the meaningful haptic is the success one that
   // fires when the work completes, and two in a row reads as a stutter.
-  const { animatedStyle, onPressIn, onPressOut } = usePressScale({
+  const { animatedStyle, onPressIn, onPressOut, reset } = usePressScale({
     haptic: variant !== 'primary',
     disabled: inactive,
   });
 
+  // A button that becomes disabled while the finger is still down never gets an
+  // onPressOut, because the Pressable stops being the responder. Without this
+  // it stays visibly squashed for the whole request: press "Sign in", the
+  // mutation starts, loading flips true, and the control sits at 0.965 until
+  // the network answers.
+  useEffect(() => {
+    if (inactive) reset();
+  }, [inactive, reset]);
+
+  // Disabled is a different fill, never a faded copy of the enabled one.
+  // Fading the whole subtree to 50% took the label down with it, which is how
+  // a primary action ended up invisible until the user had already done the
+  // thing the button was there to invite.
   const fills: Record<ButtonVariant, string> = {
-    primary: colors.accent,
-    secondary: colors.surfaceAlt,
+    primary: colors.accentFill,
+    secondary: 'transparent',
     ghost: 'transparent',
     danger: colors.dangerSoft,
   };
   const inks: Record<ButtonVariant, string> = {
     primary: colors.accentInk,
     secondary: colors.text,
-    ghost: colors.muted,
+    ghost: colors.accent,
     danger: colors.danger,
   };
-  const borders: Record<ButtonVariant, string> = {
-    primary: colors.accent,
-    secondary: colors.border,
-    ghost: colors.border,
-    danger: colors.dangerSoft,
+  // Only the variants that need a visible edge get one. Drawing a border in the
+  // same colour as the fill, as primary and danger used to, costs a pixel of
+  // layout and buys nothing.
+  const borders: Record<ButtonVariant, string | null> = {
+    primary: null,
+    secondary: colors.outline,
+    ghost: null,
+    danger: colors.danger,
   };
 
+  const fill = inactive ? colors.disabledFill : fills[variant];
+  const ink = inactive ? colors.disabledInk : inks[variant];
+  const borderColor = inactive ? colors.disabledFill : borders[variant];
+  const showBorder = borderColor !== null;
+
   const verticalPad = size === 'lg' ? spacing.lg + 2 : spacing.md + 1;
+  const alignSelf = align ?? (full ? 'stretch' : 'start');
 
   return (
     <AnimatedPressable
@@ -67,19 +100,28 @@ export function Button({
       onPressOut={onPressOut}
       disabled={inactive}
       accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: inactive, busy: loading }}
       style={({ pressed }: { pressed: boolean }) => [
         {
           borderRadius: radius.pill,
-          backgroundColor: fills[variant],
-          borderWidth: 1,
-          borderColor: borders[variant],
+          backgroundColor: fill,
+          // Ghost keeps a transparent border so its height matches the others
+          // in a row. Without it a ghost button sits two pixels shorter.
+          borderWidth: 1.5,
+          borderColor: showBorder ? borderColor : 'transparent',
           paddingVertical: verticalPad,
           paddingHorizontal: spacing.xl,
+          flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          alignSelf: full ? 'stretch' : 'flex-start',
-          opacity: inactive ? 0.5 : pressed ? 0.9 : 1,
+          gap: spacing.sm,
+          alignSelf: alignSelf === 'start' ? 'flex-start' : alignSelf,
+          // Back to the pre-motion value. The press scale was supposed to pay
+          // for a softer dim and on a small control it does not, so a tap had
+          // stopped reading as a tap.
+          opacity: pressed ? 0.82 : 1,
         },
         animatedStyle,
         style,
@@ -87,17 +129,17 @@ export function Button({
     >
       {loading ? (
         <View style={{ height: size === 'lg' ? 22 : 20, justifyContent: 'center' }}>
-          <ActivityIndicator color={inks[variant]} />
+          <ActivityIndicator color={ink} />
         </View>
       ) : (
-        <Text
-          style={[
-            size === 'lg' ? type.subtitle : type.body,
-            { color: inks[variant], fontWeight: '600' },
-          ]}
-        >
-          {label}
-        </Text>
+        <>
+          {icon ? (
+            <Text style={[size === 'lg' ? type.subtitle : type.body, { color: ink }]}>{icon}</Text>
+          ) : null}
+          <Text style={[size === 'lg' ? type.subtitle : type.body, { color: ink, fontWeight: '600' }]}>
+            {label}
+          </Text>
+        </>
       )}
     </AnimatedPressable>
   );

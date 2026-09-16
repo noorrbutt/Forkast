@@ -34,9 +34,22 @@ export function usePressScale({ haptic = true, disabled = false }: Options = {})
     scale.value = withSpring(1, motion.press);
   }, [scale]);
 
+  /**
+   * Put the control back to full size regardless of where the gesture got to.
+   *
+   * A Pressable that is disabled mid press stops being the responder and never
+   * emits onPressOut, so the scale it was left at is the scale it keeps. Every
+   * button wired to a mutation does exactly that: the press starts the request,
+   * the request sets loading, and the button is disabled with the finger still
+   * down. Callers use this on the transition into the disabled state.
+   */
+  const reset = useCallback(() => {
+    scale.value = withSpring(1, motion.press);
+  }, [scale]);
+
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
 
-  return { animatedStyle, onPressIn, onPressOut };
+  return { animatedStyle, onPressIn, onPressOut, reset };
 }

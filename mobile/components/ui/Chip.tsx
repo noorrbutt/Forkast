@@ -48,11 +48,16 @@ export function Chip({
         {
           borderRadius: radius.pill,
           borderWidth: 1,
-          borderColor: selected ? colors.accent : colors.border,
-          backgroundColor: selected ? colors.accentSoft : colors.surfaceAlt,
+          // Selected is a solid tablet, not a tint. The old treatment put
+          // saffron text on a 14 percent saffron wash, which measured 1.67:1 in
+          // light theme: the chosen option was the hardest one in the row to
+          // read, and selection was carried entirely by a colour change that
+          // several people cannot see at all.
+          borderColor: selected ? colors.accentFill : colors.border,
+          backgroundColor: selected ? colors.accentFill : colors.surfaceAlt,
           paddingVertical: compact ? spacing.sm : spacing.md - 2,
           paddingHorizontal: compact ? spacing.md : spacing.lg,
-          opacity: disabled ? 0.45 : pressed ? 0.85 : 1,
+          opacity: disabled ? 0.45 : pressed ? 0.75 : 1,
         },
         animatedStyle,
         style,
@@ -62,13 +67,15 @@ export function Chip({
         style={[
           type.caption,
           {
-            color: selected ? colors.accent : colors.muted,
+            color: selected ? colors.accentInk : colors.muted,
             fontWeight: selected ? '600' : '500',
           },
         ]}
         numberOfLines={1}
       >
-        {leading ? `${leading}  ${label}` : label}
+        {/* One space, not two. "All" has no emoji and the double gap made the
+            shortest label in the row look the most padded. */}
+        {leading ? `${leading} ${label}` : label}
       </Text>
     </AnimatedPressable>
   );
