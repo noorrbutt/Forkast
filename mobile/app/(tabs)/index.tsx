@@ -6,10 +6,12 @@ import {
   Card,
   Empty,
   ErrorState,
+  Icon,
   Loading,
   Screen,
   SectionLabel,
   StatTile,
+  type IconName,
 } from '../../components/ui';
 import { useDashboard } from '../../hooks/useInsights';
 import { describeError } from '../../lib/api';
@@ -19,12 +21,53 @@ import { BurnCard } from '../../components/BurnCard';
 import { CountUp } from '../../components/ui/CountUp';
 import { useTheme } from '../../theme';
 
+/** What this screen turns into, said plainly while there is nothing to draw. */
+const PREVIEW: { icon: IconName; title: string; caption: string }[] = [
+  {
+    icon: 'chart',
+    title: 'Calories by day',
+    caption: 'A bar for every day of the week, so a heavy Saturday is obvious.',
+  },
+  {
+    icon: 'meal',
+    title: 'Junk ratio',
+    caption: 'How much of what you ate counts as junk, not a verdict on you.',
+  },
+  {
+    icon: 'map',
+    title: 'Your usual spots',
+    caption: 'The places and cuisines you come back to most.',
+  },
+];
+
+/**
+ * A section label with its icon.
+ *
+ * Kept here rather than folded into SectionLabel because that component puts
+ * its children straight into a Text, and an icon riding inside a line box of
+ * fifteen pixels clips on Android.
+ */
+function IconLabel({ icon, children }: { icon: IconName; children: string }) {
+  const { spacing } = useTheme();
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+      <Icon name={icon} size={14} />
+      <SectionLabel>{children}</SectionLabel>
+    </View>
+  );
+}
+
 export default function DashboardScreen() {
   const { colors, radius, spacing, type } = useTheme();
   const router = useRouter();
   const dashboard = useDashboard();
 
   const data = dashboard.data;
+
+  // Burned calories can be entered before any meal is, so an untouched account
+  // is one with neither, not merely one without logs.
+  const hasAnything = data ? data.logs_count > 0 || data.total_burned > 0 : false;
 
   const burn = data?.burn_equivalents ?? null;
   const burnRows = burn
@@ -61,12 +104,49 @@ export default function DashboardScreen() {
         />
       ) : null}
 
-      {data ? (
+      {data && !hasAnything ? (
+        <>
+          <Appear index={0}>
+            <Empty
+              icon="chart"
+              title="Nothing to count yet"
+              message="Forkast adds up what you eat over the week. Log one meal and this page stops being blank."
+              actionLabel="Log your first meal"
+              actionIcon="log"
+              onAction={() => router.navigate('/log')}
+            />
+          </Appear>
+
+          <Appear index={1}>
+            <Card>
+              <View style={{ gap: spacing.lg }}>
+                <IconLabel icon="dashboard">What lands here</IconLabel>
+                {PREVIEW.map((row) => (
+                  <View
+                    key={row.title}
+                    style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}
+                  >
+                    <Icon name={row.icon} size={18} />
+                    <View style={{ flex: 1, gap: spacing.xs }}>
+                      <Text style={[type.subtitle, { color: colors.text }]}>{row.title}</Text>
+                      <Text style={[type.caption, { color: colors.muted }]}>{row.caption}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </Card>
+          </Appear>
+        </>
+      ) : null}
+
+      {data && hasAnything ? (
         <>
           <Appear index={0}>
             <Card>
               <View style={{ gap: spacing.xs }}>
-                <SectionLabel>{data.total_burned > 0 ? 'Net calories' : 'Total calories'}</SectionLabel>
+                <IconLabel icon="meal">
+                  {data.total_burned > 0 ? 'Net calories' : 'Total calories'}
+                </IconLabel>
                 <CountUp
                   value={data.total_burned > 0 ? data.net_calories : data.total_calories}
                   style={[type.display, { color: colors.text }]}
@@ -111,7 +191,7 @@ export default function DashboardScreen() {
           <Appear index={4}>
             <Card>
               <View style={{ gap: spacing.lg }}>
-                <SectionLabel>Calories by day</SectionLabel>
+                <IconLabel icon="chart">Calories by day</IconLabel>
                 <CalorieBars data={data.calories_by_day ?? []} />
               </View>
             </Card>
@@ -120,7 +200,7 @@ export default function DashboardScreen() {
           {burnRows.length > 0 ? (
             <Card>
               <View style={{ gap: spacing.lg }}>
-                <SectionLabel>How long it would take</SectionLabel>
+                <IconLabel icon="burn">How long it would take</IconLabel>
                 <View style={{ flexDirection: 'row', gap: spacing.md }}>
                   {burnRows.map((row) => (
                     <View
@@ -149,12 +229,16 @@ export default function DashboardScreen() {
 
           <Card>
             <View style={{ gap: spacing.lg }}>
-              <SectionLabel>Most fun meals</SectionLabel>
+              <IconLabel icon="fun">Most fun meals</IconLabel>
               {(data.best_fun_meals ?? []).length === 0 ? (
                 <Empty
-                  emoji="🎉"
+                  icon="fun"
                   title="Nothing rated yet"
-                  message="Rate the fun of a meal when you log it and the best ones land here."
+                  message="Give a meal a fun score while you log it and the best ones land here."
+                  actionLabel="Log a meal"
+                  actionIcon="log"
+                  actionVariant="secondary"
+                  onAction={() => router.navigate('/log')}
                 />
               ) : (
                 <View style={{ gap: spacing.md }}>
@@ -185,32 +269,41 @@ export default function DashboardScreen() {
 
       <View style={{ gap: spacing.md }}>
         <Card onPress={() => router.push('/history')}>
-          <View style={{ gap: spacing.xs }}>
-            <SectionLabel>Everything you logged</SectionLabel>
-            <Text style={[type.title, { color: colors.text }]}>Your diary</Text>
-            <Text style={[type.caption, { color: colors.muted }]}>
-              Browse past meals, fix a typo, or delete one you logged twice.
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+            <View style={{ flex: 1, gap: spacing.xs }}>
+              <IconLabel icon="history">Everything you logged</IconLabel>
+              <Text style={[type.title, { color: colors.text }]}>Your diary</Text>
+              <Text style={[type.caption, { color: colors.muted }]}>
+                Browse past meals, fix a typo, or delete one you logged twice.
+              </Text>
+            </View>
+            <Icon name="forward" />
           </View>
         </Card>
 
         <Card onPress={() => router.push('/map')}>
-          <View style={{ gap: spacing.xs }}>
-            <SectionLabel>Where you eat</SectionLabel>
-            <Text style={[type.title, { color: colors.text }]}>Map</Text>
-            <Text style={[type.caption, { color: colors.muted }]}>
-              Your spots grouped by area, with how often each one shows up.
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+            <View style={{ flex: 1, gap: spacing.xs }}>
+              <IconLabel icon="map">Where you eat</IconLabel>
+              <Text style={[type.title, { color: colors.text }]}>Map</Text>
+              <Text style={[type.caption, { color: colors.muted }]}>
+                Your spots grouped by area, with how often each one shows up.
+              </Text>
+            </View>
+            <Icon name="forward" />
           </View>
         </Card>
 
         <Card onPress={() => router.push('/plan')}>
-          <View style={{ gap: spacing.xs }}>
-            <SectionLabel>Ask Forkast</SectionLabel>
-            <Text style={[type.title, { color: colors.text }]}>AI meal plan</Text>
-            <Text style={[type.caption, { color: colors.muted }]}>
-              A week of suggestions shaped around your goal.
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+            <View style={{ flex: 1, gap: spacing.xs }}>
+              <IconLabel icon="plan">Ask Forkast</IconLabel>
+              <Text style={[type.title, { color: colors.text }]}>AI meal plan</Text>
+              <Text style={[type.caption, { color: colors.muted }]}>
+                A week of suggestions shaped around your goal.
+              </Text>
+            </View>
+            <Icon name="forward" />
           </View>
         </Card>
       </View>

@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { RefreshControl, Text, View } from 'react-native';
 
-import { Card, Empty, ErrorState, Loading, Screen, SectionLabel } from '../components/ui';
+import { Card, Empty, ErrorState, Icon, Loading, Screen, SectionLabel } from '../components/ui';
 import { useLogs } from '../hooks/useLogs';
 import { describeError } from '../lib/api';
 import { SERVING_LABELS, formatDate, formatNumber } from '../lib/format';
@@ -47,9 +47,12 @@ export default function HistoryScreen() {
 
       {logs.data && items.length === 0 ? (
         <Empty
-          emoji="🍽️"
-          title="Nothing logged yet"
-          message="Log your first meal and it will show up here, ready to edit."
+          icon="history"
+          title="Your diary is empty"
+          message="Every meal you log lands here, newest first, with its calories and where you ate it. Tap one to fix a typo or delete it."
+          actionLabel="Log your first meal"
+          actionIcon="log"
+          onAction={() => router.navigate('/log')}
         />
       ) : null}
 
@@ -71,6 +74,9 @@ export default function HistoryScreen() {
               <Text style={[type.numeral, { color: colors.accent }]}>
                 {formatNumber(log.estimated_calories)}
               </Text>
+              {/* The row is the way in to editing, which nothing else on the
+                  card says out loud. */}
+              <Icon name="forward" size={18} />
             </View>
 
             <Text style={[type.caption, { color: colors.muted }]} numberOfLines={1}>

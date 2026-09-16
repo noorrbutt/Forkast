@@ -3,7 +3,19 @@ import { useMemo, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
 import { StarRating } from '../../components/StarRating';
-import { Button, Card, Chip, ErrorState, Field, Loading, Screen, SectionLabel } from '../../components/ui';
+import {
+  Button,
+  Card,
+  Chip,
+  Empty,
+  ErrorState,
+  Field,
+  Icon,
+  Loading,
+  Screen,
+  SectionLabel,
+  type IconName,
+} from '../../components/ui';
 import { useCategories, useCuisines, useSearch } from '../../hooks/useCatalog';
 import { useCreateLog } from '../../hooks/useLogs';
 import { useRestaurants } from '../../hooks/useRestaurants';
@@ -23,6 +35,31 @@ import {
 import { useTheme } from '../../theme';
 
 const FUN_LEVELS = [1, 2, 3, 4, 5];
+
+/** The whole form in three lines, for someone opening it for the first time. */
+const STEPS: { icon: IconName; text: string }[] = [
+  { icon: 'search', text: 'Search for what you ate, or pick a cuisine and a category.' },
+  { icon: 'meal', text: 'Name the dish, say where you ate it and how big the serving was.' },
+  { icon: 'chart', text: 'Log it. Forkast estimates the calories and your week updates.' },
+];
+
+/**
+ * A section label with its icon.
+ *
+ * Kept here rather than folded into SectionLabel because that component puts
+ * its children straight into a Text, and an icon riding inside a line box of
+ * fifteen pixels clips on Android.
+ */
+function IconLabel({ icon, children }: { icon: IconName; children: string }) {
+  const { spacing } = useTheme();
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+      <Icon name={icon} size={14} />
+      <SectionLabel>{children}</SectionLabel>
+    </View>
+  );
+}
 
 export default function LogScreen() {
   const { colors, spacing, type } = useTheme();
@@ -74,6 +111,10 @@ export default function LogScreen() {
 
   const canSubmit = dishName.trim().length > 0 && categoryId !== null && !createLog.isPending;
 
+  // Nothing typed and nothing picked, so the form is still a blank page and can
+  // afford to explain itself. It gets out of the way at the first tap.
+  const pristine = query.trim().length === 0 && dishName.trim().length === 0 && categoryId === null;
+
   const submit = () => {
     if (!canSubmit || categoryId === null) return;
 
@@ -104,7 +145,7 @@ export default function LogScreen() {
       <Screen title="Logged" eyebrow="Nice one">
         <Card>
           <View style={{ gap: spacing.xs }}>
-            <SectionLabel>Estimated</SectionLabel>
+            <IconLabel icon="check">Estimated</IconLabel>
             <Text style={[type.display, { color: colors.accent }]}>
               {formatNumber(saved.estimated_calories)}
             </Text>
@@ -122,6 +163,7 @@ export default function LogScreen() {
         <View style={{ gap: spacing.md }}>
           <Button
             label="Log another"
+            icon="log"
             size="lg"
             full
             onPress={() => {
@@ -131,6 +173,7 @@ export default function LogScreen() {
           />
           <Button
             label="See the dashboard"
+            icon="dashboard"
             variant="secondary"
             size="lg"
             full
@@ -147,6 +190,25 @@ export default function LogScreen() {
 
   return (
     <Screen title="Log a meal" eyebrow="What did you eat">
+      {pristine ? (
+        <Card>
+          <View style={{ gap: spacing.lg }}>
+            <IconLabel icon="log">How a log works</IconLabel>
+            {STEPS.map((step, index) => (
+              <View
+                key={step.icon}
+                style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}
+              >
+                <Icon name={step.icon} size={18} />
+                <Text style={[type.body, { color: colors.text, flex: 1 }]}>
+                  {`${index + 1}. ${step.text}`}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </Card>
+      ) : null}
+
       <Field
         label="Search"
         value={query}
@@ -161,11 +223,17 @@ export default function LogScreen() {
       {search.data && query.trim().length >= 2 ? (
         <Card>
           <View style={{ gap: spacing.lg }}>
-            <SectionLabel>Matches</SectionLabel>
+            <IconLabel icon="search">Matches</IconLabel>
             {search.data.dishes.length === 0 && search.data.categories.length === 0 ? (
-              <Text style={[type.caption, { color: colors.muted }]}>
-                Nothing matched. Type the dish name below and pick a category.
-              </Text>
+              <Empty
+                icon="search"
+                title="Nothing matched"
+                message="Forkast only knows the dishes people have logged so far. Clear the search, then type the dish below and pick the category it belongs to."
+                actionLabel="Clear the search"
+                actionIcon="close"
+                actionVariant="secondary"
+                onAction={() => setQuery('')}
+              />
             ) : null}
 
             {search.data.dishes.length > 0 ? (
@@ -208,7 +276,7 @@ export default function LogScreen() {
       ) : null}
 
       <View style={{ gap: spacing.md }}>
-        <SectionLabel>Cuisine</SectionLabel>
+        <IconLabel icon="cuisine">Cuisine</IconLabel>
         {cuisines.isLoading ? <Loading label="Loading cuisines" fill={false} /> : null}
         {cuisines.isError ? (
           <ErrorState
@@ -238,7 +306,7 @@ export default function LogScreen() {
       </View>
 
       <View style={{ gap: spacing.md }}>
-        <SectionLabel>Category</SectionLabel>
+        <IconLabel icon="category">Category</IconLabel>
         {categories.isLoading ? <Loading label="Loading categories" fill={false} /> : null}
         {categories.isError ? (
           <ErrorState
@@ -248,9 +316,15 @@ export default function LogScreen() {
           />
         ) : null}
         {categories.data && categories.data.length === 0 ? (
-          <Text style={[type.caption, { color: colors.muted }]}>
-            No categories for this cuisine yet.
-          </Text>
+          <Empty
+            icon="category"
+            title="No categories here yet"
+            message="Nothing is mapped to this cuisine. The category is what Forkast estimates calories from, so pick one from the full list instead."
+            actionLabel="Show every cuisine"
+            actionIcon="cuisine"
+            actionVariant="secondary"
+            onAction={() => pickCuisine(null)}
+          />
         ) : null}
         {categories.data ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
@@ -306,12 +380,12 @@ export default function LogScreen() {
       <Field label="Area" value={area} onChangeText={setArea} placeholder="Optional neighbourhood" />
 
       <View style={{ gap: spacing.md }}>
-        <SectionLabel>Rating</SectionLabel>
+        <IconLabel icon="star">Rating</IconLabel>
         <StarRating value={rating} onChange={setRating} />
       </View>
 
       <View style={{ gap: spacing.md }}>
-        <SectionLabel>Fun scale</SectionLabel>
+        <IconLabel icon="fun">Fun scale</IconLabel>
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
           {FUN_LEVELS.map((level) => (
             <Chip
@@ -326,7 +400,7 @@ export default function LogScreen() {
       </View>
 
       <View style={{ gap: spacing.md }}>
-        <SectionLabel>Who was there</SectionLabel>
+        <IconLabel icon="friends">Who was there</IconLabel>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
           {FRIEND_SCALES.map((scale) => (
             <Chip
@@ -340,7 +414,7 @@ export default function LogScreen() {
       </View>
 
       <View style={{ gap: spacing.md }}>
-        <SectionLabel>Serving size</SectionLabel>
+        <IconLabel icon="meal">Serving size</IconLabel>
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
           {SERVING_SIZES.map((size) => (
             <Chip
@@ -360,6 +434,7 @@ export default function LogScreen() {
 
       <Button
         label={createLog.isPending ? 'Saving' : 'Log it'}
+        icon="check"
         size="lg"
         full
         onPress={submit}
