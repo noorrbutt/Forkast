@@ -3,19 +3,22 @@ import { RefreshControl, Text, View } from 'react-native';
 
 import { CalorieBars } from '../../components/CalorieBars';
 import {
+  Button,
   Card,
   Empty,
   ErrorState,
   Icon,
   Loading,
+  Progress,
   Screen,
   SectionLabel,
   StatTile,
   type IconName,
 } from '../../components/ui';
-import { useDashboard } from '../../hooks/useInsights';
+import { useDashboard, useTrend } from '../../hooks/useInsights';
 import { describeError } from '../../lib/api';
 import { formatMinutes, formatNumber, formatRatio, labelOf } from '../../lib/format';
+import type { Today } from '../../lib/types';
 import { Appear } from '../../components/ui/Appear';
 import { BurnCard } from '../../components/BurnCard';
 import { CountUp } from '../../components/ui/CountUp';
@@ -58,10 +61,173 @@ function IconLabel({ icon, children }: { icon: IconName; children: string }) {
   );
 }
 
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+/**
+ * The month name behind the backend's first of the month date.
+ *
+ * Split by hand rather than handed to Date, which reads a date only string as
+ * UTC midnight and would name the month before it for anyone west of Greenwich.
+ */
+function monthName(month: string): string {
+  const index = Number(month.split('-')[1]) - 1;
+  return MONTHS[index] ?? month;
+}
+
+/**
+ * How a number moved, with no verdict attached.
+ *
+ * Fewer calories is not automatically progress and more is not automatically a
+ * failure. Someone bulking wants the number up, someone cutting wants it down,
+ * and this card does not know which, so it reports the direction and stops.
+ */
+function describeChange(change: number, unit: string, against: string): string {
+  if (change === 0) return `Level with ${against}`;
+  return `${change > 0 ? 'Up' : 'Down'} ${formatNumber(Math.abs(change))} ${unit} on ${against}`;
+}
+
+/**
+ * Says which number the bar is measuring, because the bar cannot.
+ *
+ * Without this, someone who logged a workout watches the bar move backwards
+ * with no way to tell whether that was the walk or a deleted meal.
+ */
+function todayCaption(today: Today): string {
+  const measured =
+    today.burned > 0
+      ? `Net, so ${formatNumber(today.consumed)} eaten less ${formatNumber(today.burned)} burned.`
+      : 'What you have eaten today. Log burned calories and this counts net instead.';
+
+  return today.target === null ? `${measured} No daily target set yet.` : measured;
+}
+
+/** This calendar month against the last one, three numbers at a time. */
+function TrendCard({ trend }: { trend: ReturnType<typeof useTrend> }) {
+  const { colors, spacing, type } = useTheme();
+  const data = trend.data;
+
+  if (trend.isLoading) {
+    return (
+      <Card>
+        <Loading label="Comparing your months" fill={false} />
+      </Card>
+    );
+  }
+
+  if (trend.isError && !data) {
+    return (
+      <ErrorState
+        title="Trend unavailable"
+        message={describeError(trend.error)}
+        onRetry={() => void trend.refetch()}
+      />
+    );
+  }
+
+  if (!data) return null;
+
+  const now = data.this_month;
+  const before = data.last_month;
+  const thisName = monthName(now.month);
+  const lastName = monthName(before.month);
+  // A month with no meals in it reports a junk ratio of zero because there was
+  // nothing that could be junk, so comparing against it would invent movement
+  // nobody made. Nothing logged means nothing to compare, and it says so.
+  const comparable = before.meals_logged > 0;
+
+  const rows = [
+    {
+      label: 'Calories',
+      value: formatNumber(now.total_calories),
+      change: describeChange(data.change.total_calories, 'kcal', lastName),
+    },
+    {
+      label: 'Meals',
+      value: formatNumber(now.meals_logged),
+      change: describeChange(
+        data.change.meals_logged,
+        Math.abs(data.change.meals_logged) === 1 ? 'meal' : 'meals',
+        lastName
+      ),
+    },
+    {
+      label: 'Junk ratio',
+      value: formatRatio(now.junk_ratio),
+      // Points taken from the two percentages that actually get printed, so the
+      // direction can never disagree with the number sitting beside it.
+      change: describeChange(
+        Math.round(now.junk_ratio * 100) - Math.round(before.junk_ratio * 100),
+        'points',
+        lastName
+      ),
+    },
+  ];
+
+  const nothingEither = now.meals_logged === 0 && !comparable;
+
+  return (
+    <Card>
+      <View style={{ gap: spacing.lg }}>
+        <IconLabel icon="chart">{`${thisName} against ${lastName}`}</IconLabel>
+
+        {nothingEither ? (
+          <Text style={[type.caption, { color: colors.muted }]}>
+            {`Nothing logged in ${thisName} or ${lastName}, so there is nothing to compare yet.`}
+          </Text>
+        ) : (
+          <>
+            {rows.map((row) => (
+              <View
+                key={row.label}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}
+              >
+                <View style={{ flex: 1, gap: spacing.xs }}>
+                  <Text style={[type.subtitle, { color: colors.text }]}>{row.label}</Text>
+                  {comparable ? (
+                    <Text style={[type.caption, { color: colors.muted }]}>{row.change}</Text>
+                  ) : null}
+                </View>
+                <Text
+                  style={[type.numeral, { color: colors.text }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {row.value}
+                </Text>
+              </View>
+            ))}
+
+            <Text style={[type.caption, { color: colors.muted }]}>
+              {comparable
+                ? `Counting ${formatNumber(now.days_counted)} ${now.days_counted === 1 ? 'day' : 'days'} of ${thisName} against all of ${lastName}.`
+                : `Nothing logged in ${lastName}, so there is nothing to compare against. Next month this fills in.`}
+            </Text>
+          </>
+        )}
+      </View>
+    </Card>
+  );
+}
+
 export default function DashboardScreen() {
   const { colors, radius, spacing, type } = useTheme();
   const router = useRouter();
   const dashboard = useDashboard();
+  // Held here rather than inside the card so a pull to refresh reloads both.
+  const trend = useTrend();
 
   const data = dashboard.data;
 
@@ -83,8 +249,8 @@ export default function DashboardScreen() {
       scroll
       refreshControl={
         <RefreshControl
-          refreshing={dashboard.isRefetching}
-          onRefresh={() => void dashboard.refetch()}
+          refreshing={dashboard.isRefetching || trend.isRefetching}
+          onRefresh={() => void Promise.all([dashboard.refetch(), trend.refetch()])}
           tintColor={colors.accent}
         />
       }
@@ -143,6 +309,28 @@ export default function DashboardScreen() {
         <>
           <Appear index={0}>
             <Card>
+              <View style={{ gap: spacing.lg }}>
+                <IconLabel icon="clock">Today</IconLabel>
+                <Progress
+                  value={data.today.net}
+                  max={data.today.target}
+                  label="Calories today against your daily target"
+                  caption={todayCaption(data.today)}
+                />
+                {data.today.target === null ? (
+                  <Button
+                    label="Set a daily target"
+                    variant="secondary"
+                    align="start"
+                    onPress={() => router.navigate('/profile')}
+                  />
+                ) : null}
+              </View>
+            </Card>
+          </Appear>
+
+          <Appear index={1}>
+            <Card>
               <View style={{ gap: spacing.xs }}>
                 <IconLabel icon="meal">
                   {data.total_burned > 0 ? 'Net calories' : 'Total calories'}
@@ -160,7 +348,7 @@ export default function DashboardScreen() {
             </Card>
           </Appear>
 
-          <Appear index={1} style={{ flexDirection: 'row', gap: spacing.md }}>
+          <Appear index={2} style={{ flexDirection: 'row', gap: spacing.md }}>
             <StatTile
               label="Junk ratio"
               value={formatRatio(data.junk_ratio)}
@@ -179,22 +367,26 @@ export default function DashboardScreen() {
             )}
           </Appear>
 
-          <Appear index={2} style={{ flexDirection: 'row', gap: spacing.md }}>
+          <Appear index={3} style={{ flexDirection: 'row', gap: spacing.md }}>
             <StatTile label="Top category" value={labelOf(data.top_category, 'None yet')} tone="accent" />
             <StatTile label="Top spot" value={labelOf(data.top_restaurant, 'None yet')} />
           </Appear>
 
-          <Appear index={3}>
+          <Appear index={4}>
             <BurnCard />
           </Appear>
 
-          <Appear index={4}>
+          <Appear index={5}>
             <Card>
               <View style={{ gap: spacing.lg }}>
                 <IconLabel icon="chart">Calories by day</IconLabel>
                 <CalorieBars data={data.calories_by_day ?? []} />
               </View>
             </Card>
+          </Appear>
+
+          <Appear index={6}>
+            <TrendCard trend={trend} />
           </Appear>
 
           {burnRows.length > 0 ? (

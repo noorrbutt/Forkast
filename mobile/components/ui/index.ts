@@ -7,6 +7,7 @@ export { ErrorState } from './ErrorState';
 export { Frosted } from './Frosted';
 export { Icon, type IconName } from './Icon';
 export { Loading } from './Loading';
+export { Progress } from './Progress';
 export { Screen } from './Screen';
 export { SectionLabel } from './SectionLabel';
 export { StatTile } from './StatTile';
