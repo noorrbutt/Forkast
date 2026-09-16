@@ -44,6 +44,10 @@ def str_enum(enum_cls: type[_E], name: str, length: int = 32) -> SAEnum:
     return SAEnum(
         enum_cls,
         native_enum=False,
+        # SQLAlchemy 2.0 defaults this to False, which quietly produces a bare
+        # VARCHAR with no constraint at all. Without it the database happily
+        # accepts serving_size = 'gigantic'.
+        create_constraint=True,
         name=name,
         length=length,
         values_callable=lambda e: [m.value for m in e],

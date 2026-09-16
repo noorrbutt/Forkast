@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -103,3 +104,74 @@ async def test_reference_data_is_present_after_upgrade() -> None:
     assert categories >= 30
     assert orphans == 0
     assert trgm == 1
+
+
+@pytest.mark.slow
+async def test_closed_vocabularies_are_enforced_by_the_database() -> None:
+    """The varchar plus CHECK promise has to be real, not just declared.
+
+    This cannot be left to `alembic check`. Alembic autogenerate does not detect
+    CHECK constraints at all, so when these were missing it still reported no
+    drift. The only way to know is to ask the database.
+
+    Pydantic already rejects a bad value at the API boundary. This guards the
+    paths that do not go through it: a seed script, a bulk import, a direct SQL
+    fix, or a bug in a later code path.
+    """
+    expected = {
+        "ck_food_logs_serving_size",
+        "ck_food_logs_friend_scale",
+        "ck_users_goal",
+        "ck_ai_plans_goal",
+    }
+
+    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+    try:
+        async with engine.connect() as connection:
+            rows = await connection.scalars(
+                text(
+                    "SELECT conname FROM pg_constraint "
+                    "WHERE contype = 'c' AND connamespace = 'public'::regnamespace"
+                )
+            )
+            present = set(rows)
+
+            native_enums = await connection.scalar(
+                text(
+                    "SELECT count(*) FROM pg_type t "
+                    "JOIN pg_namespace n ON n.oid = t.typnamespace "
+                    "WHERE n.nspname = 'public' AND t.typtype = 'e'"
+                )
+            )
+
+            category_id = await connection.scalar(text("SELECT id FROM food_categories LIMIT 1"))
+            await connection.execute(
+                text(
+                    "INSERT INTO users (email, password_hash) "
+                    "VALUES ('vocab-probe@forkast.app', 'x')"
+                )
+            )
+            user_id = await connection.scalar(
+                text("SELECT id FROM users WHERE email = 'vocab-probe@forkast.app'")
+            )
+
+            rejected = False
+            try:
+                await connection.execute(
+                    text(
+                        "INSERT INTO food_logs "
+                        "(user_id, dish_name, category_id, rating, serving_size, estimated_calories) "
+                        "VALUES (:uid, 'probe', :cid, 3, 'gigantic', 100)"
+                    ),
+                    {"uid": user_id, "cid": category_id},
+                )
+            except IntegrityError:
+                rejected = True
+            await connection.rollback()
+    finally:
+        await engine.dispose()
+
+    assert expected <= present, f"missing CHECK constraints: {sorted(expected - present)}"
+    assert native_enums == 0, "a native PostgreSQL enum type was created, which breaks downgrades"
+    assert rejected, "the database accepted an invalid serving_size"
+
