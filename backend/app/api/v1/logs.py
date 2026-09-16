@@ -1,4 +1,10 @@
-"""Food log CRUD. This is the one feature area with real logic behind it."""
+"""Food log CRUD, plus the month over month trend read.
+
+This is the one feature area with real logic behind it. The trend lives here
+rather than beside the dashboard because it is a straight read over food_logs
+and nothing else, but it is not addressed under /logs, so this module exports
+one router carrying both and the v1 aggregation stays a single include.
+"""
 
 from __future__ import annotations
 
@@ -12,14 +18,21 @@ from sqlalchemy.orm import selectinload
 from app.api.deps import CurrentUser, SessionDep
 from app.api.v1.catalog import upsert_restaurant
 from app.models import FoodCategory, FoodLog, Restaurant
+from app.schemas.insights import TrendOut
 from app.schemas.logs import FoodLogCreate, FoodLogOut, FoodLogPage, FoodLogUpdate
 from app.services.ai.base import AIService
 from app.services.ai.deps import get_ai_service
 from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import CalorieAdjustRequest
 from app.services.calories import finalise_estimate
+from app.services.insights import build_trend
 
-router = APIRouter(prefix="/logs", tags=["logs"])
+logs_router = APIRouter(prefix="/logs", tags=["logs"])
+trend_router = APIRouter(tags=["insights"])
+
+# What app.api.v1 includes. Both of the above hang off it, so adding a route
+# outside /logs needs no change to the aggregation.
+router = APIRouter()
 
 AIDep = Annotated[AIService, Depends(get_ai_service)]
 
@@ -105,7 +118,7 @@ async def _load_log(session: SessionDep, user_id: uuid.UUID, log_id: uuid.UUID) 
     return log
 
 
-@router.post("", response_model=FoodLogOut, status_code=status.HTTP_201_CREATED)
+@logs_router.post("", response_model=FoodLogOut, status_code=status.HTTP_201_CREATED)
 async def create_log(
     payload: FoodLogCreate, session: SessionDep, user: CurrentUser, ai: AIDep
 ) -> FoodLog:
@@ -146,7 +159,7 @@ async def create_log(
     return created
 
 
-@router.get("", response_model=FoodLogPage)
+@logs_router.get("", response_model=FoodLogPage)
 async def list_logs(
     session: SessionDep,
     user: CurrentUser,
@@ -170,12 +183,12 @@ async def list_logs(
     )
 
 
-@router.get("/{log_id}", response_model=FoodLogOut)
+@logs_router.get("/{log_id}", response_model=FoodLogOut)
 async def get_log(log_id: uuid.UUID, session: SessionDep, user: CurrentUser) -> FoodLog:
     return await _load_log(session, user.id, log_id)
 
 
-@router.patch("/{log_id}", response_model=FoodLogOut)
+@logs_router.patch("/{log_id}", response_model=FoodLogOut)
 async def update_log(
     log_id: uuid.UUID,
     payload: FoodLogUpdate,
@@ -208,9 +221,58 @@ async def update_log(
     return updated
 
 
-@router.delete("/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
+@logs_router.delete("/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_log(log_id: uuid.UUID, session: SessionDep, user: CurrentUser) -> Response:
     log = await _load_log(session, user.id, log_id)
     await session.delete(log)
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@logs_router.post(
+    "/{log_id}/repeat", response_model=FoodLogOut, status_code=status.HTTP_201_CREATED
+)
+async def repeat_log(log_id: uuid.UUID, session: SessionDep, user: CurrentUser) -> FoodLog:
+    """Log the same thing again, now, without retyping any of it.
+
+    A new row rather than a counter on the old one: two chai at nine and at four
+    are two meals on two parts of the day, and collapsing them would flatten the
+    calorie chart and the streak alike.
+    """
+    original = await _load_log(session, user.id, log_id)
+
+    repeated = FoodLog(
+        user_id=user.id,
+        dish_name=original.dish_name,
+        category_id=original.category_id,
+        restaurant_id=original.restaurant_id,
+        area=original.area,
+        rating=original.rating,
+        fun_scale=original.fun_scale,
+        friend_scale=original.friend_scale,
+        serving_size=original.serving_size,
+        # Copied, not re-estimated. The estimate is a function of dish name,
+        # category range and serving size, and all three are carried over
+        # unchanged, so asking again can only return the same number or, once a
+        # real model is behind the seam, a different one for an identical meal;
+        # the user would see the same dish costing two different amounts. It
+        # also keeps this route a pure database copy, so a one tap repeat cannot
+        # fail with a 502 or wait on an upstream call.
+        estimated_calories=original.estimated_calories,
+    )
+    # created_at is deliberately left to the column default. That is the whole
+    # point of a repeat: same meal, this moment.
+    session.add(repeated)
+    await session.flush()
+    created = await _load_log(session, user.id, repeated.id)
+    await session.commit()
+    return created
+
+
+@trend_router.get("/trend", response_model=TrendOut)
+async def trend(session: SessionDep, user: CurrentUser) -> TrendOut:
+    return await build_trend(session, user)
+
+
+router.include_router(logs_router)
+router.include_router(trend_router)
