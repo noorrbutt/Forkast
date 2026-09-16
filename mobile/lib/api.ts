@@ -31,6 +31,17 @@ let accessToken: string | null = null;
 let refreshToken: string | null = null;
 let authFailureHandler: (() => void) | null = null;
 
+/**
+ * Bumped every time the session is torn down.
+ *
+ * A refresh that is already in flight when the user signs out would otherwise
+ * resolve afterwards and write a valid token pair straight back into the
+ * keystore, silently signing them back in. Sign out is not serialised behind
+ * the refresh either, because /auth/logout never returns a 401 and so never
+ * goes through the retry path.
+ */
+let tokenGeneration = 0;
+
 /** Registered by AuthProvider so a dead refresh token sends the user to login. */
 export function setAuthFailureHandler(handler: (() => void) | null): void {
   authFailureHandler = handler;
@@ -58,6 +69,8 @@ export function getRefreshToken(): string | null {
 }
 
 export async function clearTokens(): Promise<void> {
+  tokenGeneration += 1;
+  refreshInFlight = null;
   accessToken = null;
   refreshToken = null;
   await removeStoredTokens();
@@ -75,6 +88,7 @@ let refreshInFlight: Promise<TokenPair> | null = null;
 
 async function performRefresh(): Promise<TokenPair> {
   const current = refreshToken;
+  const generation = tokenGeneration;
   if (!current) throw new Error('No refresh token stored');
 
   // A bare axios call, deliberately not `api`, so the refresh itself can never
@@ -84,6 +98,12 @@ async function performRefresh(): Promise<TokenPair> {
     { refresh_token: current },
     { timeout: 15000, headers: { 'Content-Type': 'application/json' } },
   );
+  if (generation !== tokenGeneration) {
+    // Signed out while this was in flight. Throwing rather than storing keeps
+    // the sign out final; the pair is simply discarded.
+    throw new Error('Session ended while refreshing');
+  }
+
   await setTokens(response.data);
   return response.data;
 }

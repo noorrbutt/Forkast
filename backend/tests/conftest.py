@@ -21,6 +21,7 @@ comes from migration 0002 and the app cannot function without it.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import subprocess
 import sys
@@ -57,10 +58,39 @@ def migrated_database() -> None:
     env = {**os.environ, "DATABASE_URL": TEST_DATABASE_URL}
     common = {"cwd": BACKEND_DIR, "env": env, "check": True, "capture_output": True, "text": True}
 
+    # Rows left by the previous run have to go first. food_logs references
+    # food_categories with ON DELETE RESTRICT, and migration 0002's downgrade
+    # deletes the reference rows, so a single leftover log makes `downgrade
+    # base` fail. That is correct behaviour in the migration and the wrong thing
+    # to leave to chance here, since which test ran last decides whether the
+    # next session can even start.
+    asyncio.run(_truncate_if_present())
+
     # Start from a known state, so a half-migrated database left by an earlier
     # run cannot make these tests pass or fail for the wrong reason.
     subprocess.run([sys.executable, "-m", "alembic", "downgrade", "base"], **common)
     subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], **common)
+
+
+async def _truncate_if_present() -> None:
+    """Empty the mutable tables, tolerating a database with no schema at all."""
+    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    f"""
+                    DO $$
+                    BEGIN
+                        IF to_regclass('public.{MUTABLE_TABLES[0]}') IS NOT NULL THEN
+                            TRUNCATE {", ".join(MUTABLE_TABLES)} CASCADE;
+                        END IF;
+                    END $$;
+                    """
+                )
+            )
+    finally:
+        await engine.dispose()
 
 
 @pytest.fixture

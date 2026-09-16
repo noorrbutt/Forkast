@@ -33,20 +33,23 @@ _settings = get_settings()
 _DB_URL = _settings.database_url
 
 
-# Indexes built from SQL expressions rather than plain columns: lower(),
-# coalesce() and DESC ordering. SQLAlchemy cannot reliably reflect these back
-# from PostgreSQL, so leaving them visible to autogenerate makes it propose
-# dropping and recreating them on every run and `alembic check` would never be
-# clean. They are created explicitly in the initial migration instead.
+# Indexes built from a SQL expression rather than a plain column. PostgreSQL
+# reflects lower(email) back as lower((email)::text), and Alembic's cast
+# stripping still leaves a form that never equals what the metadata compiled, so
+# left visible autogenerate would propose dropping and recreating them on every
+# run and `alembic check` would never be clean. They are created explicitly in
+# the initial migration instead.
 #
-# The trigram indexes are deliberately NOT in this set: they use
-# postgresql_ops={"col": "gin_trgm_ops"} on a plain column, which autogenerate
-# compares correctly.
+# Two kinds are deliberately NOT in this set, because excluding a comparable
+# index silently removes it from drift detection, which is a cost with no
+# benefit:
+#  - the (user_id, created_at DESC) indexes. A DESC modifier on a plain column
+#    is reflected as column_sorting, and Alembic's PostgreSQL implementation
+#    normalises both sides to the same text, so they compare equal.
+#  - the trigram indexes, which use postgresql_ops on a plain column.
 EXPRESSION_INDEXES = {
     "uq_users_email_lower",
     "uq_restaurants_name_area_lower",
-    "ix_food_logs_user_id_created_at",
-    "ix_ai_plans_user_id_created_at",
 }
 
 

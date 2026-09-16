@@ -169,3 +169,23 @@ async def test_coordinates_are_json_numbers_not_strings(auth_client: AsyncClient
     assert isinstance(body["longitude"], float), f"got {type(body['longitude']).__name__}"
     assert abs(body["latitude"] - 24.8185) < 0.0001
 
+
+async def test_both_cuisine_parameter_spellings_filter(auth_client: AsyncClient) -> None:
+    """The clients send cuisine_id, the project plan's route table wrote
+    ?cuisine=. Both have to filter, or a caller following one of them silently
+    receives every category instead of an error."""
+    cuisines = (await auth_client.get("/api/v1/cuisines")).json()
+    desi = next(c for c in cuisines if c["slug"] == "desi")
+    everything = (await auth_client.get("/api/v1/categories")).json()
+
+    by_id = (
+        await auth_client.get("/api/v1/categories", params={"cuisine_id": desi["id"]})
+    ).json()
+    by_plan_spelling = (
+        await auth_client.get("/api/v1/categories", params={"cuisine": desi["id"]})
+    ).json()
+
+    assert 0 < len(by_id) < len(everything)
+    assert len(by_plan_spelling) == len(by_id)
+    assert {c["id"] for c in by_plan_spelling} == {c["id"] for c in by_id}
+

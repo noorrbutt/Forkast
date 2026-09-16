@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.enums import FriendScale, ServingSize
 from app.schemas.catalog import SMALLINT_MAX, CategoryOut, RestaurantOut
@@ -30,12 +30,40 @@ class FoodLogCreate(BaseModel):
     # Optional, for backfilling older meals. Defaults to now on the server.
     created_at: dt.datetime | None = None
 
+    @field_validator("created_at")
+    @classmethod
+    def _bounded_and_offset_aware(cls, value: dt.datetime | None) -> dt.datetime | None:
+        """Require an offset and a plausible instant.
+
+        A naive datetime is not harmless here. asyncpg encodes it with
+        astimezone, which reads it as the API host's local zone rather than the
+        user's, so the same payload lands on a different calendar day depending
+        on where the server runs. Streaks bucket by local day, so that is a
+        wrong answer in a feature that looks unrelated.
+        """
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("created_at must include a UTC offset, for example 2026-09-16T20:30:00+05:00")
+
+        now = dt.datetime.now(dt.UTC)
+        if value > now + CLOCK_SKEW:
+            raise ValueError("created_at cannot be in the future")
+        if value < now - MAX_BACKFILL:
+            raise ValueError("created_at is implausibly far in the past")
+        return value
+
     @model_validator(mode="after")
     def _one_restaurant_reference(self) -> FoodLogCreate:
         if self.restaurant_id is not None and self.restaurant_name:
             raise ValueError("Pass restaurant_id or restaurant_name, not both")
         return self
 
+
+# A backfill is for a meal someone forgot to log, so it may sit slightly ahead
+# of the server clock but never genuinely in the future, and never prehistoric.
+CLOCK_SKEW = dt.timedelta(minutes=5)
+MAX_BACKFILL = dt.timedelta(days=3650)
 
 # Columns the database declares NOT NULL. Omitting them in a PATCH means "leave
 # alone", but sending an explicit null is a client mistake and has to be a 422

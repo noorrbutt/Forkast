@@ -59,11 +59,20 @@ async def list_cuisines(session: SessionDep, user: CurrentUser) -> list[Cuisine]
 async def list_categories(
     session: SessionDep,
     user: CurrentUser,
+    # Two spellings on purpose. cuisine_id is what the clients send and it
+    # matches the response field, while the project plan's route table wrote
+    # ?cuisine=. Declaring both as real parameters means a caller following
+    # either one gets a filtered list instead of silently receiving everything.
+    # AliasChoices is not used here: FastAPI ignores it on a Query parameter,
+    # so the alternate spelling would quietly do nothing.
     cuisine_id: int | None = Query(default=None, ge=1, le=SMALLINT_MAX),
+    cuisine: int | None = Query(default=None, ge=1, le=SMALLINT_MAX),
 ) -> list[FoodCategory]:
+    selected = cuisine_id if cuisine_id is not None else cuisine
+
     stmt = select(FoodCategory).order_by(FoodCategory.name)
-    if cuisine_id is not None:
-        stmt = stmt.where(FoodCategory.cuisine_id == cuisine_id)
+    if selected is not None:
+        stmt = stmt.where(FoodCategory.cuisine_id == selected)
     result = await session.scalars(stmt)
     return list(result)
 

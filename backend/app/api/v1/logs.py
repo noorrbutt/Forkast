@@ -82,6 +82,14 @@ async def _load_log(session: SessionDep, user_id: uuid.UUID, log_id: uuid.UUID) 
         select(FoodLog)
         .where(FoodLog.id == log_id, FoodLog.user_id == user_id)
         .options(selectinload(FoodLog.category), selectinload(FoodLog.restaurant))
+        # populate_existing because assigning a raw foreign key column does not
+        # refresh the relationship that was already loaded beside it, and a
+        # plain reload resolves to the same identity-mapped object without
+        # overwriting it. Without this, PATCHing category_id returns the new id
+        # next to the old nested category, and a client rendering from the
+        # nested object shows the wrong thing. Safe at every call site: the two
+        # with pending changes flush first.
+        .execution_options(populate_existing=True)
     )
     if log is None:
         # 404 rather than 403 for a log belonging to someone else: no reason to

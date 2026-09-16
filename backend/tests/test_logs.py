@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime as dt
+
 import pytest
 from httpx import AsyncClient
 
@@ -350,4 +352,134 @@ async def test_patching_a_nullable_field_to_null_still_clears_it(
 
     assert response.status_code == 200
     assert response.json()[field] is None
+
+
+async def test_patching_the_category_returns_the_new_nested_category(
+    auth_client: AsyncClient,
+) -> None:
+    """The response has to be internally consistent.
+
+    Assigning a raw foreign key does not refresh the relationship loaded beside
+    it, and a plain reload resolves to the same identity-mapped object without
+    overwriting it, so the response used to carry the new category_id next to
+    the old nested category. A client rendering the nested object showed the
+    wrong category until something else refetched.
+    """
+    biryani = await _a_category(auth_client, "biryani")
+    pizza = await _a_category(auth_client, "pizza")
+
+    created = (
+        await auth_client.post(
+            LOGS,
+            json={
+                "dish_name": "switcher",
+                "category_id": biryani["id"],
+                "rating": 4,
+                "serving_size": "medium",
+            },
+        )
+    ).json()
+    assert created["category"]["slug"] == "biryani"
+
+    patched = (
+        await auth_client.patch(f"{LOGS}/{created['id']}", json={"category_id": pizza["id"]})
+    ).json()
+
+    assert patched["category_id"] == pizza["id"]
+    assert patched["category"]["slug"] == "pizza", "nested category is stale"
+
+
+async def test_patching_the_restaurant_returns_the_new_nested_restaurant(
+    auth_client: AsyncClient,
+) -> None:
+    category = await _a_category(auth_client)
+    first = (
+        await auth_client.post("/api/v1/restaurants", json={"name": "Nested One"})
+    ).json()
+    second = (
+        await auth_client.post("/api/v1/restaurants", json={"name": "Nested Two"})
+    ).json()
+
+    created = (
+        await auth_client.post(
+            LOGS,
+            json={
+                "dish_name": "moving",
+                "category_id": category["id"],
+                "restaurant_id": first["id"],
+                "rating": 4,
+                "serving_size": "medium",
+            },
+        )
+    ).json()
+
+    patched = (
+        await auth_client.patch(f"{LOGS}/{created['id']}", json={"restaurant_id": second["id"]})
+    ).json()
+
+    assert patched["restaurant"]["name"] == "Nested Two"
+
+
+async def test_a_backfilled_timestamp_must_carry_an_offset(auth_client: AsyncClient) -> None:
+    """A naive datetime is encoded against the API host's zone, not the user's,
+    so the same payload would land on a different calendar day depending on
+    where the server runs. Streaks bucket by local day."""
+    category = await _a_category(auth_client)
+
+    response = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "naive backfill",
+            "category_id": category["id"],
+            "rating": 4,
+            "serving_size": "medium",
+            "created_at": "2026-09-01T20:30:00",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "offset_days",
+    [4000, -1],
+    ids=["implausibly old", "in the future"],
+)
+async def test_an_implausible_backfill_timestamp_is_rejected(
+    auth_client: AsyncClient, offset_days: int
+) -> None:
+    category = await _a_category(auth_client)
+    when = dt.datetime.now(dt.UTC) - dt.timedelta(days=offset_days)
+
+    response = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "time traveller",
+            "category_id": category["id"],
+            "rating": 4,
+            "serving_size": "medium",
+            "created_at": when.isoformat(),
+        },
+    )
+
+    assert response.status_code == 422
+
+
+async def test_a_reasonable_backfill_is_accepted(auth_client: AsyncClient) -> None:
+    """Logging a meal you forgot about yesterday has to keep working."""
+    category = await _a_category(auth_client)
+    yesterday = dt.datetime.now(dt.UTC) - dt.timedelta(days=1)
+
+    response = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "yesterday lunch",
+            "category_id": category["id"],
+            "rating": 4,
+            "serving_size": "medium",
+            "created_at": yesterday.isoformat(),
+        },
+    )
+
+    assert response.status_code == 201
 
