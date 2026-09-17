@@ -19,7 +19,7 @@ function Bootstrapping() {
 }
 
 function RootNavigator() {
-  const { ready, signedIn } = useAuth();
+  const { ready, signedIn, needsSetup } = useAuth();
   const { colors, isDark } = useTheme();
   const segments = useSegments();
   const router = useRouter();
@@ -28,14 +28,21 @@ function RootNavigator() {
     if (!ready) return;
     const inAuthGroup = segments[0] === '(auth)';
 
+    const inSetup = segments[0] === 'setup';
+
     if (!signedIn && !inAuthGroup) {
       // The welcome screen, not the form. Someone who has never used
       // Forkast should be told what it is before being asked who they are.
       router.replace('/welcome');
-    } else if (signedIn && inAuthGroup) {
+    } else if (signedIn && needsSetup && !inSetup) {
+      // A brand new account has the server's default timezone, which decides
+      // which day every meal and streak lands in. Asking now costs one screen;
+      // finding out later costs days that cannot be re-bucketed.
+      router.replace('/setup');
+    } else if (signedIn && !needsSetup && (inAuthGroup || inSetup)) {
       router.replace('/');
     }
-  }, [ready, signedIn, segments, router]);
+  }, [ready, signedIn, needsSetup, segments, router]);
 
   if (!ready) return <Bootstrapping />;
 
@@ -50,6 +57,7 @@ function RootNavigator() {
       >
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="setup" />
         <Stack.Screen name="map" />
         <Stack.Screen name="history" />
         <Stack.Screen name="logs/[id]" />

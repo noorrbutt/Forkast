@@ -19,6 +19,17 @@ type AuthValue = {
   /** False until the stored token pair has been read back from the keystore. */
   ready: boolean;
   signedIn: boolean;
+  /**
+   * True between creating an account and finishing the one time setup.
+   *
+   * Timezone decides which calendar day every meal and every streak lands in,
+   * and it defaults to Asia/Karachi on the server. Left to a banner on the
+   * Profile tab, someone who never opens that tab logs a run of days into the
+   * wrong ones before finding out, and those days cannot be re-bucketed after
+   * the fact. So it is asked once, at the start, when it is still free.
+   */
+  needsSetup: boolean;
+  completeSetup: () => void;
   signIn: (creds: Credentials) => Promise<void>;
   signUp: (creds: Credentials) => Promise<void>;
   signOut: () => Promise<void>;
@@ -30,6 +41,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [token, setToken] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  // Deliberately not persisted. It marks this session as brand new, and a
+  // reinstall that restores a token belongs straight in the app, not back
+  // through a setup screen for an account that has already been configured.
+  const [needsSetup, setNeedsSetup] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -106,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (creds: Credentials) => {
       const response = await api.post<TokenPair>('/auth/register', creds);
       await adopt(response.data);
+      setNeedsSetup(true);
     },
     [adopt],
   );
@@ -121,12 +137,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     await clearTokens();
     setToken(null);
+    setNeedsSetup(false);
     queryClient.clear();
   }, [queryClient]);
 
+  const completeSetup = useCallback(() => setNeedsSetup(false), []);
+
   const value = useMemo<AuthValue>(
-    () => ({ ready, signedIn: token !== null, signIn, signUp, signOut }),
-    [ready, token, signIn, signUp, signOut],
+    () => ({
+      ready,
+      signedIn: token !== null,
+      needsSetup,
+      completeSetup,
+      signIn,
+      signUp,
+      signOut,
+    }),
+    [ready, token, needsSetup, completeSetup, signIn, signUp, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
