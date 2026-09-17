@@ -27,3 +27,7 @@ Thumbs.db
 mobile/.agents/
 mobile/.claude/
 mobile/skills-lock.json
+# playwright-cli writes snapshots, console logs and screenshots beside the
+# project while a browser session is driving it.
+.playwright-cli/
+mobile/.playwright-cli/

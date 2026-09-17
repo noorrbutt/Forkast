@@ -337,11 +337,147 @@ function MealRowBase({ log, last, onOpen, onRepeat, sending, confirmed, error }:
  */
 const MealRow = memo(MealRowBase);
 
-export default function HistoryScreen() {
+/**
+ * The diary list.
+ *
+ * A component rather than inline JSX for one specific reason: it needs the
+ * padding Screen would otherwise have applied, and Screen publishes that
+ * through a context whose provider is inside Screen itself. Read from the
+ * screen component, which is Screen's parent, the hook returns the default of
+ * zero, the list starts underneath the frosted header, and the first day
+ * heading is hidden behind it. Rendered here, as Screen's child, it is inside
+ * the provider and gets the real value.
+ */
+function DiaryList({
+  days,
+  logs,
+  loadMore,
+  items,
+  repeat,
+  confirmed,
+  onOpen,
+  onRepeat,
+  onLogFirst,
+}: {
+  days: DiaryDay[];
+  logs: ReturnType<typeof useInfiniteLogs>;
+  loadMore: () => void;
+  items: FoodLog[];
+  repeat: ReturnType<typeof useRepeatLog>;
+  confirmed: Uuid | null;
+  onOpen: (id: Uuid) => void;
+  onRepeat: (id: Uuid) => void;
+  onLogFirst: () => void;
+}) {
   const { colors, layout, spacing, type } = useTheme();
+  const screenInsets = useScreenInsets();
+
+  return (
+  <FlatList<DiaryDay>
+    testID="diary"
+    data={days}
+    keyExtractor={(day) => day.key}
+    refreshControl={
+      <RefreshControl
+        refreshing={logs.isRefetching && !logs.isFetchingNextPage}
+        onRefresh={() => void logs.refetch()}
+        tintColor={colors.accent}
+      />
+    }
+    // The column cap lives on the content container, which is the one box
+    // a list lets you centre.
+    contentContainerStyle={{
+      width: '100%',
+      maxWidth: layout.contentWidth,
+      alignSelf: 'center',
+      paddingTop: screenInsets.top,
+      paddingHorizontal: layout.screenPadding,
+      paddingBottom: layout.scrollBottomInset + screenInsets.bottom,
+      gap: spacing.lg,
+    }}
+    showsVerticalScrollIndicator={false}
+    onEndReached={loadMore}
+    // Half a screen out, so the next page is usually there by the time the
+    // last row is.
+    onEndReachedThreshold={0.5}
+    ListHeaderComponent={
+      <>
+        {logs.isPending ? <Loading label="Reading your diary" /> : null}
+
+        {logs.isError && !logs.data ? (
+          <ErrorState
+            title="Diary unavailable"
+            message={describeError(logs.error)}
+            onRetry={() => void logs.refetch()}
+          />
+        ) : null}
+      </>
+    }
+    ListEmptyComponent={
+      logs.data && items.length === 0 ? (
+        <Empty
+          icon="empty"
+          title="Your diary is empty"
+          message="Every meal you log lands here, newest first, with its photo and its calories. Tap one to fix a typo or delete it."
+          actionLabel="Log your first meal"
+          actionIcon="log"
+          onAction={onLogFirst}
+        />
+      ) : null
+    }
+    ListFooterComponent={
+      // The end of the diary is a designed state too. Silence after the
+      // last row reads the same as a list that failed to load more.
+      logs.isFetchingNextPage ? (
+        <Loading label="Reading further back" fill={false} />
+      ) : items.length > 0 && !logs.hasNextPage ? (
+        <Text
+          style={[
+            type.caption,
+            { color: colors.muted, textAlign: 'center', paddingTop: spacing.lg },
+          ]}
+        >
+          That is every meal you have logged.
+        </Text>
+      ) : null
+    }
+    /* A full step between days, against hairlines inside one, so a day
+       reads as a group before a single word of it is read.
+
+       Section 4 says a section heading should be `title`, and these are
+       the group's own quieter label instead. The reason: a date is not a
+       headline, it is the coordinate the meals under it share, and at 21pt
+       it would outweigh every dish name on the screen. The grouping is
+       already carried by the surface and the space around it, so the
+       heading only has to name the day and say what it came to. */
+    renderItem={({ item: day }) => (
+      <ListGroup title={`${day.heading} · ${formatNumber(day.total)} kcal`}>
+        {day.meals.map((log, index) => (
+          <MealRow
+            key={log.id}
+            log={log}
+            last={index === day.meals.length - 1}
+            onOpen={onOpen}
+            onRepeat={onRepeat}
+            sending={repeat.isPending && repeat.variables === log.id}
+            confirmed={confirmed === log.id}
+            error={
+              repeat.isError && repeat.variables === log.id
+                ? describeError(repeat.error)
+                : null
+            }
+          />
+        ))}
+      </ListGroup>
+    )}
+    ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
+  />
+  );
+}
+
+export default function HistoryScreen() {
   const router = useRouter();
   const logs = useInfiniteLogs();
-  const screenInsets = useScreenInsets();
   const repeat = useRepeatLog();
 
   const [confirmed, setConfirmed] = useState<Uuid | null>(null);
@@ -433,104 +569,16 @@ export default function HistoryScreen() {
       title="Your diary"
       eyebrow={logs.data ? `${formatNumber(total)} logged` : undefined}
     >
-      <FlatList<DiaryDay>
-        testID="diary"
-        data={days}
-        keyExtractor={(day) => day.key}
-        refreshControl={
-          <RefreshControl
-            refreshing={logs.isRefetching && !logs.isFetchingNextPage}
-            onRefresh={() => void logs.refetch()}
-            tintColor={colors.accent}
-          />
-        }
-        // The column cap lives on the content container, which is the one box
-        // a list lets you centre.
-        contentContainerStyle={{
-          width: '100%',
-          maxWidth: layout.contentWidth,
-          alignSelf: 'center',
-          paddingTop: screenInsets.top,
-          paddingHorizontal: layout.screenPadding,
-          paddingBottom: layout.scrollBottomInset + screenInsets.bottom,
-          gap: spacing.lg,
-        }}
-        showsVerticalScrollIndicator={false}
-        onEndReached={loadMore}
-        // Half a screen out, so the next page is usually there by the time the
-        // last row is.
-        onEndReachedThreshold={0.5}
-        ListHeaderComponent={
-          <>
-            {logs.isPending ? <Loading label="Reading your diary" /> : null}
-
-            {logs.isError && !logs.data ? (
-              <ErrorState
-                title="Diary unavailable"
-                message={describeError(logs.error)}
-                onRetry={() => void logs.refetch()}
-              />
-            ) : null}
-          </>
-        }
-        ListEmptyComponent={
-          logs.data && items.length === 0 ? (
-            <Empty
-              icon="empty"
-              title="Your diary is empty"
-              message="Every meal you log lands here, newest first, with its photo and its calories. Tap one to fix a typo or delete it."
-              actionLabel="Log your first meal"
-              actionIcon="log"
-              onAction={() => router.navigate('/log')}
-            />
-          ) : null
-        }
-        ListFooterComponent={
-          // The end of the diary is a designed state too. Silence after the
-          // last row reads the same as a list that failed to load more.
-          logs.isFetchingNextPage ? (
-            <Loading label="Reading further back" fill={false} />
-          ) : items.length > 0 && !logs.hasNextPage ? (
-            <Text
-              style={[
-                type.caption,
-                { color: colors.muted, textAlign: 'center', paddingTop: spacing.lg },
-              ]}
-            >
-              That is every meal you have logged.
-            </Text>
-          ) : null
-        }
-        /* A full step between days, against hairlines inside one, so a day
-           reads as a group before a single word of it is read.
-
-           Section 4 says a section heading should be `title`, and these are
-           the group's own quieter label instead. The reason: a date is not a
-           headline, it is the coordinate the meals under it share, and at 21pt
-           it would outweigh every dish name on the screen. The grouping is
-           already carried by the surface and the space around it, so the
-           heading only has to name the day and say what it came to. */
-        renderItem={({ item: day }) => (
-          <ListGroup title={`${day.heading} · ${formatNumber(day.total)} kcal`}>
-            {day.meals.map((log, index) => (
-              <MealRow
-                key={log.id}
-                log={log}
-                last={index === day.meals.length - 1}
-                onOpen={openMeal}
-                onRepeat={askToRepeat}
-                sending={repeat.isPending && repeat.variables === log.id}
-                confirmed={confirmed === log.id}
-                error={
-                  repeat.isError && repeat.variables === log.id
-                    ? describeError(repeat.error)
-                    : null
-                }
-              />
-            ))}
-          </ListGroup>
-        )}
-        ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
+      <DiaryList
+        days={days}
+        logs={logs}
+        loadMore={loadMore}
+        items={items}
+        repeat={repeat}
+        confirmed={confirmed}
+        onOpen={openMeal}
+        onRepeat={askToRepeat}
+        onLogFirst={() => router.navigate('/log')}
       />
 
       {/* At screen level rather than inside the row, which is what every other
