@@ -19,6 +19,7 @@ import { useAuth, useMe } from '../../hooks/useAuth';
 import { hasAvatar } from '../../hooks/useAvatar';
 import { useUpdateProfile } from '../../hooks/useProfile';
 import { useReminders } from '../../hooks/useReminders';
+import { REMINDERS_AVAILABLE } from '../../lib/notifications';
 import { describeError } from '../../lib/api';
 import { GOAL_BLURBS, GOAL_LABELS, formatDate, formatNumber } from '../../lib/format';
 import { haptics } from '../../lib/haptics';

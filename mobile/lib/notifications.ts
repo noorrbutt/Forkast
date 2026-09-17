@@ -1,5 +1,7 @@
-import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+
+type NotificationsModule = typeof import('expo-notifications');
 
 /**
  * Local reminders: nudge after a quiet stretch, and protect a live streak.
@@ -13,7 +15,44 @@ import { Platform } from 'react-native';
  * Every call is wrapped. Notification support varies by platform and by how the
  * app was launched, and a reminder failing to schedule must never take a screen
  * down with it: the worst acceptable outcome is that no reminder arrives.
+ *
+ * The module is loaded on demand rather than imported at the top of this file,
+ * and that is not a style choice. Importing expo-notifications runs its device
+ * push token auto registration as a side effect, which throws in Expo Go since
+ * SDK 53 removed remote push from that client. Forkast never asks for a push
+ * token, but the import alone was enough to take the whole app down before a
+ * single screen rendered, and it did, through the Profile tab.
+ *
+ * So in Expo Go the module is never touched and reminders report themselves
+ * unavailable. In a development or production build it loads normally and the
+ * feature works. Nothing is silently broken: the Profile screen says which one
+ * you are in.
  */
+
+/**
+ * Expo Go cannot run this and must never be asked to.
+ *
+ * appOwnership is the check rather than executionEnvironment, for the same
+ * reason the map seam uses it: StoreClient covers a development client too,
+ * which would disable reminders in exactly the build that supports them.
+ */
+export const REMINDERS_AVAILABLE = Constants.appOwnership !== 'expo';
+
+let cached: NotificationsModule | null = null;
+
+/** The module, or null where loading it would throw or do nothing useful. */
+function load(): NotificationsModule | null {
+  if (!REMINDERS_AVAILABLE) return null;
+  if (cached) return cached;
+  try {
+    // A require rather than an import, so this is genuinely deferred to the
+    // first call rather than hoisted back to module scope by the bundler.
+    cached = require('expo-notifications') as NotificationsModule;
+    return cached;
+  } catch {
+    return null;
+  }
+}
 
 const INACTIVITY_ID = 'forkast.inactivity';
 const STREAK_ID = 'forkast.streak';
@@ -28,7 +67,8 @@ const STREAK_MINUTE = 30;
 let handlerInstalled = false;
 
 function installHandler(): void {
-  if (handlerInstalled) return;
+  const Notifications = load();
+  if (!Notifications || handlerInstalled) return;
   handlerInstalled = true;
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -49,6 +89,8 @@ function installHandler(): void {
  */
 export async function requestReminderPermission(): Promise<boolean> {
   try {
+    const Notifications = load();
+    if (!Notifications) return false;
     installHandler();
 
     if (Platform.OS === 'android') {
@@ -74,6 +116,8 @@ export async function requestReminderPermission(): Promise<boolean> {
 
 export async function hasReminderPermission(): Promise<boolean> {
   try {
+    const Notifications = load();
+    if (!Notifications) return false;
     return (await Notifications.getPermissionsAsync()).granted;
   } catch {
     return false;
@@ -82,6 +126,8 @@ export async function hasReminderPermission(): Promise<boolean> {
 
 async function cancel(identifier: string): Promise<void> {
   try {
+    const Notifications = load();
+    if (!Notifications) return;
     await Notifications.cancelScheduledNotificationAsync(identifier);
   } catch {
     // Cancelling something that was never scheduled is not an error worth
@@ -110,6 +156,8 @@ type ReminderState = {
  */
 export async function syncReminders(state: ReminderState): Promise<void> {
   try {
+    const Notifications = load();
+    if (!Notifications) return;
     installHandler();
     await cancelAllReminders();
 
