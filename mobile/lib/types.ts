@@ -72,6 +72,9 @@ export type Restaurant = {
 };
 
 export type FoodLog = {
+  /** Whether a picture is attached. Answered by the list query itself, so the
+   *  client can decide whether to request the image without fetching it. */
+  has_photo: boolean;
   id: Uuid;
   dish_name: string;
   category_id: RefId;

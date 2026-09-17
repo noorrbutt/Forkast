@@ -39,3 +39,19 @@ jest.mock('expo-notifications', () => ({
   AndroidImportance: { DEFAULT: 3 },
   SchedulableTriggerInputTypes: { TIME_INTERVAL: 'timeInterval', DAILY: 'daily' },
 }));
+
+// No camera and no photo library in a test runner, and both modules throw on
+// import outside a native host. The permission calls default to granted so the
+// tests exercise the path a real user takes; a test that needs a refusal
+// overrides these for its own duration.
+jest.mock('expo-image-picker', () => ({
+  requestCameraPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+  requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+  launchCameraAsync: jest.fn().mockResolvedValue({ canceled: true, assets: [] }),
+  launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: true, assets: [] }),
+}));
+
+jest.mock('expo-image-manipulator', () => ({
+  manipulateAsync: jest.fn().mockResolvedValue({ uri: 'file:///resized.jpg' }),
+  SaveFormat: { JPEG: 'jpeg', PNG: 'png' },
+}));

@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 
+import { MealPhoto } from '../../components/MealPhoto';
 import { StarRating } from '../../components/StarRating';
 import {
   Button,
@@ -182,6 +183,13 @@ export default function EditLogScreen() {
             kcal. Changing the dish, category or serving size re-estimates it.
           </Text>
         </View>
+      </Card>
+
+      {/* Directly under the estimate, because the picture is the part of a
+          diary entry people come back for, and burying it under the edit form
+          would make it feel like an afterthought. */}
+      <Card>
+        <MealPhoto logId={log.data.id} hasPhoto={log.data.has_photo} />
       </Card>
 
       {/* Above the form on purpose. Repeating is a decision made on the way
