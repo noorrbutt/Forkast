@@ -43,6 +43,12 @@ type ChipProps = {
  *
  * It was too small to hit. 41pt and 37pt are both under the 44pt iOS and 48dp
  * Android minimums, so a control that looked heavy was still hard to tap.
+ *
+ * And it truncated. The label carried numberOfLines={1}, so any caller that
+ * squeezed a chip into a fixed share of a row got "Maint..." instead of
+ * "Maintain". A control whose own label is unreadable is broken however it got
+ * that narrow, so the label wraps now rather than being cut, and callers size
+ * chips to their content instead of to a third of the row.
  */
 export function Chip({
   label,
@@ -118,9 +124,9 @@ export function Chip({
             color: selected ? colors.text : colors.muted,
             // Never changes between states, see the note above.
             fontWeight: '600',
+            textAlign: 'center',
           },
         ]}
-        numberOfLines={1}
       >
         {label}
       </Text>

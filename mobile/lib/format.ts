@@ -73,14 +73,58 @@ export const FRIEND_LABELS: Record<FriendScale, string> = {
   squad: 'Squad',
 };
 
-export const GOAL_LABELS: Record<Goal, string> = {
-  cut: 'Cut',
-  maintain: 'Maintain',
-  bulk: 'Bulk',
+/**
+ * The daily calorie target a goal proposes.
+ *
+ * A goal used to reach nothing but the plan prompt, so picking one changed no
+ * number anybody ever saw and the whole control read as decoration. It now
+ * proposes the one number the dashboard measures a day against, and then gets
+ * out of the way: every screen that offers a goal also lets this be edited.
+ *
+ * Where the numbers come from. 2,000 kcal is the reference intake printed on
+ * food labels and a fair opening guess for an adult of average size and
+ * activity, so it is the honest default for holding steady. Half a kilo of fat
+ * is roughly 3,500 kcal, so eating 500 a day under maintenance is about half a
+ * kilo a week: brisk enough to show on a scale within a month, gentle enough
+ * to keep up. Gaining is not the mirror image, because past a few hundred a
+ * day a surplus mostly arrives as fat rather than as muscle, so bulking adds
+ * 300 instead of 500.
+ *
+ * These are opening guesses, not prescriptions. Nobody's real maintenance is
+ * knowable from a chip on a setup screen, which is exactly why the number
+ * stays editable and why the copy says so. All three sit well inside the 800
+ * to 10,000 the server will accept.
+ */
+const SUGGESTED_TARGETS: Record<Goal, number> = {
+  cut: 1_500,
+  maintain: 2_000,
+  bulk: 2_300,
 };
 
+export function suggestedTarget(goal: Goal): number {
+  return SUGGESTED_TARGETS[goal];
+}
+
+/**
+ * Cut, maintain and bulk are gym words, and someone who has never set foot in
+ * a gym cannot tell from them what the app is about to do. These say which way
+ * the weight is meant to go, and they still read correctly on the plan screen,
+ * which appends the word "plan" to whichever one is stored.
+ */
+export const GOAL_LABELS: Record<Goal, string> = {
+  cut: 'Weight loss',
+  maintain: 'Maintenance',
+  bulk: 'Weight gain',
+};
+
+/**
+ * What picking this goal actually does, in the order it happens: it suggests a
+ * number, it says what the number means, and it hands the number over. Built
+ * from suggestedTarget rather than typed out, so the copy cannot quietly drift
+ * away from the figure the screens fill in.
+ */
 export const GOAL_BLURBS: Record<Goal, string> = {
-  cut: 'Lighter days, still room for the good stuff.',
-  maintain: 'Hold steady and keep eating well.',
-  bulk: 'Build up with bigger, denser plates.',
+  cut: `Suggests a daily target of ${formatNumber(suggestedTarget('cut'))} kcal, around half a kilo a week off. Yours to change.`,
+  maintain: `Suggests a daily target of ${formatNumber(suggestedTarget('maintain'))} kcal, roughly an average adult day. Yours to change.`,
+  bulk: `Suggests a daily target of ${formatNumber(suggestedTarget('bulk'))} kcal, a small surplus to build on. Yours to change.`,
 };

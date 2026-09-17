@@ -83,13 +83,17 @@ export function Button({
     ghost: colors.accent,
     danger: colors.danger,
   };
-  // Only the variants that need a visible edge get one. Drawing a border in the
-  // same colour as the fill, as primary and danger used to, costs a pixel of
-  // layout and buys nothing.
+  // Every variant that is not a solid fill gets a visible edge, because a
+  // control with neither is text. Ghost had transparent fill AND transparent
+  // border, which measures 1.00:1 of shape contrast, so the Remove button on a
+  // photo and the Clear button on the burn card read as floating words next to
+  // the outlined buttons beside them. Quiet means a lighter fill, never no
+  // shape. Primary and danger still skip it: drawing a border in the same
+  // colour as the fill costs a pixel of layout and buys nothing.
   const borders: Record<ButtonVariant, string | null> = {
     primary: null,
     secondary: colors.outline,
-    ghost: null,
+    ghost: colors.outline,
     danger: colors.danger,
   };
 

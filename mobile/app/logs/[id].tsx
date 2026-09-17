@@ -264,7 +264,6 @@ export default function EditLogScreen() {
               label={String(level)}
               selected={funScale === level}
               onPress={() => setFunScale(funScale === level ? null : level)}
-              style={{ flex: 1, alignItems: 'center' }}
             />
           ))}
         </View>
@@ -293,7 +292,6 @@ export default function EditLogScreen() {
               label={SERVING_LABELS[size]}
               selected={servingSize === size}
               onPress={() => setServingSize(size)}
-              style={{ flex: 1, alignItems: 'center' }}
             />
           ))}
         </View>

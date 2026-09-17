@@ -5,13 +5,16 @@ import { Button, Card, Chip, Field, Icon, Screen, SectionLabel } from '../compon
 import { useAuth } from '../hooks/useAuth';
 import { useUpdateProfile } from '../hooks/useProfile';
 import { describeError } from '../lib/api';
-import { GOAL_BLURBS, GOAL_LABELS, formatNumber } from '../lib/format';
+import { GOAL_BLURBS, GOAL_LABELS, formatNumber, suggestedTarget } from '../lib/format';
 import { GOALS, type Goal } from '../lib/types';
 import { useTheme } from '../theme';
 
 /** Matches ck_users_calorie_target_plausible, so a typo is caught before a round trip. */
 const MIN_TARGET = 800;
 const MAX_TARGET = 10_000;
+
+/** The goal this screen opens on, and therefore the target it opens with. */
+const FIRST_GOAL: Goal = 'maintain';
 
 /** What the device thinks it is, which is almost always what the user wants. */
 function deviceTimezone(): string | null {
@@ -31,8 +34,9 @@ function deviceTimezone(): string | null {
  * right at the start. Timezone decides which calendar day every meal and every
  * streak is filed under, and a day cannot be re-bucketed after the fact, so a
  * user who never opens Profile would quietly accumulate a run of wrong days.
- * The goal was previously a label that measured nothing; paired with a target
- * it becomes the number the dashboard reports against.
+ * The goal was previously a label that measured nothing; it now proposes the
+ * daily target, which is the number the dashboard reports every day against,
+ * and then leaves that number alone for the user to set.
  *
  * Everything here is skippable. Nothing on this screen is worth blocking
  * someone from logging their first meal.
@@ -43,8 +47,11 @@ export default function SetupScreen() {
   const updateProfile = useUpdateProfile();
 
   const zone = deviceTimezone();
-  const [goal, setGoal] = useState<Goal>('maintain');
-  const [target, setTarget] = useState('');
+  const [goal, setGoal] = useState<Goal>(FIRST_GOAL);
+  const [target, setTarget] = useState(String(suggestedTarget(FIRST_GOAL)));
+  // Whether the number below is theirs or ours. Once it is theirs, the goal
+  // stops touching it, see pickGoal.
+  const [typedTarget, setTypedTarget] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
   const trimmed = target.trim();
@@ -53,6 +60,21 @@ export default function SetupScreen() {
   const targetValid =
     !targetGiven ||
     (Number.isInteger(parsed) && parsed >= MIN_TARGET && parsed <= MAX_TARGET);
+
+  /**
+   * The goal proposes a target, then gets out of the way.
+   *
+   * It proposes only while the number is still ours. A figure someone typed is
+   * the most considered thing on this screen, and silently replacing it while
+   * they look at a different control would be the app overruling them, which
+   * is worse than a goal that does nothing.
+   */
+  const pickGoal = (next: Goal) => {
+    setGoal(next);
+    if (typedTarget) return;
+    setProblem(null);
+    setTarget(String(suggestedTarget(next)));
+  };
 
   const finish = (withTarget: boolean) => {
     if (updateProfile.isPending) return;
@@ -118,7 +140,7 @@ export default function SetupScreen() {
                   key={option}
                   label={GOAL_LABELS[option]}
                   selected={goal === option}
-                  onPress={() => setGoal(option)}
+                  onPress={() => pickGoal(option)}
                 />
               ))}
             </View>
@@ -137,13 +159,14 @@ export default function SetupScreen() {
               value={target}
               onChangeText={(next) => {
                 setProblem(null);
+                setTypedTarget(true);
                 setTarget(next.replace(/[^0-9]/g, ''));
               }}
               placeholder="e.g. 2000"
               keyboardType="number-pad"
               maxLength={5}
               editable={!updateProfile.isPending}
-              hint="Optional. The dashboard will show each day against this."
+              hint="Filled in from your goal, and yours to change. The dashboard measures every day against this number."
             />
           </View>
         </Card>

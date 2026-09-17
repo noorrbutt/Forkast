@@ -29,14 +29,13 @@ export default function PlanRoute() {
       <Card>
         <View style={{ gap: spacing.lg }}>
           <SectionLabel>Goal</SectionLabel>
-          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
             {GOALS.map((option) => (
               <Chip
                 key={option}
                 label={GOAL_LABELS[option]}
                 selected={goal === option}
                 onPress={() => setPicked(option)}
-                style={{ flex: 1, alignItems: 'center' }}
               />
             ))}
           </View>

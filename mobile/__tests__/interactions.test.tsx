@@ -168,3 +168,70 @@ describe('styles survive the animation wrapper', () => {
     expect(style.paddingHorizontal).toBeGreaterThan(0);
   });
 });
+
+describe('every button variant is visibly a button', () => {
+  // The ghost variant shipped with a transparent fill AND a transparent border,
+  // so it measured 1.00:1 of shape contrast. Two screens used it for Remove and
+  // Clear, sitting directly beside outlined buttons, and it read as floating
+  // text rather than as a control. A quiet variant is allowed a lighter fill, it
+  // is not allowed to have no shape at all.
+  const VARIANTS = ['primary', 'secondary', 'ghost', 'danger'] as const;
+
+  it.each(VARIANTS)('%s has either a fill or a visible border', (variant) => {
+    const { getByRole } = render(<Button label="Remove" variant={variant} />);
+    const style = Object.assign(
+      {},
+      ...[getByRole('button').props.style].flat(4).filter((s) => s && typeof s === 'object'),
+    );
+
+    const hasFill = style.backgroundColor && style.backgroundColor !== 'transparent';
+    const hasEdge = style.borderColor && style.borderColor !== 'transparent' && style.borderWidth > 0;
+
+    expect({ variant, visible: Boolean(hasFill || hasEdge) }).toEqual({ variant, visible: true });
+  });
+
+  it.each(VARIANTS)('%s is the same height as every other variant', (variant) => {
+    // Consistency is the complaint. A row of buttons that do not line up reads
+    // as a mistake even when each one is fine on its own.
+    const pad = (v: (typeof VARIANTS)[number]) => {
+      const { getByRole } = render(<Button label="Remove" variant={v} />);
+      const style = Object.assign(
+        {},
+        ...[getByRole('button').props.style].flat(4).filter((s) => s && typeof s === 'object'),
+      );
+      return { paddingVertical: style.paddingVertical, borderWidth: style.borderWidth };
+    };
+
+    expect(pad(variant)).toEqual(pad('secondary'));
+  });
+});
+
+describe('a chip never cuts its own label off', () => {
+  // "Maintain" came out as "Maint..." in the goal row. The label carried
+  // numberOfLines={1} and the caller squeezed each chip into a third of a row
+  // inside a Card, which leaves about 58pt of text box for a word needing 66pt.
+  // Raising the font from 13px to 15px, which was the right call for
+  // readability, is what pushed it over.
+  it('renders the whole word, not an ellipsis', () => {
+    const { getByText } = render(<Chip label="Maintain" />);
+
+    expect(getByText('Maintain')).toBeTruthy();
+  });
+
+  it('does not limit the label to a single line', () => {
+    // Wrapping is survivable. Truncating is not, because the option becomes
+    // unreadable exactly when it matters.
+    const { getByText } = render(<Chip label="Maintain" />);
+
+    expect(getByText('Maintain').props.numberOfLines).toBeUndefined();
+  });
+
+  it.each(['Cut', 'Maintain', 'Bulk', 'Small', 'Medium', 'Large', 'Small group'])(
+    'renders %s in full',
+    (label) => {
+      const { getByText } = render(<Chip label={label} selected />);
+
+      expect(getByText(label)).toBeTruthy();
+    },
+  );
+});
