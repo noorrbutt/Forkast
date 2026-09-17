@@ -150,6 +150,36 @@ export const series: Record<ThemeName, string[]> = {
 };
 
 /**
+ * The two halves of a day's calories: what was junk, and what was not.
+ *
+ * Sage for the food that was fine, terracotta for the food that was not. Warm,
+ * in the same family as the rest of the app, and nothing like the stock
+ * red-against-green those two states usually get.
+ *
+ * These are not `success` and `danger`. Those are reserved status colours and a
+ * chart series may not borrow a meaning it does not have, so this is a separate
+ * pair tuned for the one job of being told apart as adjacent fills.
+ *
+ * Tuned, specifically, because the obvious choice does not work. Sage and
+ * terracotta at the palette's own lightness sit at L 0.708 and 0.726, which is
+ * so nearly identical that under simulated deuteranopia the two are 2.4 apart
+ * in OKLab: red-green colour blindness collapses the hue difference and there
+ * is no lightness difference left underneath it. Roughly one man in twelve
+ * would have seen one flat bar. Holding the hues and pulling the lightnesses
+ * apart takes that to 6.3 on dark and 6.0 on light, against a normal-vision
+ * separation above 20 in both.
+ *
+ * Six is a floor rather than a target, and it is only legal alongside a second
+ * way of telling the two apart. There are three here: junk is always the top
+ * segment, a 2px gap of the surface colour runs between the fills, and the
+ * legend pairs each swatch with its word.
+ */
+export const split: Record<ThemeName, { junk: string; clean: string }> = {
+  dark: { junk: '#D3795E', clean: '#5F952D' },
+  light: { junk: '#B83B0E', clean: '#4C6F2F' },
+};
+
+/**
  * The wash behind the one number a screen leads with.
  *
  * The reference apps get most of their warmth from a soft colour field sitting

@@ -45,7 +45,7 @@ import DashboardScreen from '../app/(tabs)/index';
 import { Card, Icon, ListGroup } from '../components/ui';
 import { AuthProvider } from '../hooks/useAuth';
 import { api, hydrateTokens } from '../lib/api';
-import { ThemeProvider, type } from '../theme';
+import { ThemeProvider, palettes, split, type } from '../theme';
 import type { Dashboard, Today } from '../lib/types';
 
 const mockedApi = api as unknown as { get: jest.Mock; put: jest.Mock; delete: jest.Mock };
@@ -357,11 +357,64 @@ describe('icons and labels', () => {
 });
 
 describe('the chart', () => {
-  it('names both series rather than leaving the colours to speak', async () => {
+  it('names every series rather than leaving the colours to speak', async () => {
     const screen = await open(UNDER);
 
-    expect(screen.getByText('Eaten')).toBeTruthy();
+    // Three now. The eaten bar used to be one saffron block, which said how
+    // much was eaten and nothing about what it was, and spent the brand colour
+    // on a chart to say it.
+    expect(screen.getByText('Junk')).toBeTruthy();
+    expect(screen.getByText('Everything else')).toBeTruthy();
     expect(screen.getByText('Burned')).toBeTruthy();
+  });
+
+  it('never draws a data mark in the brand colour', async () => {
+    // Saffron means "you can press this". A chart wearing it weakens that and
+    // tells the reader nothing about the food.
+    const screen = await open(UNDER);
+    const chart = screen.getByLabelText(/Calories by day/);
+    const fills = new Set<string>();
+
+    const walk = (node: { props?: Record<string, unknown>; children?: unknown[] }) => {
+      const style = flat((node.props as { style?: unknown })?.style) as {
+        backgroundColor?: string;
+      };
+      if (style?.backgroundColor) fills.add(style.backgroundColor);
+      for (const child of node.children ?? []) {
+        if (child && typeof child === 'object') walk(child as never);
+      }
+    };
+    walk(chart as never);
+
+    expect(fills.size).toBeGreaterThan(0);
+    expect([...fills]).not.toContain(palettes.dark.accentFill);
+    expect([...fills]).not.toContain(palettes.light.accentFill);
+  });
+
+  it('splits a day by what the food was, not just how much of it there was', async () => {
+    // Two days of 2,000 kcal, one all junk and one none, are the same bar
+    // unless the bar is split. Both halves have to be drawn.
+    const screen = await open(UNDER);
+    const chart = screen.getByLabelText(/Calories by day/);
+    const fills = new Set<string>();
+
+    const walk = (node: { props?: Record<string, unknown>; children?: unknown[] }) => {
+      const style = flat((node.props as { style?: unknown })?.style) as {
+        backgroundColor?: string;
+      };
+      if (style?.backgroundColor) fills.add(style.backgroundColor);
+      for (const child of node.children ?? []) {
+        if (child && typeof child === 'object') walk(child as never);
+      }
+    };
+    walk(chart as never);
+
+    // Whichever theme the runner resolved to, both halves have to be present.
+    const lower = [...fills].map((fill) => fill.toLowerCase());
+    const theme = lower.includes(split.dark.junk.toLowerCase()) ? split.dark : split.light;
+
+    expect(lower).toContain(theme.junk.toLowerCase());
+    expect(lower).toContain(theme.clean.toLowerCase());
   });
 
   it('gives the bars a scale to be read against', async () => {
