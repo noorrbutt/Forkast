@@ -1,9 +1,10 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, RefreshControl, Text, View } from 'react-native';
 
 import {
   Button,
+  Dialog,
   Empty,
   ErrorState,
   Icon,
@@ -174,8 +175,17 @@ type MealRowProps = {
   log: FoodLog;
   /** Drops the divider, so the last row in a day does not draw a line to nothing. */
   last: boolean;
-  onOpen: () => void;
-  onRepeat: () => void;
+  /**
+   * Both take the id rather than closing over it.
+   *
+   * The screen used to hand each row `() => router.push(...)` and
+   * `() => logAgain(log.id)`, built fresh on every render, which meant a
+   * memoised row would still see two new props every time and re-render
+   * anyway. Taking the id lets the parent keep one stable function for the
+   * whole list.
+   */
+  onOpen: (id: Uuid) => void;
+  onRepeat: (id: Uuid) => void;
   sending: boolean;
   confirmed: boolean;
   error: string | null;
@@ -189,7 +199,7 @@ type MealRowProps = {
  * which is a different shape from the settings row `ListRow` exists for. If a
  * second screen ever needs it, it moves.
  */
-function MealRow({ log, last, onOpen, onRepeat, sending, confirmed, error }: MealRowProps) {
+function MealRowBase({ log, last, onOpen, onRepeat, sending, confirmed, error }: MealRowProps) {
   const { colors, radius, spacing, type } = useTheme();
 
   // Asked for only when the payload says there is one, so a meal without a
@@ -206,7 +216,7 @@ function MealRow({ log, last, onOpen, onRepeat, sending, confirmed, error }: Mea
 
   return (
     <Pressable
-      onPress={onOpen}
+      onPress={() => onOpen(log.id)}
       accessibilityRole="button"
       accessibilityLabel={`${log.dish_name}, ${formatNumber(log.estimated_calories)} kcal`}
       accessibilityHint="Opens this meal"
@@ -295,7 +305,7 @@ function MealRow({ log, last, onOpen, onRepeat, sending, confirmed, error }: Mea
             label={sending ? 'Logging' : 'Log again'}
             variant="secondary"
             icon="log"
-            onPress={onRepeat}
+            onPress={() => onRepeat(log.id)}
             accessibilityHint={`Adds ${log.dish_name} to today, with the time you tap it`}
           />
 
@@ -311,6 +321,22 @@ function MealRow({ log, last, onOpen, onRepeat, sending, confirmed, error }: Mea
     </Pressable>
   );
 }
+
+/**
+ * Memoised, because the diary holds a hundred of these.
+ *
+ * Every row renders a Button, and Button allocates an animated value and an
+ * animated style, so a hundred rows is a hundred of each. Nothing here was
+ * memoised, so a single "Log again" tap re-rendered all hundred about four
+ * times over: once when the mutation goes pending, once on success, once when
+ * the acknowledgement is set, and once more four seconds later when it clears,
+ * plus a pass when the refetch lands. That is the stutter after tapping.
+ *
+ * The props are all primitives, the log object, and two functions the screen
+ * now keeps stable, so the default shallow comparison is enough and a custom
+ * comparator would only be one more thing to get wrong.
+ */
+const MealRow = memo(MealRowBase);
 
 export default function HistoryScreen() {
   const { colors, spacing } = useTheme();
@@ -339,14 +365,32 @@ export default function HistoryScreen() {
     return () => clearTimeout(timer);
   }, [confirmed]);
 
-  const logAgain = (id: Uuid) => {
+  /**
+   * Which meal is waiting to be confirmed, or null when nothing is asked.
+   *
+   * Logging again used to fire on the tap. It writes a real row that then has
+   * to be found and deleted, and the button sits on a row that is itself
+   * pressable, so it is easy to hit by accident while scrolling. One question
+   * is cheaper than an undo that does not exist.
+   */
+  const [pending, setPending] = useState<FoodLog | null>(null);
+
+  const openMeal = useCallback((id: Uuid) => router.push(`/logs/${id}`), [router]);
+
+  // Stable, so the memoised rows above actually stay memoised.
+  const askToRepeat = useCallback((id: Uuid) => {
+    setPending(itemsRef.current.find((log) => log.id === id) ?? null);
+  }, []);
+
+  const logAgain = (log: FoodLog) => {
     if (inFlight.current !== null) return;
-    inFlight.current = id;
+    inFlight.current = log.id;
     setConfirmed(null);
-    repeat.mutate(id, {
+    setPending(null);
+    repeat.mutate(log.id, {
       onSuccess: () => {
         haptics.success();
-        setConfirmed(id);
+        setConfirmed(log.id);
       },
       onError: () => haptics.error(),
       onSettled: () => {
@@ -356,6 +400,11 @@ export default function HistoryScreen() {
   };
 
   const items: FoodLog[] = logs.data?.items ?? [];
+
+  // Read by askToRepeat, which has to stay stable for the memo above to hold
+  // and therefore cannot close over `items`.
+  const itemsRef = useRef<FoodLog[]>(items);
+  itemsRef.current = items;
 
   // Today is read at grouping time rather than held in state: this query is the
   // only thing that moves the list, and it refetches when the screen comes back
@@ -417,8 +466,8 @@ export default function HistoryScreen() {
                   key={log.id}
                   log={log}
                   last={index === day.meals.length - 1}
-                  onOpen={() => router.push(`/logs/${log.id}`)}
-                  onRepeat={() => logAgain(log.id)}
+                  onOpen={openMeal}
+                  onRepeat={askToRepeat}
                   sending={repeat.isPending && repeat.variables === log.id}
                   confirmed={confirmed === log.id}
                   error={
@@ -432,6 +481,38 @@ export default function HistoryScreen() {
           ))}
         </View>
       </View>
+
+      {/* At screen level rather than inside the row, which is what every other
+          confirmation in this app does. A dialog mounted per row would be a
+          hundred modals, and it would unmount underneath itself the moment the
+          list refetched. */}
+      <Dialog
+        visible={pending !== null}
+        onDismiss={() => !repeat.isPending && setPending(null)}
+        title="Log this again?"
+        message={
+          pending
+            ? `${pending.dish_name} goes into today at ${formatNumber(
+                pending.estimated_calories
+              )} kcal. You can edit or delete it afterwards.`
+            : undefined
+        }
+        actions={[
+          {
+            label: 'Log it again',
+            variant: 'primary',
+            onPress: () => pending && logAgain(pending),
+            disabled: repeat.isPending,
+            loading: repeat.isPending,
+          },
+          {
+            label: 'Cancel',
+            variant: 'secondary',
+            onPress: () => setPending(null),
+            disabled: repeat.isPending,
+          },
+        ]}
+      />
     </Screen>
   );
 }

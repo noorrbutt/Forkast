@@ -142,11 +142,58 @@ beforeEach(() => {
 });
 
 describe('from the diary', () => {
+  /**
+   * Tapping "Log again" asks before it writes anything.
+   *
+   * It used to fire on the tap. It creates a real row that then has to be found
+   * and deleted, and the button sits on a row that is itself pressable, so it
+   * is easy to catch while scrolling. One question is cheaper than an undo that
+   * does not exist.
+   */
+  const confirm = (screen: ReturnType<typeof render>) =>
+    fireEvent.press(screen.getByText('Log it again'));
+
+  it('asks before it writes anything', async () => {
+    const screen = render(<HistoryScreen />, { wrapper });
+    const buttons = await waitFor(() => screen.getAllByText('Log again'));
+
+    fireEvent.press(buttons[0]);
+
+    expect(screen.getByText('Log this again?')).toBeTruthy();
+    // Nothing sent until the question is answered.
+    expect(mockedApi.post).not.toHaveBeenCalled();
+  });
+
+  it('names the meal and the figure it is about to add', async () => {
+    const screen = render(<HistoryScreen />, { wrapper });
+    const buttons = await waitFor(() => screen.getAllByText('Log again'));
+
+    fireEvent.press(buttons[0]);
+
+    // A confirmation that does not say what it is confirming is a speed bump.
+    // Matched on the dialog's own wording rather than on the dish name alone,
+    // which appears on the row behind it too.
+    const message = screen.getByText(/goes into today/);
+    expect(message.props.children).toMatch(/Chicken biryani/);
+  });
+
+  it('writes nothing when the question is declined', async () => {
+    const screen = render(<HistoryScreen />, { wrapper });
+    const buttons = await waitFor(() => screen.getAllByText('Log again'));
+
+    fireEvent.press(buttons[0]);
+    fireEvent.press(screen.getByText('Cancel'));
+
+    expect(screen.queryByText('Log this again?')).toBeNull();
+    expect(mockedApi.post).not.toHaveBeenCalled();
+  });
+
   it('repeats the meal the button belongs to, not the first one on the list', async () => {
-    const { getAllByText } = render(<HistoryScreen />, { wrapper });
-    const buttons = await waitFor(() => getAllByText('Log again'));
+    const screen = render(<HistoryScreen />, { wrapper });
+    const buttons = await waitFor(() => screen.getAllByText('Log again'));
 
     fireEvent.press(buttons[1]);
+    confirm(screen);
 
     await waitFor(() =>
       expect(mockedApi.post).toHaveBeenCalledWith('/logs/' + mockDetailId + '/repeat'),
@@ -162,15 +209,19 @@ describe('from the diary', () => {
         }),
     );
 
-    const { getAllByText, getByText } = render(<HistoryScreen />, { wrapper });
-    const buttons = await waitFor(() => getAllByText('Log again'));
+    const screen = render(<HistoryScreen />, { wrapper });
+    const { getByText } = screen;
+    const buttons = await waitFor(() => screen.getAllByText('Log again'));
 
-    // The same control twice, which is what an impatient thumb does. Both taps
-    // land before the button can re-render, so nothing about its pending state
-    // can be what refuses the second one. The button stays live through this on
-    // purpose: a tap it refuses must not fall through to the row behind it.
     fireEvent.press(buttons[0]);
-    fireEvent.press(buttons[0]);
+    // The same confirm control twice, which is what an impatient thumb does.
+    // Held as one element rather than looked up twice, because answering the
+    // question closes the dialog, so a second lookup would find nothing and the
+    // test would be asserting the dialog had closed rather than that the second
+    // tap was refused.
+    const confirmButton = screen.getByText('Log it again');
+    fireEvent.press(confirmButton);
+    fireEvent.press(confirmButton);
 
     await waitFor(() => expect(getByText('Logging')).toBeTruthy());
     expect(mockedApi.post).toHaveBeenCalledTimes(1);
@@ -185,10 +236,12 @@ describe('from the diary', () => {
   });
 
   it('says the meal was logged, rather than leaving the tap unanswered', async () => {
-    const { getAllByText, getByText } = render(<HistoryScreen />, { wrapper });
-    const buttons = await waitFor(() => getAllByText('Log again'));
+    const screen = render(<HistoryScreen />, { wrapper });
+    const { getByText } = screen;
+    const buttons = await waitFor(() => screen.getAllByText('Log again'));
 
     fireEvent.press(buttons[0]);
+    confirm(screen);
 
     await waitFor(() => expect(getByText('Logged again for today.')).toBeTruthy());
     expect(mockedHaptic).toHaveBeenCalledWith('success');
@@ -197,20 +250,24 @@ describe('from the diary', () => {
   it('puts a refusal on the row instead of swallowing it', async () => {
     mockedApi.post.mockRejectedValue(GONE);
 
-    const { getAllByText, getByText } = render(<HistoryScreen />, { wrapper });
-    const buttons = await waitFor(() => getAllByText('Log again'));
+    const screen = render(<HistoryScreen />, { wrapper });
+    const { getByText } = screen;
+    const buttons = await waitFor(() => screen.getAllByText('Log again'));
 
     fireEvent.press(buttons[0]);
+    confirm(screen);
 
     await waitFor(() => expect(getByText('That meal is no longer in your diary.')).toBeTruthy());
     expect(mockedHaptic).toHaveBeenCalledWith('error');
   });
 
   it('does not open the meal, which is what the rest of the row is for', async () => {
-    const { getAllByText, getByText } = render(<HistoryScreen />, { wrapper });
-    const buttons = await waitFor(() => getAllByText('Log again'));
+    const screen = render(<HistoryScreen />, { wrapper });
+    const { getByText } = screen;
+    const buttons = await waitFor(() => screen.getAllByText('Log again'));
 
     fireEvent.press(buttons[0]);
+    confirm(screen);
     await waitFor(() => expect(mockedApi.post).toHaveBeenCalled());
 
     expect(mockPush).not.toHaveBeenCalled();
