@@ -47,16 +47,40 @@ export function formatMinutes(value: number | null | undefined): string {
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+/** A bare calendar day, with no time and no zone: what the API sends for a date. */
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * Read an API date without letting the runtime guess a timezone.
+ *
+ * `new Date('2026-09-17')` is specified to parse as UTC midnight, while
+ * `new Date('2026-09-17T12:00:00')` parses as local. So a date only string
+ * silently becomes the previous evening for anyone west of Greenwich, and every
+ * weekday and every day number derived from it is then wrong by one. A slip
+ * logged on Thursday the 17th reads as "Sep 16" in New York, and the column
+ * under "Thu" gets labelled "Wed".
+ *
+ * The server sends these as a plain calendar day precisely because they have no
+ * time in them, so the fix is to build the date from its parts and leave it in
+ * the local zone. Anything carrying a time is left alone: those are real
+ * instants and the runtime is right to convert them.
+ */
+function parseApiDate(value: string): Date {
+  const parts = DATE_ONLY.exec(value);
+  if (!parts) return new Date(value);
+  return new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
+}
+
 /** Short weekday for an ISO day string, falling back to the raw tail. */
 export function shortDay(day: string): string {
-  const parsed = new Date(day);
+  const parsed = parseApiDate(day);
   if (!Number.isNaN(parsed.getTime())) return DAY_NAMES[parsed.getDay()];
   return day.slice(-2);
 }
 
 export function formatDate(value: string | null | undefined): string {
   if (!value) return '';
-  const parsed = new Date(value);
+  const parsed = parseApiDate(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
