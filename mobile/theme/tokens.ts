@@ -202,7 +202,29 @@ export const layout = {
  * tiny uppercase letterspaced labels.
  */
 export const type = {
-  /** 48 / 300. The hero numeral. */
+  /**
+   * 64 / 300. Reserved for the one number or headline a screen leads with, at
+   * most once per screen.
+   *
+   * Derived rather than chosen. Measuring the reference screens, a hero numeral
+   * runs about 58pt on one and 38pt on the other, supporting numerals about
+   * 28pt and captions about 12pt, so the hero to caption ratio sits near 5x. At
+   * 64 this is 4.92x caption and 2.46x numeral, inside that range, and 1.33x
+   * display, which is enough that a hero can never be mistaken for a page
+   * title. Those two sharing one size is why nothing on the old screens was
+   * dominant.
+   *
+   * The component that renders this steps the size down for long values and
+   * large system text, so the rule lives in one place rather than in every
+   * caller. See DESIGN_STYLE_GUIDE.md section 4.
+   */
+  hero: {
+    fontSize: 64,
+    fontWeight: '300',
+    letterSpacing: -2.2,
+    lineHeight: 70,
+  } satisfies TextStyle,
+  /** 48 / 300. A page title, or a secondary numeral on a screen with a hero. */
   display: {
     fontSize: 48,
     fontWeight: '300',
