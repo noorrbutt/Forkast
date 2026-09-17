@@ -29,17 +29,29 @@ export function DeleteAccount() {
   const { colors, spacing, type } = useTheme();
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
+  // Whether the confirm has been pressed on an empty field yet. The button is
+  // live either way; this only decides whether the field says what is missing.
+  const [asked, setAsked] = useState(false);
   const remove = useDeleteAccount();
 
   const close = () => {
     if (remove.isPending) return;
     setOpen(false);
     setPassword('');
+    setAsked(false);
     remove.reset();
   };
 
   const confirm = () => {
-    if (!password || remove.isPending) return;
+    if (remove.isPending) return;
+    // The button was live, so a press with nothing typed is answered by saying
+    // what is missing rather than by having been unpressable. Typing the
+    // password is still the confirmation: an empty press deletes nothing.
+    setAsked(true);
+    if (!password) {
+      haptics.error();
+      return;
+    }
     remove.mutate(password, {
       // No success handler: deleting signs the user out, which unmounts this
       // screen. Anything set here would be set on a dead component.
@@ -73,9 +85,11 @@ export function DeleteAccount() {
             variant: 'danger',
             icon: 'trash',
             onPress: confirm,
-            // Typing the password is the confirmation. Nothing is destroyed by
-            // a stray tap on a button that cannot do anything yet.
-            disabled: !password || remove.isPending,
+            // Live until the request is running. A primary action that disables
+            // itself until the form is valid hides the affordance behind the
+            // thing it invites, so this one stays pressable and the field below
+            // says what is missing.
+            disabled: remove.isPending,
             loading: remove.isPending,
           },
           {
@@ -95,13 +109,17 @@ export function DeleteAccount() {
           <Field
             label="Confirm your password"
             value={password}
-            onChangeText={setPassword}
             placeholder="Your password"
             autoCapitalize="none"
             autoCorrect={false}
             secureTextEntry
             textContentType="password"
             editable={!remove.isPending}
+            onChangeText={(next) => {
+              setAsked(false);
+              setPassword(next);
+            }}
+            hint={asked && !password ? 'Type your password to confirm.' : undefined}
           />
 
           {remove.isError ? (

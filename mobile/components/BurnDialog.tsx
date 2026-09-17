@@ -38,6 +38,9 @@ export function BurnDialog({ visible, onDismiss }: Props) {
 
   const [draft, setDraft] = useState('');
   const [touched, setTouched] = useState(false);
+  // Whether Save has been pressed yet, which is what lets an empty field stay
+  // quiet until someone has actually asked for it to be saved.
+  const [asked, setAsked] = useState(false);
 
   const saved = today.data;
 
@@ -60,6 +63,7 @@ export function BurnDialog({ visible, onDismiss }: Props) {
   useEffect(() => {
     if (!visible) {
       setTouched(false);
+      setAsked(false);
       setDraft('');
       save.reset();
       clear.reset();
@@ -74,13 +78,24 @@ export function BurnDialog({ visible, onDismiss }: Props) {
   const unchanged = saved != null && valid && parsed === saved.calories;
   const busy = save.isPending || clear.isPending;
 
+  // Named once the field has something wrong in it, or once Save has been
+  // pressed on an empty one. Before either, there is nothing to scold anybody
+  // about and the hint would be answering a question nobody asked.
   const problem =
-    trimmed.length > 0 && !valid
+    (asked || trimmed.length > 0) && !valid
       ? `Enter a whole number between 0 and ${formatNumber(MAX_BURN)}.`
       : null;
 
   const onSave = () => {
-    if (!valid || unchanged) return;
+    if (busy) return;
+    // Pressing is what makes an empty field a problem worth naming.
+    setAsked(true);
+    if (!valid) return;
+    // Nothing to send, so the dialog closing is the whole answer.
+    if (unchanged) {
+      onDismiss();
+      return;
+    }
     save.mutate(parsed, {
       onSuccess: () => {
         haptics.success();
@@ -118,7 +133,11 @@ export function BurnDialog({ visible, onDismiss }: Props) {
           label: saved ? 'Update' : 'Save',
           variant: 'primary',
           onPress: onSave,
-          disabled: !valid || unchanged || busy,
+          // Live until the request is actually running. A primary action that
+          // disables itself until the form is valid hides the affordance behind
+          // the very thing it is inviting, so this one stays pressable and the
+          // field says what is missing instead.
+          disabled: busy,
           loading: save.isPending,
         },
         ...(saved

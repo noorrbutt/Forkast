@@ -105,13 +105,20 @@ it('asks on the page rather than handing the question to the operating system', 
   expect(getByText('Delete your account?')).toBeTruthy();
 });
 
-it('will not delete without a password', () => {
-  const { getByText } = render(<DeleteAccount />, { wrapper });
+// The confirm stays pressable with the field empty, because a primary action
+// that disables itself until the form is valid hides the affordance behind the
+// thing it invites. Typing the password is still the confirmation: an empty
+// press deletes nothing and says so.
+it('will not delete without a password, and says what is missing', () => {
+  const { getByText, queryByText } = render(<DeleteAccount />, { wrapper });
   fireEvent.press(getByText('Delete my account'));
+
+  expect(queryByText('Type your password to confirm.')).toBeNull();
 
   fireEvent.press(getByText('Delete for good'));
 
   expect(mockedApi.delete).not.toHaveBeenCalled();
+  expect(getByText('Type your password to confirm.')).toBeTruthy();
 });
 
 it('does nothing on the way in, even with a password typed', () => {

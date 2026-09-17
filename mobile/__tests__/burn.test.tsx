@@ -87,13 +87,23 @@ describe('with nothing entered yet', () => {
     await waitFor(() => expect(getByText(/Optional/)).toBeTruthy());
   });
 
-  it('keeps save disabled until something is typed', async () => {
-    const { getByText, getByPlaceholderText } = render(<BurnDialog visible onDismiss={onDismiss} />, { wrapper });
+  // The button stays pressable with the field empty. Disabling it until the
+  // form is valid hides the affordance behind the action it invites, which the
+  // style guide names outright, so an empty press is answered in words.
+  it('stays pressable on an empty field, and says what is missing', async () => {
+    const { getByText, getByPlaceholderText, queryByText } = render(
+      <BurnDialog visible onDismiss={onDismiss} />,
+      { wrapper },
+    );
     await waitFor(() => expect(getByPlaceholderText('e.g. 420')).toBeTruthy());
+
+    // Nothing to answer before it has been asked for.
+    expect(queryByText(/Enter a whole number/)).toBeNull();
 
     fireEvent.press(getByText('Save'));
 
     expect(mockedApi.put).not.toHaveBeenCalled();
+    expect(getByText(/Enter a whole number/)).toBeTruthy();
   });
 
   it('saves a typed number', async () => {
