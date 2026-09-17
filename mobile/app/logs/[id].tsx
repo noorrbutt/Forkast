@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 
 import { StarRating } from '../../components/StarRating';
@@ -14,7 +14,7 @@ import {
   SectionLabel,
 } from '../../components/ui';
 import { useCategories } from '../../hooks/useCatalog';
-import { useDeleteLog, useLog, useUpdateLog } from '../../hooks/useLogs';
+import { useDeleteLog, useLog, useRepeatLog, useUpdateLog } from '../../hooks/useLogs';
 import { describeError } from '../../lib/api';
 import { FRIEND_LABELS, SERVING_LABELS, formatNumber } from '../../lib/format';
 import { haptics } from '../../lib/haptics';
@@ -38,6 +38,16 @@ export default function EditLogScreen() {
   const log = useLog(id ?? null);
   const updateLog = useUpdateLog();
   const deleteLog = useDeleteLog();
+  const repeat = useRepeatLog();
+
+  /**
+   * The guard that actually stops this meal being logged twice.
+   *
+   * isPending only reaches the button on the next render, and an impatient
+   * second tap lands well inside that gap, so the disabled prop is the half
+   * of this the user can see and the ref is the half that holds.
+   */
+  const repeating = useRef(false);
 
   // All categories, not the ones for a chosen cuisine: an edit starts from a
   // category that is already set, and re-picking the cuisine first would be a
@@ -126,6 +136,18 @@ export default function EditLogScreen() {
     ]);
   };
 
+  const logAgain = () => {
+    if (!id || repeating.current) return;
+    repeating.current = true;
+    repeat.mutate(id, {
+      onSuccess: () => haptics.success(),
+      onError: () => haptics.error(),
+      onSettled: () => {
+        repeating.current = false;
+      },
+    });
+  };
+
   if (log.isLoading) {
     return (
       <Screen title="Edit" onBack={() => router.back()}>
@@ -146,7 +168,7 @@ export default function EditLogScreen() {
     );
   }
 
-  const busy = updateLog.isPending || deleteLog.isPending;
+  const busy = updateLog.isPending || deleteLog.isPending || repeat.isPending;
 
   return (
     <Screen title="Edit log" eyebrow="Fix anything" onBack={() => router.back()}>
@@ -161,6 +183,36 @@ export default function EditLogScreen() {
           </Text>
         </View>
       </Card>
+
+      {/* Above the form on purpose. Repeating is a decision made on the way
+          past, and under the fields it would sit behind an edit the user
+          never came here to make. */}
+      <View style={{ gap: spacing.sm }}>
+        <Button
+          label="Log this again"
+          variant="secondary"
+          size="lg"
+          full
+          icon="log"
+          onPress={logAgain}
+          loading={repeat.isPending}
+          disabled={busy}
+          accessibilityHint="Copies this meal onto today, with the time you tap it"
+        />
+
+        {/* A tap that only refetches something offscreen reads as a tap that
+            did nothing, so the screen says what happened. */}
+        {repeat.isSuccess ? (
+          <Text style={[type.caption, { color: colors.success }]}>
+            Logged again for today. It is on your dashboard and in your diary now.
+          </Text>
+        ) : null}
+        {repeat.isError ? (
+          <Text style={[type.caption, { color: colors.danger }]}>
+            {describeError(repeat.error)}
+          </Text>
+        ) : null}
+      </View>
 
       <Field label="Dish" value={dishName} onChangeText={setDishName} placeholder="Chicken karahi" />
 
