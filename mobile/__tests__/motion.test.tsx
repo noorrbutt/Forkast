@@ -1,17 +1,17 @@
 /**
- * The motion layer: tokens, the counting number, and the staggered entrance.
+ * The motion layer, which is now only its tokens.
  *
- * Reanimated is mocked here, so these do not prove a spring settles or that a
- * number visibly ticks. They prove the pieces render, carry the right values,
- * and stay accessible while they are moving, and they pin down the token
- * relationships that encode the agreed feel.
+ * These pin down the relationships that encode the agreed feel: that the paths
+ * you walk constantly are quicker than the moments meant to land, that nothing
+ * everyday drags past a third of a second, and that every duration respects the
+ * system's reduce motion setting.
+ *
+ * The counting number and the staggered entrance used to be tested here too.
+ * Both components have been deleted: no screen rendered either of them, and the
+ * staggered fade was the generic default the style guide bans outright, so the
+ * tests were the only thing keeping them alive.
  */
 
-import { render } from '@testing-library/react-native';
-import { Text } from 'react-native';
-
-import { Appear } from '../components/ui/Appear';
-import { CountUp } from '../components/ui/CountUp';
 import { motion } from '../theme/motion';
 
 describe('motion tokens', () => {
@@ -50,56 +50,5 @@ describe('motion tokens', () => {
     }
     expect(motion.press.reduceMotion).toBeDefined();
     expect(motion.bouncy.reduceMotion).toBeDefined();
-  });
-});
-
-describe('CountUp', () => {
-  it('renders without needing the animation to have run', () => {
-    const { toJSON } = render(<CountUp value={1840} />);
-    expect(toJSON()).toBeTruthy();
-  });
-
-  it('exposes the final value to screen readers immediately', () => {
-    // The visible text animates, so assistive tech must not be made to wait for
-    // it, nor read out every intermediate number.
-    const { getByLabelText } = render(<CountUp value={1840} />);
-    expect(getByLabelText('1,840')).toBeTruthy();
-  });
-
-  it('includes the suffix in the accessible label', () => {
-    const { getByLabelText } = render(<CountUp value={512} suffix=" kcal" />);
-    expect(getByLabelText('512 kcal')).toBeTruthy();
-  });
-
-  it('handles zero, which is what a new account sees', () => {
-    const { getByLabelText } = render(<CountUp value={0} />);
-    expect(getByLabelText('0')).toBeTruthy();
-  });
-
-  it('is not editable, since it is a label that happens to animate', () => {
-    const { UNSAFE_getByType } = render(<CountUp value={7} />);
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { TextInput } = require('react-native');
-    expect(UNSAFE_getByType(TextInput).props.editable).toBe(false);
-  });
-});
-
-describe('Appear', () => {
-  it('renders its children', () => {
-    const { getByText } = render(
-      <Appear>
-        <Text>Total calories</Text>
-      </Appear>,
-    );
-    expect(getByText('Total calories')).toBeTruthy();
-  });
-
-  it('renders the same content whatever its position in the group', () => {
-    const { getByText } = render(
-      <Appear index={4}>
-        <Text>Fourth card</Text>
-      </Appear>,
-    );
-    expect(getByText('Fourth card')).toBeTruthy();
   });
 });
