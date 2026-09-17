@@ -113,6 +113,21 @@ async def build_dashboard(session: AsyncSession, user: User) -> DashboardOut:
             burn_equivalents=BurnEquivalents(
                 walking_minutes=0, running_minutes=0, cycling_minutes=0
             ),
+            # Named rather than left to default. TodayOut() leaves target null,
+            # which told an account that had set a daily target and not yet
+            # logged anything that it had no target at all. Nothing on the
+            # dashboard shows it today, because the screen happens to hide that
+            # block behind the same condition as this early return, but the
+            # payload was already wrong and the next reader of it would have
+            # inherited the bug rather than found it.
+            today=TodayOut(
+                target=user.daily_calorie_target,
+                consumed=0,
+                burned=0,
+                net=0,
+                # Nothing eaten and nothing burned, so the whole target is left.
+                remaining=user.daily_calorie_target,
+            ),
         )
 
     # The day expression goes in a subquery so the outer GROUP BY references a

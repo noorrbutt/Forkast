@@ -75,10 +75,22 @@ async def read_me(user: CurrentUser) -> User:
 
 @router.patch("/me", response_model=UserOut)
 async def update_me(payload: UserUpdate, session: SessionDep, user: CurrentUser) -> User:
+    """Apply exactly the fields the caller sent, including the ones set to null.
+
+    exclude_unset is what separates "leave this alone" from "clear this", and it
+    already does that job on its own. The `if value is not None` this used to
+    carry on top of it collapsed the two back together, so PATCH {"daily_
+    calorie_target": null} was accepted, answered 200, and changed nothing. That
+    is the only way to remove a daily target from the app, so "Clear target" on
+    the Profile tab closed the dialog, fired the success haptic and left the
+    target exactly where it was, with no way to ever remove it.
+
+    The fields that genuinely cannot take a null are refused by UserUpdate
+    before reaching here.
+    """
     changes = payload.model_dump(exclude_unset=True)
     for field, value in changes.items():
-        if value is not None:
-            setattr(user, field, value)
+        setattr(user, field, value)
     await session.commit()
     return user
 

@@ -6,7 +6,7 @@ import datetime as dt
 import uuid
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.models.enums import Goal
 
@@ -78,6 +78,22 @@ class UserUpdate(BaseModel):
     # Matches ck_users_calorie_target_plausible, so a stray digit is refused
     # with a 422 rather than a 500 from the database.
     daily_calorie_target: int | None = Field(default=None, ge=800, le=10_000)
+
+    @model_validator(mode="after")
+    def _null_only_where_the_column_is_nullable(self) -> "UserUpdate":
+        """Refuse an explicit null for a column that cannot hold one.
+
+        Every field here is optional, which is what makes a PATCH a PATCH: an
+        absent field means "leave this alone". A field present and null is a
+        different instruction, "clear this", and the only column on users that
+        can actually be cleared is the daily target. Sending null for goal or
+        timezone would set a NOT NULL column to null and surface as a 500 from
+        the database, so it is refused here with a field path instead.
+        """
+        for field in ("goal", "timezone"):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be null")
+        return self
 
     @field_validator("timezone")
     @classmethod
