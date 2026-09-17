@@ -9,7 +9,7 @@ import { describeError } from '../lib/api';
 import { formatNumber } from '../lib/format';
 import type { FoodLog, Restaurant } from '../lib/types';
 import { useTheme } from '../theme';
-import { Card, Empty, ErrorState, Loading } from './ui';
+import { Empty, ErrorState, ListGroup, ListRow, Loading } from './ui';
 
 const UNLISTED = 'Area not set';
 
@@ -248,57 +248,30 @@ export function MapScreen() {
             : 'Grouped by area. The map needs a development build on Android, since Expo Go cannot draw one.'}
       </Text>
 
-      {groups.map((group) => (
-        <Card key={group.area}>
-          <View style={{ gap: spacing.lg }}>
-            <View style={{ gap: spacing.xs }}>
-              {/* A real section heading, so it wears `title` like every other
-                  heading in the app rather than a component of its own. */}
-              <Text style={[type.title, { color: colors.text }]}>{group.area}</Text>
-              <Text style={[type.displaySm, { color: colors.text }]}>{formatNumber(group.total)}</Text>
-              <Text style={[type.caption, { color: colors.muted }]}>
-                {group.total === 1 ? 'meal logged here' : 'meals logged here'}
-              </Text>
-            </View>
+      {/* One group per area, exactly as the diary does one per day.
 
-            <View style={{ gap: spacing.sm }}>
-              {group.spots.map((spot) => (
-                <View
-                  key={spot.key}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: spacing.md,
-                    paddingVertical: spacing.md,
-                    paddingHorizontal: spacing.lg,
-                    borderRadius: radius.pill,
-                    backgroundColor: colors.surfaceAlt,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                  }}
-                >
-                  {/* Wraps. A restaurant name cut to "Bundu Khan Kar..." is a
-                      label the guide calls a failure rather than a cosmetic
-                      issue, and a pill two lines tall is the cheaper problem. */}
-                  <Text style={[type.body, { color: colors.text, flex: 1 }]}>{spot.name}</Text>
-                  {/* Muted, not saffron. This is a count, and the brand colour
-                      is reserved for things you can press. Lining figures so a
-                      column of them can be read down the card. */}
-                  <Text
-                    style={[
-                      type.body,
-                      { color: colors.muted, fontVariant: ['tabular-nums'] },
-                    ]}
-                    accessibilityLabel={`${spot.count} ${spot.count === 1 ? 'visit' : 'visits'}`}
-                  >
-                    {`${spot.count}x`}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        </Card>
+          It was a Card each, which put an unbounded stack of surfaces on a
+          screen: someone who eats in a dozen areas got a dozen of them, well
+          past the ceiling section 6 sets. It was also the same job the diary
+          already solves, solved a second way, which is the rule against two
+          screens answering one problem differently. The area total moves into
+          the group's own heading, where the diary puts a day's. */}
+      {groups.map((group) => (
+        <ListGroup
+          key={group.area}
+          title={`${group.area} · ${formatNumber(group.total)} ${
+            group.total === 1 ? 'meal' : 'meals'
+          }`}
+        >
+          {group.spots.map((spot, index) => (
+            <ListRow
+              key={spot.key}
+              label={spot.name}
+              value={`${formatNumber(spot.count)} ${spot.count === 1 ? 'visit' : 'visits'}`}
+              last={index === group.spots.length - 1}
+            />
+          ))}
+        </ListGroup>
       ))}
     </View>
   );
