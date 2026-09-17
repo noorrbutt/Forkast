@@ -16,16 +16,19 @@ import { describeError } from '../../lib/api';
  * What it broke. The same three things as its twin, which is the point: two
  * screens with one job each were solving the same problem two ways in the
  * details. Section 3, consistency: two titles, and the 48pt one was not the
- * name of the action. Section 2, alignment: "Already have an account?" centred
- * between left aligned blocks. Section 7: primary and escape hatch both
- * `size="lg"` and both `full`. Section 5: no cap on the column.
+ * name of the action. Section 7: primary and escape hatch both `size="lg"` and
+ * both `full`. Section 5: no cap on the column.
  *
  * What the one thing is now: "Sign up." at `display`, 48 against a next largest
  * of 16, the same words as the button that reaches it.
  *
  * What was demoted, and why that is correct: the way back to signing in is a
- * medium, outlined, left aligned button. Someone who already has an account is
- * the exception here, and the exception gets a findable control, not an equal one.
+ * medium, outlined button. Someone who already has an account is the exception
+ * here, and the exception gets a findable control, not an equal one.
+ *
+ * It sits centred, at the user's request, on the same axis as the primary
+ * button above it. Its twin on the sign in screen does the same, which is the
+ * point: these two screens have one job each and should not solve it two ways.
  */
 
 const MIN_PASSWORD = 8;
@@ -117,10 +120,14 @@ export default function RegisterScreen() {
           <Button label="Sign up" size="lg" full onPress={submit} loading={register.isPending} />
         </View>
 
-        {/* Left edge shared with everything above it, and quieter than the
-            primary action. */}
-        <View style={{ gap: spacing.sm, alignItems: 'flex-start' }}>
-          <Text style={[type.caption, { color: colors.muted }]}>Already have an account?</Text>
+        {/* Centred, on the centre line of the primary button above it, so the
+            way out of this screen sits on the same axis as the way through it.
+            Still quieter than that button: outlined rather than filled, and
+            medium rather than large. */}
+        <View style={{ gap: spacing.sm, alignItems: 'center' }}>
+          <Text style={[type.caption, { color: colors.muted, textAlign: 'center' }]}>
+            Already have an account?
+          </Text>
           <Button
             label="Sign in"
             variant="secondary"

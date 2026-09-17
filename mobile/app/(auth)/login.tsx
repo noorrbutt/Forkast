@@ -16,9 +16,8 @@ import { describeError } from '../../lib/api';
  * What it broke. Section 3, consistency: the screen carried two titles, and the
  * larger one, at 48 against the bar's 21, was not the name of the action that
  * led here. One name per action means the biggest words on this screen are the
- * ones on the button that opened it. Section 2, alignment: "New to Forkast?"
- * was centred between left aligned blocks, so the scroll changed edge three
- * times. Section 7: the primary and the escape hatch were both `size="lg"` and
+ * ones on the button that opened it. Section 7: the primary and the escape
+ * hatch were both `size="lg"` and
  * both `full`, which is near equal weight between the one thing this screen is
  * for and a route away from it. Section 5: no cap on the column, so the form
  * ran the full width of a browser.
@@ -28,9 +27,17 @@ import { describeError } from '../../lib/api';
  * The bar keeps the back chevron and drops its title, so the name is said once.
  *
  * What was demoted, and why that is correct: the way to registration is now a
- * medium, outlined, left aligned button under a caption rather than a second
- * full width slab. Someone on this screen came here to sign in; the other door
- * has to be findable, not equally loud.
+ * medium, outlined button under a caption rather than a second full width slab.
+ * Someone on this screen came here to sign in; the other door has to be
+ * findable, not equally loud.
+ *
+ * On the alignment, which changed twice. This block was first centred, then
+ * pulled left because a centred line between left aligned blocks changed the
+ * scroll's edge three times, and is now centred again because the user asked
+ * for it. The earlier objection was to a caption centred while the button under
+ * it was not, which is a different thing: the caption and the button move
+ * together now, and they sit on the centre line of the primary button directly
+ * above, so the column has one axis rather than two competing ones.
  */
 
 /** Capped so the form never runs the full width of a tablet or a browser. */
@@ -125,12 +132,17 @@ export default function LoginScreen() {
           <Button label="Sign in" size="lg" full onPress={submit} loading={login.isPending} />
         </View>
 
-        {/* Left edge shared with everything above it, and quieter than the
-            primary action. Labelled with the word people actually look for:
-            "Create an account" was the old label, and it is not the phrase
-            anyone scans a screen hunting for. */}
-        <View style={{ gap: spacing.sm, alignItems: 'flex-start' }}>
-          <Text style={[type.caption, { color: colors.muted }]}>New to Forkast?</Text>
+        {/* Centred, on the centre line of the primary button above it, so the
+            way out of this screen sits on the same axis as the way through it.
+            Still quieter: outlined rather than filled, and medium rather than
+            large, because someone on this screen came here to sign in.
+            Labelled with the word people actually look for: "Create an account"
+            was the old label, and it is not the phrase anyone scans a screen
+            hunting for. */}
+        <View style={{ gap: spacing.sm, alignItems: 'center' }}>
+          <Text style={[type.caption, { color: colors.muted, textAlign: 'center' }]}>
+            New to Forkast?
+          </Text>
           <Button
             label="Sign up"
             variant="secondary"

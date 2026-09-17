@@ -233,17 +233,55 @@ describe('finding the way in', () => {
     await waitFor(() => expect(reg.getByText('Sign up.')).toBeTruthy());
   });
 
-  it('keeps one left edge down both forms', async () => {
-    // Section 2: one content column, one left edge. The line offering the other
-    // form was centred between left aligned blocks, so a short scroll changed
-    // alignment twice.
-    const login = render(<LoginScreen />, { wrapper });
-    await waitFor(() => expect(login.getByText('New to Forkast?')).toBeTruthy());
-    expect(everyStyle(login.toJSON()).some((style) => style.textAlign === 'center')).toBe(false);
+  /**
+   * The caption offering the other form, and the button under it, move together.
+   *
+   * This started as a rule that nothing on these screens was centred, because
+   * the caption used to be centred while the button below it was not, which
+   * changed the column's edge twice in a short scroll. The user then asked for
+   * the button to be centred, which fixes that complaint rather than
+   * reintroducing it: the pair now shares one axis, and it is the same axis as
+   * the full width primary button directly above them.
+   *
+   * So the thing worth guarding is no longer "nothing is centred". It is that
+   * the caption and the button agree.
+   */
+  it('centres the other-form caption and its button as one pair', async () => {
+    for (const [Screen, caption] of [
+      [LoginScreen, 'New to Forkast?'],
+      [RegisterScreen, 'Already have an account?'],
+    ] as const) {
+      const screen = render(<Screen />, { wrapper });
+      await waitFor(() => expect(screen.getByText(caption)).toBeTruthy());
 
-    const reg = render(<RegisterScreen />, { wrapper });
-    await waitFor(() => expect(reg.getByText('Already have an account?')).toBeTruthy());
-    expect(everyStyle(reg.toJSON()).some((style) => style.textAlign === 'center')).toBe(false);
+      // The caption is centred.
+      const captionStyle = StyleSheet.flatten(screen.getByText(caption).props.style) as AnyStyle;
+      expect(captionStyle.textAlign).toBe('center');
+
+      // And so is the container holding it and the button, which is what
+      // actually moves the button. A centred caption over a left aligned
+      // button is the arrangement this test exists to prevent.
+      const centred = everyStyle(screen.toJSON()).filter(
+        (style) => style.alignItems === 'center' && style.gap !== undefined,
+      );
+      expect(centred.length).toBeGreaterThan(0);
+
+      screen.unmount();
+    }
+  });
+
+  it('leaves the form itself on one left edge', async () => {
+    // Only the trailing escape hatch is centred. The headline and the fields
+    // above it keep the single left edge the column is built on, because a form
+    // whose labels wander is a form that is hard to scan.
+    const login = render(<LoginScreen />, { wrapper });
+    await waitFor(() => expect(login.getByText('Sign in.')).toBeTruthy());
+
+    const headline = StyleSheet.flatten(login.getByText('Sign in.').props.style) as AnyStyle;
+    expect(headline.textAlign).toBeUndefined();
+
+    const fieldLabel = StyleSheet.flatten(login.getByText('Email').props.style) as AnyStyle;
+    expect(fieldLabel.textAlign).toBeUndefined();
   });
 
   it('keeps the submit button live with the form empty', async () => {
