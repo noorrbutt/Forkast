@@ -17,3 +17,4 @@ export { ListRow, ListGroup } from './ListRow';
 export { Select, type SelectOption } from './Select';
 export { Hero } from './Hero';
 export { Ring } from './Ring';
+export { HeroWash } from './HeroWash';

@@ -21,3 +21,9 @@ web-build/
 .DS_Store
 Thumbs.db
 
+
+# Agent scratch, never part of the project
+.agents/
+mobile/.agents/
+mobile/.claude/
+mobile/skills-lock.json

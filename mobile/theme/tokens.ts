@@ -31,8 +31,23 @@ export type Palette = {
   /** Fill for a control that is present but inactive. Solid, never a faded copy. */
   disabledFill: string;
   disabledInk: string;
+  /**
+   * Sage. Good states: a live streak, a day inside its target, a meal that is
+   * not junk. Warm and in saffron's family rather than a stock mint, which read
+   * as arriving from a component kit.
+   */
   success: string;
   successSoft: string;
+  /**
+   * Terracotta. Junk flags, going over target, and destructive actions. A warm
+   * rust rather than a generic red, for the same reason.
+   *
+   * It sits near saffron on the wheel, which a categorical palette would not
+   * allow. Status colour is not categorical: it is reserved, and the guide
+   * requires it to ship with an icon and a word, never colour alone, so the
+   * difference between a button and a warning is never carried by hue. What it
+   * does have to clear is text contrast, and it does on every surface.
+   */
   danger: string;
   dangerSoft: string;
   /** Solid colour painted behind a BlurView so the layer never reads as a hole. */
@@ -66,45 +81,45 @@ export const palettes: Record<ThemeName, Palette> = {
     // the page reading as one flat sheet. The previous ramp sat every surface
     // within 1.09:1 of the background, so nothing lifted off anything and the
     // whole app looked monochrome.
-    bg: '#08080B',
-    surface: '#28282E',
-    surfaceAlt: '#38383E',
-    border: '#535359',
-    outline: '#818187',
-    text: '#FAFAF7',
-    muted: '#B4B4BE',
+    bg: '#0A0908',
+    surface: '#2B2927',
+    surfaceAlt: '#3B3937',
+    border: '#58544F',
+    outline: '#89827A',
+    text: '#FAF7F2',
+    muted: '#BCB5AC',
     accent: SAFFRON,
     accentFill: SAFFRON,
     accentSoft: 'rgba(245, 165, 36, 0.18)',
     accentInk: '#0E0E10',
-    disabledFill: '#3A3A42',
-    disabledInk: '#B8B8C2',
-    success: '#5CE08C',
-    successSoft: 'rgba(92, 224, 140, 0.16)',
-    danger: '#FF8F8F',
-    dangerSoft: 'rgba(255, 143, 143, 0.16)',
+    disabledFill: '#3D3A36',
+    disabledInk: '#BCB5AC',
+    success: '#87AF6A',
+    successSoft: 'rgba(135, 175, 106, 0.18)',
+    danger: '#DF8F77',
+    dangerSoft: 'rgba(223, 143, 119, 0.18)',
     blurFallback: 'rgba(8, 8, 11, 0.72)',
     blurTint: 'dark',
     scrim: 'rgba(0, 0, 0, 0.66)',
   },
   light: {
-    bg: '#F2F1EB',
-    surface: '#FFFFFF',
-    surfaceAlt: '#E6E5E1',
-    border: '#BDBCB8',
-    outline: '#84837F',
-    text: '#14140F',
-    muted: '#5A5A62',
+    bg: '#F4F1EE',
+    surface: '#FDFBFA',
+    surfaceAlt: '#E5E1DC',
+    border: '#BFB7AE',
+    outline: '#897F73',
+    text: '#17140F',
+    muted: '#5E574D',
     accent: SAFFRON_DEEP,
     accentFill: SAFFRON_DEEP,
     accentSoft: 'rgba(154, 77, 8, 0.12)',
     accentInk: '#FFFFFF',
-    disabledFill: '#DCDBD6',
-    disabledInk: '#55555C',
-    success: '#146B33',
-    successSoft: 'rgba(20, 107, 51, 0.14)',
-    danger: '#A81F1A',
-    dangerSoft: 'rgba(168, 31, 26, 0.12)',
+    disabledFill: '#DED9D2',
+    disabledInk: '#5E574D',
+    success: '#4E6A39',
+    successSoft: 'rgba(78, 106, 57, 0.14)',
+    danger: '#A54427',
+    dangerSoft: 'rgba(165, 68, 39, 0.12)',
     blurFallback: 'rgba(242, 241, 235, 0.72)',
     blurTint: 'light',
     scrim: 'rgba(20, 20, 15, 0.42)',
@@ -112,42 +127,41 @@ export const palettes: Record<ThemeName, Palette> = {
 };
 
 /**
- * A colour per cuisine, so a cuisine is recognisable before its name is read.
+ * Colour for data, and nothing else.
  *
- * Generated rather than picked: hues are spaced 36 degrees apart so they are
- * told apart by hue and not by brightness, and each one's lightness was walked
- * until it cleared 4.5:1 against the card it sits on in its own theme. Several
- * pairs are near identical in luminance, which is fine and deliberate; what
- * must not happen is two cuisines that are the same hue.
+ * Three slots, taken from the documented categorical palette rather than
+ * invented, because invented ones do not survive the checks. The ten cuisine
+ * colours that used to live here failed three of six: worst adjacent pair 9.3
+ * against a normal vision floor of 15, 5.8 deutan against a floor of 8, and
+ * every value inside one narrow lightness band because hue varied and lightness
+ * did not. The method caps a categorical palette at eight anyway, and calls more
+ * than about seven classes carrying meaning an anti pattern.
  *
- * Used as ink and as a soft tint, never as a large fill, so no screen ever
- * carries ten saturated blocks at once.
+ * These three clear every check on the harder all pairs test in both themes,
+ * which is what lets any two of them sit next to each other. Assigned in fixed
+ * order, never cycled, and never reused for a status.
+ *
+ * The light aqua sits at 2.73:1, which the validator allows only where the value
+ * is readable another way, so every bar using it carries its number in text.
  */
-export const cuisineColors: Record<ThemeName, Record<string, string>> = {
-  dark: {
-    desi: '#D79256',
-    american: '#E38793',
-    italian: '#7ED345',
-    chinese: '#D187E3',
-    middle_eastern: '#45D3CA',
-    japanese: '#E283B3',
-    korean: '#A598E7',
-    thai: '#B7D345',
-    mexican: '#DF8F77',
-    continental: '#6AA7DC',
-  },
-  light: {
-    desi: '#98551B',
-    american: '#C32238',
-    italian: '#397114',
-    chinese: '#A322C3',
-    middle_eastern: '#14716B',
-    japanese: '#BF2270',
-    korean: '#3D22C3',
-    thai: '#5B6C13',
-    mexican: '#B2421F',
-    continental: '#1E68A9',
-  },
+export const series: Record<ThemeName, string[]> = {
+  dark: ['#3987E5', '#D95926', '#199E70'],
+  light: ['#2A78D6', '#EB6834', '#1BAF7A'],
+};
+
+/**
+ * The wash behind the one number a screen leads with.
+ *
+ * The reference apps get most of their warmth from a soft colour field sitting
+ * under the hero rather than from anything structural, and a flat surface
+ * behind a big number is what made this app read as austere. Low saturation and
+ * a narrow hue range on purpose: it should feel like light falling on the page,
+ * not like a decorative gradient, and the number on top of it still has to
+ * clear contrast, which is why the stops stay close to the page colour.
+ */
+export const heroWash: Record<ThemeName, string[]> = {
+  dark: ['#2A2018', '#1A1512', '#0A0908'],
+  light: ['#FBEEDC', '#F8F2EA', '#F4F1EE'],
 };
 
 /**

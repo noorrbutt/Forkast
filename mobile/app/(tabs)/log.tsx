@@ -37,7 +37,6 @@ import {
   type ServingSize,
 } from '../../lib/types';
 import { useTheme } from '../../theme';
-import { cuisineColors } from '../../theme/tokens';
 
 const FUN_LEVELS = [1, 2, 3, 4, 5];
 
@@ -130,7 +129,6 @@ export default function LogScreen() {
         value: String(cuisine.id),
         label: cuisine.name,
         emoji: cuisine.emoji ?? undefined,
-        color: cuisineColors[themeName][cuisine.slug],
       })),
     ],
     [cuisines.data, themeName],
@@ -160,7 +158,6 @@ export default function LogScreen() {
           // before they know which of our 38 buckets we filed it under.
           label: category.name,
           hint: cuisine?.name,
-          color: cuisine ? cuisineColors[themeName][cuisine.slug] : undefined,
         };
       }),
     [visibleCategories, cuisineById, themeName],
