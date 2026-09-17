@@ -51,10 +51,37 @@ describe('Chip', () => {
     expect(onPress).not.toHaveBeenCalled();
   });
 
-  it('renders the leading emoji beside the label', () => {
+  it('renders the leading emoji as its own node, not glued to the label', () => {
+    // Separate nodes on purpose: a search over option labels must never match
+    // an emoji, and the glyph needs its own size rather than inheriting the
+    // label's.
     const { getByText } = render(<Chip label="Desi" leading="A" />);
 
-    expect(getByText(/A\s+Desi/)).toBeTruthy();
+    expect(getByText('A')).toBeTruthy();
+    expect(getByText('Desi')).toBeTruthy();
+  });
+
+  it('keeps the label the same weight whether or not it is selected', () => {
+    // Selecting used to flip fontWeight 500 to 600, which widened the text
+    // inside a fixed flex:1 box with numberOfLines={1}, so at larger font
+    // scales "Medium" truncated to "Medi..." exactly when it was chosen.
+    const plain = render(<Chip label="Medium" />).getByText('Medium');
+    const picked = render(<Chip label="Medium" selected />).getByText('Medium');
+
+    const weightOf = (node: { props: { style: unknown } }) =>
+      [node.props.style].flat(3).find((s) => s && typeof s === 'object' && 'fontWeight' in s);
+
+    expect(weightOf(picked)).toEqual(weightOf(plain));
+  });
+
+  it('is big enough to hit on both platforms', () => {
+    // 41pt and 37pt were both under the 44pt iOS and 48dp Android minimums.
+    const { getByRole } = render(<Chip label="Small" />);
+    const style = [getByRole('button').props.style].flat(3).find(
+      (s) => s && typeof s === 'object' && 'minHeight' in s,
+    );
+
+    expect((style as { minHeight: number }).minHeight).toBeGreaterThanOrEqual(48);
   });
 
   it('reports its selected state to assistive tech', () => {

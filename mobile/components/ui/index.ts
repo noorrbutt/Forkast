@@ -11,3 +11,7 @@ export { Progress } from './Progress';
 export { Screen } from './Screen';
 export { SectionLabel } from './SectionLabel';
 export { StatTile } from './StatTile';
+export { Avatar, initialsOf } from './Avatar';
+export { Dialog } from './Dialog';
+export { ListRow, ListGroup } from './ListRow';
+export { Select, type SelectOption } from './Select';
