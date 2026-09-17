@@ -25,9 +25,55 @@ import { haptics } from '../../lib/haptics';
 import { GOALS, type Goal } from '../../lib/types';
 import { useTheme } from '../../theme';
 
+/**
+ * Self-critique, per the style guide section 13.
+ *
+ * What it was: a centred identity block, four grouped lists of rows, and a
+ * centred version line. The grouped rows are the right pattern and they stay.
+ *
+ * What it broke. Section 2, alignment: the scroll changed edge three times,
+ * centred identity, then left aligned groups, then a centred footer, and the
+ * rule is one content column and one left edge unless there is a reason.
+ * Section 3, accessibility: the email carried `numberOfLines={1}`, so a long
+ * address rendered as "verylongaddress@exa...", which is the truncation the
+ * guide names as a failure rather than a cosmetic issue. Section 2, contrast:
+ * the largest thing in the content was the email at 21, exactly the size of the
+ * title in the bar above it, so the first and second elements were zero steps
+ * apart. Section 10: eight icons drawn inside discs, five 32pt discs on the
+ * rows and three 52pt ones sitting directly above a dialog title, which is both
+ * the decorative disc and the icon beside a heading. Section 12: an eyebrow
+ * reading "Your account" above a title reading "Profile", which says one thing
+ * twice. Section 5: no cap on the column. Section 3, usability: the target
+ * dialog disabled its own primary action until the number was valid, which is
+ * the one failure this app has already shipped once and the guide names
+ * outright.
+ *
+ * What the one thing is now: who is signed in. A 72pt picture with the address
+ * beside it, left aligned on the same edge as everything below, with 32 of
+ * space under it against 24 between the groups. No `hero` on this screen, and
+ * that is correct: a profile has no focal number, and the guide asks for none
+ * rather than for something invented to fill the slot.
+ *
+ * What was demoted, and why that is correct: every row lost its icon. The
+ * labels, "Goal", "Daily calorie target", "Timezone", "Reminders", "Sign out",
+ * already say what they are, and an icon carrying meaning a word carries is
+ * what the guide bans. The version line moved to the left edge and stayed at 12.
+ */
+
 /** The range the server accepts, checked here so a typo never costs a 422. */
 const MIN_TARGET = 800;
 const MAX_TARGET = 10_000;
+
+/** Capped so the settings never run the full width of a tablet or a browser. */
+const CONTENT_MAX = 560;
+
+/**
+ * The picture, at 72 rather than the component's default 88.
+ *
+ * It sits beside the address now instead of above it, and at 88 the circle took
+ * enough of a narrow phone's width that the email had nowhere to wrap to.
+ */
+const AVATAR_SIZE = 72;
 
 function deviceTimezone(): string | null {
   try {
@@ -38,12 +84,16 @@ function deviceTimezone(): string | null {
 }
 
 /**
- * Who this account is.
+ * Who this account is. The one thing on this screen.
  *
- * A face, an address and a date, centred, which is the first thing every
- * profile screen in existence shows. The old screen opened with a card of
- * label and value pairs, so the page began by reciting fields rather than by
- * saying whose page it was.
+ * A picture and an address, side by side on the same left edge as every group
+ * below, rather than a centred stack that made the scroll change alignment
+ * twice before the first setting. Large on the left, small on the right is the
+ * asymmetry the guide asks for, and it is the only block here with 32 beneath
+ * it where the groups get 24.
+ *
+ * Not a card on purpose. A surface would make it the fifth in a stack of five
+ * and undo the whole point of it being first.
  */
 function Identity({
   email,
@@ -56,12 +106,20 @@ function Identity({
 }) {
   const { colors, spacing, type } = useTheme();
   return (
-    <View style={{ alignItems: 'center', gap: spacing.md, paddingTop: spacing.sm }}>
-      <ProfileAvatar name={email} hasPicture={picture} />
-      <View style={{ alignItems: 'center', gap: spacing.xs }}>
-        <Text style={[type.title, { color: colors.text, textAlign: 'center' }]} numberOfLines={1}>
-          {email}
-        </Text>
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.lg,
+        paddingBottom: spacing.sm,
+      }}
+    >
+      <ProfileAvatar name={email} hasPicture={picture} size={AVATAR_SIZE} />
+      <View style={{ flex: 1, gap: spacing.xs }}>
+        {/* Wraps. It used to be one line with a tail truncation, so a long
+            address became "verylongaddress@exa..." and the account you were
+            looking at was the one thing the screen would not tell you. */}
+        <Text style={[type.title, { color: colors.text }]}>{email}</Text>
         <Text style={[type.caption, { color: colors.muted }]}>
           Member since {joined || 'today'}
         </Text>
@@ -91,7 +149,6 @@ function GoalRow({ goal, last }: { goal: Goal | null; last?: boolean }) {
   return (
     <>
       <ListRow
-        icon="trophy"
         label="Goal"
         value={goal ? GOAL_LABELS[goal] : 'Not set'}
         hint={goal ? GOAL_BLURBS[goal] : 'Pick a goal and the meal plans will follow it.'}
@@ -104,7 +161,6 @@ function GoalRow({ goal, last }: { goal: Goal | null; last?: boolean }) {
         onDismiss={() => setOpen(false)}
         title="Your goal"
         message="The meal plans follow this, so it is worth being honest about."
-        icon="trophy"
         actions={[{ label: 'Done', variant: 'primary', onPress: () => setOpen(false) }]}
       >
         <View style={{ gap: spacing.md }}>
@@ -151,6 +207,9 @@ function TargetRow({ target, last }: { target: number | null; last?: boolean }) 
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const [touched, setTouched] = useState(false);
+  // Whether the save has been pressed yet, which is what lets an empty field
+  // stay quiet until someone has actually asked for it to be saved.
+  const [asked, setAsked] = useState(false);
 
   useEffect(() => {
     // Adopt the stored value, but never overwrite something being typed.
@@ -169,14 +228,23 @@ function TargetRow({ target, last }: { target: number | null; last?: boolean }) 
   const unchanged = valid && parsed === target;
 
   const problem =
-    trimmed.length > 0 && !valid
+    (asked || trimmed.length > 0) && !valid
       ? `Enter a whole number between ${formatNumber(MIN_TARGET)} and ${formatNumber(MAX_TARGET)}.`
       : null;
 
   const busy = save.isPending || clear.isPending;
 
   const onSave = () => {
-    if (!valid || unchanged) return;
+    if (busy) return;
+    // Pressing is what makes an empty field a problem worth naming. Until then
+    // the message would be scolding someone for not having typed yet.
+    setAsked(true);
+    if (!valid) return;
+    // Nothing to send, so the dialog closing is the whole answer.
+    if (unchanged) {
+      setOpen(false);
+      return;
+    }
     save.mutate(
       { daily_calorie_target: parsed },
       {
@@ -213,7 +281,11 @@ function TargetRow({ target, last }: { target: number | null; last?: boolean }) 
       label: target != null ? 'Update target' : 'Set target',
       variant: 'primary',
       onPress: onSave,
-      disabled: !valid || unchanged || busy,
+      // Live until the request is actually running. A primary action that
+      // disables itself until the form is valid hides the affordance behind
+      // the very thing it is inviting, so this one stays pressable and the
+      // field says what is missing instead.
+      disabled: busy,
       loading: save.isPending,
     },
   ];
@@ -236,7 +308,6 @@ function TargetRow({ target, last }: { target: number | null; last?: boolean }) 
   return (
     <>
       <ListRow
-        icon="chart"
         label="Daily calorie target"
         value={target != null ? formatNumber(target) : 'Not set'}
         hint={
@@ -244,7 +315,10 @@ function TargetRow({ target, last }: { target: number | null; last?: boolean }) 
             ? 'Your dashboard measures the day against this and shows what is left.'
             : 'Optional. Set one and the dashboard shows what is left of the day, not just a total.'
         }
-        onPress={() => setOpen(true)}
+        onPress={() => {
+          setAsked(false);
+          setOpen(true);
+        }}
         last={last}
       />
 
@@ -253,7 +327,6 @@ function TargetRow({ target, last }: { target: number | null; last?: boolean }) 
         onDismiss={() => !busy && setOpen(false)}
         title="Your daily target"
         message="A number the dashboard can measure the day against."
-        icon="chart"
         actions={actions}
       >
         <View style={{ gap: spacing.md }}>
@@ -315,11 +388,18 @@ function TimezoneRow({ zone, last }: { zone: string; last?: boolean }) {
 
   return (
     <>
+      {/* The zone reads on the hint line rather than in the value column, and
+          it is the one setting here that has to. A value is held to one line,
+          and "America/Argentina/Buenos_Aires" at 15pt is 224 wide against 268
+          of column, which becomes 290 the moment the system text size goes up:
+          a truncated timezone is a wrong timezone. The hint wraps. */}
       <ListRow
-        icon="clock"
         label="Timezone"
-        value={zone || 'Not set'}
-        hint={mismatch && local ? `This device reports ${local}.` : undefined}
+        hint={
+          mismatch && local
+            ? `${zone || 'Not set'}. This device reports ${local}.`
+            : zone || 'Not set'
+        }
         onPress={mismatch ? () => setOpen(true) : undefined}
         trailing={
           update.isPending ? <ActivityIndicator size="small" color={colors.accent} /> : undefined
@@ -335,7 +415,6 @@ function TimezoneRow({ zone, last }: { zone: string; last?: boolean }) {
           onDismiss={() => !update.isPending && setOpen(false)}
           title="Timezone"
           message={`This device reports ${local}. Matching it keeps your streaks lined up with your days.`}
-          icon="clock"
           actions={[
             {
               label: 'Use this device',
@@ -379,7 +458,6 @@ function RemindersSection() {
     <View style={{ gap: spacing.sm }}>
       <ListGroup title="Notifications">
         <ListRow
-          icon="bell"
           label="Reminders"
           value={reminders.enabled === null ? undefined : on ? 'On' : 'Off'}
           hint={
@@ -411,53 +489,62 @@ export default function ProfileScreen() {
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
   return (
-    <Screen title="Profile" eyebrow="Your account">
-      {me.isLoading ? <Loading label="Loading your profile" /> : null}
-
-      {me.isError && !user ? (
-        <ErrorState
-          title="Profile unavailable"
-          message={describeError(me.error)}
-          onRetry={() => void me.refetch()}
-        />
-      ) : null}
-
-      {user ? (
-        <>
-          <Identity
-            email={user.email}
-            joined={formatDate(user.created_at)}
-            picture={hasAvatar(user)}
-          />
-
-          <ListGroup title="Your day">
-            <GoalRow goal={user.goal ?? null} />
-            <TargetRow target={user.daily_calorie_target} />
-            <TimezoneRow zone={user.timezone} last />
-          </ListGroup>
-
-          <RemindersSection />
-
-          {/* Signing out sits in a group with everything else rather than
-              floating under the page as a lone pill, which is what made it and
-              the delete trigger read as two orphans that had missed the grid. */}
-          <ListGroup title="Account">
-            <ChangePassword />
-            <ListRow icon="signOut" label="Sign out" onPress={() => void signOut()} last />
-          </ListGroup>
-
-          <DeleteAccount />
-        </>
-      ) : null}
-
-      <Text
-        style={[
-          type.labelSoft,
-          { color: colors.muted, textAlign: 'center', paddingTop: spacing.sm },
-        ]}
+    // No eyebrow. "Your account" above a title reading "Profile" was the same
+    // sentence twice, and the tab bar has already said which screen this is.
+    <Screen title="Profile">
+      <View
+        style={{
+          width: '100%',
+          maxWidth: CONTENT_MAX,
+          alignSelf: 'center',
+          // 24 between groups against 8 between a group's title and its rows,
+          // so the grouping says something.
+          gap: spacing.xl,
+        }}
       >
-        Forkast {appVersion}
-      </Text>
+        {me.isLoading ? <Loading label="Loading your profile" /> : null}
+
+        {me.isError && !user ? (
+          <ErrorState
+            title="Profile unavailable"
+            message={describeError(me.error)}
+            onRetry={() => void me.refetch()}
+          />
+        ) : null}
+
+        {user ? (
+          <>
+            <Identity
+              email={user.email}
+              joined={formatDate(user.created_at)}
+              picture={hasAvatar(user)}
+            />
+
+            <ListGroup title="Your day">
+              <GoalRow goal={user.goal ?? null} />
+              <TargetRow target={user.daily_calorie_target} />
+              <TimezoneRow zone={user.timezone} last />
+            </ListGroup>
+
+            <RemindersSection />
+
+            {/* Signing out sits in a group with everything else rather than
+                floating under the page as a lone pill, which is what made it and
+                the delete trigger read as two orphans that had missed the grid. */}
+            <ListGroup title="Account">
+              <ChangePassword />
+              <ListRow label="Sign out" onPress={() => void signOut()} last />
+            </ListGroup>
+
+            <DeleteAccount />
+          </>
+        ) : null}
+
+        {/* On the same left edge as everything above it. Centring one line at
+            the bottom of a left aligned screen is the third alignment change in
+            one scroll, and it was not buying anything. */}
+        <Text style={[type.labelSoft, { color: colors.muted }]}>Forkast {appVersion}</Text>
+      </View>
     </Screen>
   );
 }

@@ -3,11 +3,35 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Button, Field, Screen } from '../../components/ui';
+import { useTheme } from '../../theme';
 import { useRegister } from '../../hooks/useAuth';
 import { describeError } from '../../lib/api';
-import { useTheme } from '../../theme';
+
+/**
+ * Self-critique, per the style guide section 13.
+ *
+ * What it was: a frosted bar titled "Sign up", a 48pt headline saying something
+ * else, two fields, and two identical full width buttons.
+ *
+ * What it broke. The same three things as its twin, which is the point: two
+ * screens with one job each were solving the same problem two ways in the
+ * details. Section 3, consistency: two titles, and the 48pt one was not the
+ * name of the action. Section 2, alignment: "Already have an account?" centred
+ * between left aligned blocks. Section 7: primary and escape hatch both
+ * `size="lg"` and both `full`. Section 5: no cap on the column.
+ *
+ * What the one thing is now: "Sign up." at `display`, 48 against a next largest
+ * of 16, the same words as the button that reaches it.
+ *
+ * What was demoted, and why that is correct: the way back to signing in is a
+ * medium, outlined, left aligned button. Someone who already has an account is
+ * the exception here, and the exception gets a findable control, not an equal one.
+ */
 
 const MIN_PASSWORD = 8;
+
+/** Capped so the form never runs the full width of a tablet or a browser. */
+const COLUMN_WIDTH = 420;
 
 export default function RegisterScreen() {
   const { colors, spacing, type } = useTheme();
@@ -38,10 +62,19 @@ export default function RegisterScreen() {
   const message = problem ?? (register.isError ? describeError(register.error) : null);
 
   return (
-    <Screen scroll bottomInset={spacing.xxl} title="Sign up" onBack={() => router.back()}>
-      <View style={{ gap: spacing.xl, paddingTop: spacing.sm }}>
+    // No title on the bar, for the reason given on the sign in screen.
+    <Screen scroll bottomInset={spacing.xxl} onBack={() => router.back()}>
+      <View
+        style={{
+          width: '100%',
+          maxWidth: COLUMN_WIDTH,
+          alignSelf: 'center',
+          gap: spacing.xl,
+          paddingTop: spacing.sm,
+        }}
+      >
         <View style={{ gap: spacing.sm }}>
-          <Text style={[type.display, { color: colors.text }]}>Start{'\n'}the streak.</Text>
+          <Text style={[type.display, { color: colors.text }]}>Sign up.</Text>
           <Text style={[type.body, { color: colors.muted }]}>
             One account, every meal, no judgement.
           </Text>
@@ -84,15 +117,13 @@ export default function RegisterScreen() {
           <Button label="Sign up" size="lg" full onPress={submit} loading={register.isPending} />
         </View>
 
-        <View style={{ gap: spacing.sm, alignItems: 'stretch' }}>
-          <Text style={[type.caption, { color: colors.muted, textAlign: 'center' }]}>
-            Already have an account?
-          </Text>
+        {/* Left edge shared with everything above it, and quieter than the
+            primary action. */}
+        <View style={{ gap: spacing.sm, alignItems: 'flex-start' }}>
+          <Text style={[type.caption, { color: colors.muted }]}>Already have an account?</Text>
           <Button
             label="Sign in"
             variant="secondary"
-            size="lg"
-            full
             onPress={() => router.replace('/login')}
             disabled={register.isPending}
           />

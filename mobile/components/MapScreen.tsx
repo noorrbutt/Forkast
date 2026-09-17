@@ -266,7 +266,7 @@ export function MapScreen() {
                   <Text style={[type.body, { color: colors.text, flex: 1 }]} numberOfLines={1}>
                     {spot.name}
                   </Text>
-                  <Text style={[type.label, { color: colors.accent }]}>
+                  <Text style={[type.labelSoft, { color: colors.accent }]}>
                     {`${spot.count}x`}
                   </Text>
                 </View>

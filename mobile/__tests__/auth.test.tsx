@@ -12,7 +12,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
-import { Text } from 'react-native';
+import { StyleSheet, Text, type TextStyle, type ViewStyle } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import LoginScreen from '../app/(auth)/login';
@@ -82,6 +82,31 @@ const METRICS = {
 
 const STORED = { access_token: 'stored-access', refresh_token: 'stored-refresh' };
 
+type AnyStyle = TextStyle & ViewStyle;
+
+/**
+ * Every style on every rendered node, flattened.
+ *
+ * The composition rules in the style guide are about what is on the screen
+ * rather than about any one component, so the checks below read the whole tree
+ * instead of asking a component what it thinks it rendered.
+ */
+function everyStyle(tree: unknown): AnyStyle[] {
+  const found: AnyStyle[] = [];
+  const walk = (node: unknown) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    const { props, children } = node as { props?: { style?: unknown }; children?: unknown };
+    if (props?.style) found.push(StyleSheet.flatten(props.style as AnyStyle) ?? {});
+    walk(children);
+  };
+  walk(tree);
+  return found;
+}
+
 /** An axios rejection carrying a status, shaped the way the interceptor leaves it. */
 const refusal = (status: number) =>
   Object.assign(new Error(`Request failed with status code ${status}`), {
@@ -128,6 +153,48 @@ describe('the welcome screen', () => {
     expect(getByRole('button', { name: 'Sign in' })).toBeTruthy();
   });
 
+  it('leads with exactly one figure, and nothing else comes near it', async () => {
+    // Style guide section 4: `hero` at most once per screen, and the gap to the
+    // second element at least one full step of the scale. The screen used to
+    // top out at 48 with three 44pt coloured discs beneath it, which is how
+    // three supporting rows ended up weighing as much as the headline.
+    const { toJSON } = render(<WelcomeScreen />, { wrapper });
+
+    const sizes = everyStyle(toJSON())
+      .map((style) => Number(style.fontSize ?? 0))
+      .sort((a, b) => b - a);
+
+    // 44, 52 and 64 are the three sizes the hero is allowed to step between.
+    expect(sizes.filter((size) => size >= 44)).toHaveLength(1);
+    // And the drop to whatever is second is a full step of the scale or more.
+    const second = sizes.find((size) => size < sizes[0]) ?? 0;
+    expect(sizes[0] / second).toBeGreaterThanOrEqual(1.33);
+  });
+
+  it('puts no decorative disc behind anything', async () => {
+    // Section 10 bans the disc outright, and this screen had three of them:
+    // 44pt circles of accentSoft behind the icon on each feature row, which is
+    // also brand colour spent on decoration rather than on an action.
+    const { toJSON } = render(<WelcomeScreen />, { wrapper });
+
+    const discs = everyStyle(toJSON()).filter(
+      (style) =>
+        Boolean(style.backgroundColor) &&
+        typeof style.width === 'number' &&
+        style.width === style.height &&
+        Number(style.borderRadius ?? 0) >= style.width / 2,
+    );
+    expect(discs).toHaveLength(0);
+  });
+
+  it('wears no uppercase eyebrow', async () => {
+    // Section 4: the 11px tracked out uppercase label is allowed on the tab bar
+    // and in chart axes, nowhere else. This screen wore one reading "Forkast".
+    const { toJSON } = render(<WelcomeScreen />, { wrapper });
+
+    expect(everyStyle(toJSON()).some((style) => style.textTransform === 'uppercase')).toBe(false);
+  });
+
   it('sends you to sign up and to sign in', async () => {
     const { getByRole } = render(<WelcomeScreen />, { wrapper });
     await waitFor(() => expect(getByRole('button', { name: 'Get started' })).toBeTruthy());
@@ -153,6 +220,30 @@ describe('finding the way in', () => {
     const reg = render(<RegisterScreen />, { wrapper });
     await waitFor(() => expect(reg.getByRole('button', { name: 'Sign up' })).toBeTruthy());
     expect(reg.getByRole('button', { name: 'Sign in' })).toBeTruthy();
+  });
+
+  it('calls each form what the button that opened it called it', async () => {
+    // Section 3: one name per action, everywhere. Both screens used to carry a
+    // 21pt title in the bar and a different 48pt headline under it, so the
+    // biggest words on a form were not the name of the thing it does.
+    const login = render(<LoginScreen />, { wrapper });
+    await waitFor(() => expect(login.getByText('Sign in.')).toBeTruthy());
+
+    const reg = render(<RegisterScreen />, { wrapper });
+    await waitFor(() => expect(reg.getByText('Sign up.')).toBeTruthy());
+  });
+
+  it('keeps one left edge down both forms', async () => {
+    // Section 2: one content column, one left edge. The line offering the other
+    // form was centred between left aligned blocks, so a short scroll changed
+    // alignment twice.
+    const login = render(<LoginScreen />, { wrapper });
+    await waitFor(() => expect(login.getByText('New to Forkast?')).toBeTruthy());
+    expect(everyStyle(login.toJSON()).some((style) => style.textAlign === 'center')).toBe(false);
+
+    const reg = render(<RegisterScreen />, { wrapper });
+    await waitFor(() => expect(reg.getByText('Already have an account?')).toBeTruthy());
+    expect(everyStyle(reg.toJSON()).some((style) => style.textAlign === 'center')).toBe(false);
   });
 
   it('keeps the submit button live with the form empty', async () => {
