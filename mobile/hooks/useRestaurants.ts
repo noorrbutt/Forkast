@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../lib/api';
 import { useAuth } from './useAuth';
+import { useDebounced } from './useDebounced';
 import type { Restaurant } from '../lib/types';
 
 /**
@@ -11,10 +12,17 @@ import type { Restaurant } from '../lib/types';
  */
 export function useRestaurants(term = '') {
   const { signedIn } = useAuth();
-  const query = term.trim();
+  // Debounced, and gated on having some substance, both of which this was
+  // missing while its sibling useSearch had them. Wired straight to
+  // onChangeText it fired one request per keystroke, so typing a restaurant
+  // name cost about fifteen round trips and the list flickered as they landed
+  // out of order.
+  const query = useDebounced(term.trim());
   return useQuery({
     queryKey: ['restaurants', query],
-    enabled: signedIn,
+    // An empty term is a real request: it lists the registry for the picker.
+    // One or two letters is not, it just matches most of it.
+    enabled: signedIn && (query.length === 0 || query.length >= 2),
     staleTime: 60_000,
     queryFn: async () => {
       const response = await api.get<Restaurant[]>('/restaurants', {

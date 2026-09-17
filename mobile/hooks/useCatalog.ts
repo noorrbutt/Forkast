@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../lib/api';
 import { useAuth } from './useAuth';
+import { useDebounced } from './useDebounced';
 import type { Category, Cuisine, RefId, SearchResults } from '../lib/types';
 
 export function useCuisines() {
@@ -35,7 +36,10 @@ export function useCategories(cuisineId?: RefId | null) {
 /** Fires only once the query has some substance, to keep the keyboard responsive. */
 export function useSearch(term: string) {
   const { signedIn } = useAuth();
-  const query = term.trim();
+  // The length gate below kept the shortest queries off the wire, but every
+  // keystroke past the second still sent one. Typing "chicken biryani" was
+  // fourteen requests where one would do.
+  const query = useDebounced(term.trim());
   return useQuery({
     queryKey: ['search', query],
     enabled: signedIn && query.length >= 2,
