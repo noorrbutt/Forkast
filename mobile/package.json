@@ -60,6 +60,7 @@
       "components/**/*.{ts,tsx}",
       "lib/**/*.{ts,tsx}",
       "theme/**/*.{ts,tsx}"
-    ]
+    ],
+    "maxWorkers": 2
   }
 }

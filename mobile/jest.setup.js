@@ -1,3 +1,19 @@
+// Timing, before anything else, because the rest of this file is mocks.
+//
+// The suite is 23 files of React Native renders on a 4 core machine, and jest
+// runs several at once. Under that contention a file that finishes in 25s alone
+// takes 115s, and React Native Testing Library's waitFor gives up after 1000ms
+// by default, so tests fail for having been starved rather than for being
+// wrong. That is worse than a slow suite: it teaches you to re-run and shrug,
+// and a real failure then hides among the noise.
+//
+// The numbers are chosen to be far past any legitimate wait. Nothing here is
+// waiting on a network; the slowest thing is a render settling.
+jest.setTimeout(30_000);
+
+const { configure } = require('@testing-library/react-native');
+configure({ asyncUtilTimeout: 10_000 });
+
 // Test setup for the Expo app.
 
 // Reanimated 4 cannot load in a test runner: it reaches for native worklets at
