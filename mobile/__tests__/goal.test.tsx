@@ -37,7 +37,7 @@ import { api } from '../lib/api';
 const mockedApi = api as unknown as { get: jest.Mock; post: jest.Mock; patch: jest.Mock };
 
 /** What ck_users_calorie_target_plausible allows, which is what the server takes. */
-const MIN_TARGET = 800;
+const MIN_TARGET = 0;
 const MAX_TARGET = 10_000;
 
 describe('the target a goal suggests', () => {
@@ -226,14 +226,28 @@ describe('what setup sends', () => {
     );
   });
 
-  it('refuses a number the server would refuse, and names the range', () => {
+  it('accepts a low number, because there is no floor to argue with', async () => {
     const { screen, input } = openSetup();
 
     fireEvent.changeText(input, '400');
     fireEvent.press(screen.getByText('Start logging'));
 
+    await waitFor(() =>
+      expect(mockedApi.patch).toHaveBeenCalledWith(
+        '/me',
+        expect.objectContaining({ daily_calorie_target: 400 }),
+      ),
+    );
+  });
+
+  it('refuses a number the server would refuse, and says what the limit is', () => {
+    const { screen, input } = openSetup();
+
+    fireEvent.changeText(input, '99999');
+    fireEvent.press(screen.getByText('Start logging'));
+
     expect(mockedApi.patch).not.toHaveBeenCalled();
-    expect(screen.getByText(/between 800 and 10,000/)).toBeTruthy();
+    expect(screen.getByText(/up to 10,000/)).toBeTruthy();
   });
 
   it('sends no target at all when the setup is skipped', async () => {

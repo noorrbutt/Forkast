@@ -62,7 +62,7 @@ import { useTheme } from '../../theme';
  */
 
 /** The range the server accepts, checked here so a typo never costs a 422. */
-const MIN_TARGET = 800;
+const MIN_TARGET = 0;
 const MAX_TARGET = 10_000;
 
 /** Capped so the settings never run the full width of a tablet or a browser. */
@@ -230,7 +230,7 @@ function TargetRow({ target, last }: { target: number | null; last?: boolean }) 
 
   const problem =
     (asked || trimmed.length > 0) && !valid
-      ? `Enter a whole number between ${formatNumber(MIN_TARGET)} and ${formatNumber(MAX_TARGET)}.`
+      ? `Enter a whole number, up to ${formatNumber(MAX_TARGET)}.`
       : null;
 
   const busy = save.isPending || clear.isPending;

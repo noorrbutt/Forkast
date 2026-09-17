@@ -167,19 +167,29 @@ describe('what never reaches the server', () => {
     expect(input.props.value).toBe('2200');
   });
 
-  it('refuses a number below the floor and names the range', async () => {
+  it('accepts a low number, because there is no floor to argue with', async () => {
+    // There used to be one, at 800. Forkast holds no height, weight, age or
+    // activity level, so it was not a clinical minimum derived from anything;
+    // it was the app refusing a number the user had deliberately chosen, with
+    // no way around it.
     const screen = render(<ProfileScreen />, { wrapper });
     const input = await openTarget(screen);
 
     fireEvent.changeText(input, '500');
     fireEvent.press(screen.getByText('Set target'));
 
-    expect(mockedApi.patch).not.toHaveBeenCalled();
-    // Saying the range beats a 422 read back from the server as a red line.
-    expect(screen.getByText(/between 800 and 10,000/)).toBeTruthy();
+    await waitFor(() =>
+      expect(mockedApi.patch).toHaveBeenCalledWith(
+        '/me',
+        expect.objectContaining({ daily_calorie_target: 500 }),
+      ),
+    );
   });
 
-  it('refuses a number above the ceiling', async () => {
+  it('refuses a number above the ceiling and says what the limit is', async () => {
+    // The ceiling stays. An extra digit is the error that silently makes every
+    // day look like a success, which is the opposite of a low target, where
+    // being wrong is obvious to the person who typed it.
     const screen = render(<ProfileScreen />, { wrapper });
     const input = await openTarget(screen);
 
@@ -187,7 +197,8 @@ describe('what never reaches the server', () => {
     fireEvent.press(screen.getByText('Set target'));
 
     expect(mockedApi.patch).not.toHaveBeenCalled();
-    expect(screen.getByText(/between 800 and 10,000/)).toBeTruthy();
+    // Saying the limit beats a 422 read back from the server as a red line.
+    expect(screen.getByText(/up to 10,000/)).toBeTruthy();
   });
 });
 

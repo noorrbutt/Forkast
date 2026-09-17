@@ -95,3 +95,50 @@ async def test_an_empty_account_with_no_target_reports_none(
     assert dashboard["logs_count"] == 0
     assert dashboard["today"]["target"] is None
     assert dashboard["today"]["remaining"] is None
+
+
+async def test_a_low_target_is_accepted(auth_client: AsyncClient) -> None:
+    """The floor was 800, which the app was in no position to insist on.
+
+    Forkast holds no height, weight, age or activity level, so 800 was not a
+    clinical minimum derived from anything. It was the app arguing with a number
+    the user had deliberately chosen, and there is no way around it: the daily
+    target is a single field with one validator.
+    """
+    for value in (1, 200, 500, 799):
+        response = await auth_client.patch(
+            "/api/v1/me", json={"daily_calorie_target": value}
+        )
+
+        assert response.status_code == 200, f"{value} was refused: {response.text}"
+        assert response.json()["daily_calorie_target"] == value
+
+
+async def test_zero_is_stored_and_reads_as_no_target(auth_client: AsyncClient) -> None:
+    """Zero is the one value a meter cannot express.
+
+    There is nothing to be a fraction of, so the dashboard treats any
+    non-positive target the same way it treats a missing one and falls back to
+    the plain figure for the day. It is still stored as the user typed it.
+    """
+    stored = await auth_client.patch("/api/v1/me", json={"daily_calorie_target": 0})
+
+    assert stored.status_code == 200
+    assert stored.json()["daily_calorie_target"] == 0
+
+
+async def test_the_ceiling_still_catches_a_stray_digit(auth_client: AsyncClient) -> None:
+    """Lowering the floor did not remove the upper bound, which still earns it.
+
+    An extra digit is the error that silently makes every day look like a
+    success, which is the opposite of a target being too low and obvious.
+    """
+    response = await auth_client.patch("/api/v1/me", json={"daily_calorie_target": 22000})
+
+    assert response.status_code == 422
+
+
+async def test_a_negative_target_is_still_refused(auth_client: AsyncClient) -> None:
+    response = await auth_client.patch("/api/v1/me", json={"daily_calorie_target": -1})
+
+    assert response.status_code == 422

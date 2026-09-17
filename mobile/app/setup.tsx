@@ -10,7 +10,7 @@ import { GOALS, type Goal } from '../lib/types';
 import { useTheme } from '../theme';
 
 /** Matches ck_users_calorie_target_plausible, so a typo is caught before a round trip. */
-const MIN_TARGET = 800;
+const MIN_TARGET = 0;
 const MAX_TARGET = 10_000;
 
 /** The goal this screen opens on, and therefore the target it opens with. */
@@ -150,7 +150,7 @@ export default function SetupScreen() {
     if (updateProfile.isPending) return;
     if (withTarget && !targetValid) {
       setProblem(
-        `A daily target is between ${formatNumber(MIN_TARGET)} and ${formatNumber(MAX_TARGET)} kcal.`,
+        `A daily target is a whole number, up to ${formatNumber(MAX_TARGET)} kcal.`,
       );
       return;
     }

@@ -64,12 +64,15 @@ class User(Base):
         # collation: the latter disables B-tree deduplication and breaks
         # pattern matching.
         Index("uq_users_email_lower", func.lower(email), unique=True),
-        # Wide enough for anyone from a cutting sedentary adult to an athlete,
-        # narrow enough that a stray extra digit is caught before it silently
-        # makes every day look like a success.
+        # The ceiling catches a stray extra digit before it silently makes
+        # every day look like a success. There is deliberately no meaningful
+        # floor: Forkast knows no height, weight, age or activity level, so it
+        # is in no position to tell anyone their target is too low. Zero is
+        # allowed and reads downstream as no target, which is what the
+        # dashboard already does with any non-positive value.
         CheckConstraint(
             "daily_calorie_target IS NULL OR "
-            "(daily_calorie_target >= 800 AND daily_calorie_target <= 10000)",
+            "(daily_calorie_target >= 0 AND daily_calorie_target <= 10000)",
             name="calorie_target_plausible",
         ),
     )
