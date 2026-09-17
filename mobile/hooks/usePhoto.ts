@@ -5,7 +5,24 @@ import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 
 import { API_BASE_URL, api, getAccessToken } from '../lib/api';
+import { useAuthedImage } from '../lib/authedImage';
+import { appendFile } from '../lib/upload';
 import type { FoodLog, Uuid } from '../lib/types';
+
+/**
+ * Bumped every time any meal photo changes.
+ *
+ * The URL for a meal's photo is derived from the meal's id, and replacing a
+ * photo writes over the existing row rather than making a new one, so the URL
+ * after a retake is byte for byte the URL before it. Both React Native's image
+ * cache and the browser key on that URL alone, so the old picture stayed on
+ * screen and the upload read as having silently failed.
+ *
+ * One counter for all meals rather than one per meal: replacing a photo is
+ * rare, the parameter only has to change, and a map keyed by id would have to
+ * be cleaned up on sign out. The server ignores it, the caches do not.
+ */
+let revision = 0;
 
 /**
  * Where the image for a meal lives.
@@ -14,16 +31,22 @@ import type { FoodLog, Uuid } from '../lib/types';
  * its own caching and decoding far better than anything done by hand here. The
  * request needs the bearer token, which is why the header goes along with it.
  */
-export function photoSource(logId: Uuid, token: string | null) {
+export function photoSource(logId: Uuid, token: string | null, version = revision) {
   return {
-    uri: `${API_BASE_URL}/logs/${logId}/photo`,
+    uri: `${API_BASE_URL}/logs/${logId}/photo?v=${version}`,
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   };
 }
 
-/** Null while a meal is still being written, when there is no id to fetch from. */
+/**
+ * Null while a meal is still being written, when there is no id to fetch from.
+ *
+ * Passed through useAuthedImage, which is the identity function on iOS and
+ * Android and does the fetch-to-object-url dance on web, where Image cannot
+ * send the Authorization header this source carries.
+ */
 export function usePhotoSource(logId: Uuid | null) {
-  return logId === null ? undefined : photoSource(logId, getAccessToken());
+  return useAuthedImage(logId === null ? undefined : photoSource(logId, getAccessToken()));
 }
 
 /**
@@ -137,13 +160,11 @@ export function useSetPhoto() {
   return useMutation({
     mutationFn: async ({ logId, uri, mimeType }: UploadArgs) => {
       const form = new FormData();
-      // The cast is unavoidable: React Native accepts this object where the DOM
-      // types insist on a Blob, and there is no Blob for a file uri here.
-      form.append('file', {
+      await appendFile(form, 'file', {
         uri,
         name: `meal.${mimeType.split('/')[1] ?? 'jpg'}`,
-        type: mimeType,
-      } as unknown as Blob);
+        mimeType,
+      });
 
       const response = await api.put<FoodLog>(`/logs/${logId}/photo`, form, {
         // Left to the runtime on purpose. Axios has to set the multipart
@@ -155,6 +176,9 @@ export function useSetPhoto() {
       return response.data;
     },
     onSuccess: (log) => {
+      // Before the cache is told, so anything re-rendering off this reads the
+      // new number and asks for a url the caches have not seen.
+      revision += 1;
       queryClient.setQueryData(['log', log.id], log);
       void queryClient.invalidateQueries({ queryKey: ['logs'] });
     },
@@ -170,6 +194,7 @@ export function useRemovePhoto() {
       return logId;
     },
     onSuccess: (logId) => {
+      revision += 1;
       void queryClient.invalidateQueries({ queryKey: ['log', logId] });
       void queryClient.invalidateQueries({ queryKey: ['logs'] });
     },

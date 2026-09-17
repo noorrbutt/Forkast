@@ -5,6 +5,8 @@ import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 
 import { API_BASE_URL, api, getAccessToken } from '../lib/api';
+import { useAuthedImage } from '../lib/authedImage';
+import { appendFile } from '../lib/upload';
 import type { User } from '../lib/types';
 
 /** The account shape once the server has grown its avatar flag. */
@@ -47,7 +49,7 @@ export function avatarSource(token: string | null, version: number) {
  * "fall back to initials" and a 404 behind an Image is a blank circle.
  */
 export function useAvatarSource(present: boolean) {
-  return present ? avatarSource(getAccessToken(), revision) : undefined;
+  return useAuthedImage(present ? avatarSource(getAccessToken(), revision) : undefined);
 }
 
 /**
@@ -149,13 +151,11 @@ export function useSetAvatar() {
   return useMutation({
     mutationFn: async ({ uri, mimeType }: PickedAvatar) => {
       const form = new FormData();
-      // The cast is unavoidable: React Native accepts this object where the DOM
-      // types insist on a Blob, and there is no Blob for a file uri here.
-      form.append('file', {
+      await appendFile(form, 'file', {
         uri,
         name: `avatar.${mimeType.split('/')[1] ?? 'jpg'}`,
-        type: mimeType,
-      } as unknown as Blob);
+        mimeType,
+      });
 
       const response = await api.put<UserWithAvatar>('/me/avatar', form, {
         // Left to the runtime on purpose. Axios has to set the multipart
