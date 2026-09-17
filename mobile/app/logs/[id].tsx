@@ -641,7 +641,6 @@ export default function MealScreen() {
         onDismiss={() => setConfirmingDelete(false)}
         title="Delete this log?"
         message="It comes off your dashboard and your streak, and there is no undo."
-        tone="danger"
         actions={[
           {
             label: 'Delete this log',
@@ -659,7 +658,6 @@ export default function MealScreen() {
         onDismiss={() => setConfirmingPhotoRemoval(false)}
         title="Remove this photo?"
         message="The meal itself stays in your diary."
-        tone="danger"
         actions={[
           {
             label: 'Remove the photo',

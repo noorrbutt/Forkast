@@ -127,7 +127,6 @@ export function BurnDialog({ visible, onDismiss }: Props) {
       onDismiss={busy ? () => undefined : onDismiss}
       title="Burned today"
       message="Optional. Add it if you tracked a workout or a long walk, and it comes off your total."
-      icon="burn"
       actions={[
         {
           label: saved ? 'Update' : 'Save',

@@ -77,8 +77,6 @@ export function DeleteAccount() {
         onDismiss={close}
         title="Delete your account?"
         message="Every meal, streak and plan goes with it. This cannot be undone."
-        icon="trash"
-        tone="danger"
         actions={[
           {
             label: 'Delete for good',

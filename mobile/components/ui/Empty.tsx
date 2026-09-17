@@ -58,19 +58,16 @@ export function Empty({
         backgroundColor: colors.surface,
       }}
     >
+      {/* The glyph alone, with no disc under it. Section 10 bans a disc added
+          beneath a lone icon to make it look weightier, and this was the
+          clearest case of it in the app: a 56pt saffron circle carrying a 26pt
+          glyph. Muted rather than accent for the same reason the welcome screen
+          gave up its three coloured discs, since saffron is the colour that
+          means "you can press this" and the button below is what can be
+          pressed. */}
       {icon ? (
-        <View
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: radius.pill,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: colors.accentSoft,
-            marginBottom: spacing.xs,
-          }}
-        >
-          <Icon name={icon} size={26} color={colors.accent} />
+        <View style={{ marginBottom: spacing.xs }}>
+          <Icon name={icon} size={32} color={colors.muted} />
         </View>
       ) : (
         <Text style={{ fontSize: 30 }}>{emoji}</Text>

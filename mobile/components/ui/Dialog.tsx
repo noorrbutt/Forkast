@@ -3,7 +3,7 @@ import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { useTheme } from '../../theme';
 import { Button } from './Button';
-import { Icon, type IconName } from './Icon';
+import { type IconName } from './Icon';
 
 type DialogAction = {
   label: string;
@@ -20,9 +20,6 @@ type DialogProps = {
   title: string;
   /** One or two sentences. Longer copy belongs in children. */
   message?: string;
-  icon?: IconName;
-  /** Tints the icon disc and, for destructive dialogs, the confirm button. */
-  tone?: 'neutral' | 'danger';
   children?: ReactNode;
   /** Rendered bottom to top in importance: the first is the primary action. */
   actions: DialogAction[];
@@ -40,20 +37,24 @@ type DialogProps = {
  * Actions stack rather than sit in a row. A row forces every label to be one or
  * two words, which is how confirmations end up saying "OK" when they could say
  * what is about to happen.
+ *
+ * No icon above the title, and no tone. It used to draw a 52pt tinted disc with
+ * a glyph in it directly over the heading, which is two banned things at once:
+ * a disc added under a lone icon to give it presence, and an icon beside a
+ * heading. Section 10 draws the line at whether the thing is tapped or read, and
+ * a dialog title is read. What the dialog is about is carried by its words, and
+ * a destructive one is carried by the danger variant on the button that does the
+ * destroying, which is a control and may keep its trash glyph.
  */
 export function Dialog({
   visible,
   onDismiss,
   title,
   message,
-  icon,
-  tone = 'neutral',
   children,
   actions,
 }: DialogProps) {
   const { colors, radius, spacing, type } = useTheme();
-  const accentish = tone === 'danger' ? colors.danger : colors.accent;
-  const disc = tone === 'danger' ? colors.dangerSoft : colors.accentSoft;
 
   return (
     <Modal
@@ -93,20 +94,6 @@ export function Dialog({
           }}
         >
           <View style={{ alignItems: 'center', gap: spacing.md }}>
-            {icon ? (
-              <View
-                style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: radius.pill,
-                  backgroundColor: disc,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Icon name={icon} size={26} color={accentish} />
-              </View>
-            ) : null}
             <Text style={[type.title, { color: colors.text, textAlign: 'center' }]}>{title}</Text>
             {message ? (
               <Text style={[type.body, { color: colors.muted, textAlign: 'center' }]}>

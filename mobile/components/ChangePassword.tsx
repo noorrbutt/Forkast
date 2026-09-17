@@ -102,7 +102,6 @@ export function ChangePassword({ last = false }: { last?: boolean }) {
   return (
     <>
       <ListRow
-        icon="edit"
         label="Change password"
         hint={changed ? 'Password updated.' : undefined}
         onPress={() => setOpen(true)}
@@ -114,7 +113,6 @@ export function ChangePassword({ last = false }: { last?: boolean }) {
         onDismiss={cancel}
         title="Change your password"
         message="Pick something you have not used here before."
-        icon="edit"
         actions={[
           {
             label: 'Update password',
