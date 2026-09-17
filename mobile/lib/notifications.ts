@@ -30,13 +30,21 @@ type NotificationsModule = typeof import('expo-notifications');
  */
 
 /**
- * Expo Go cannot run this and must never be asked to.
+ * Expo Go cannot run this and must never be asked to. Neither can the browser.
  *
  * appOwnership is the check rather than executionEnvironment, for the same
  * reason the map seam uses it: StoreClient covers a development client too,
  * which would disable reminders in exactly the build that supports them.
+ *
+ * Web is excluded separately, and it is the less obvious half. appOwnership is
+ * null in a browser, so the Expo Go check alone said reminders were available
+ * there. They are not, and the failure was quiet in the worst way: the
+ * permission half of expo-notifications does work on web, so tapping the row
+ * raised a real browser permission prompt and flipped it to "On", while the
+ * scheduling half has no implementation at all. The user granted a permission
+ * and was promised an evening nudge that could never arrive.
  */
-export const REMINDERS_AVAILABLE = Constants.appOwnership !== 'expo';
+export const REMINDERS_AVAILABLE = Constants.appOwnership !== 'expo' && Platform.OS !== 'web';
 
 let cached: NotificationsModule | null = null;
 

@@ -1,4 +1,5 @@
-import { ActivityIndicator, Alert, Image, Pressable, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native';
 
 import {
   useRemovePhoto,
@@ -11,7 +12,7 @@ import { describeError } from '../lib/api';
 import { haptics } from '../lib/haptics';
 import { useTheme } from '../theme';
 import type { Uuid } from '../lib/types';
-import { Button, Icon, SectionLabel } from './ui';
+import { Button, Dialog, Icon, SectionLabel } from './ui';
 
 /** A meal that exists, so a picked photo goes to the server there and then. */
 type AttachedProps = {
@@ -58,6 +59,9 @@ export function MealPhoto(props: AttachedProps | HeldProps) {
 
   const busy = preparing || upload.isPending || remove.isPending;
 
+  /** Whether the "remove this photo" confirmation is on screen. */
+  const [confirming, setConfirming] = useState(false);
+
   const thumbnail = pending
     ? pending.photo && { uri: pending.photo.uri }
     : attached?.hasPhoto
@@ -100,21 +104,23 @@ export function MealPhoto(props: AttachedProps | HeldProps) {
       return;
     }
 
-    // Held in a const so the confirmation's callback keeps the narrowed id.
-    const logId = props.logId;
-    Alert.alert('Remove this photo?', 'The meal itself stays in your diary.', [
-      { text: 'Keep it', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => {
-          remove.mutate(logId, {
-            onSuccess: () => haptics.tap(),
-            onError: () => haptics.error(),
-          });
-        },
+    // A Dialog rather than Alert.alert, and not as a style preference.
+    // react-native-web ships Alert as a class with an empty static method, so
+    // on web this confirmation opened nothing, threw nothing and logged
+    // nothing: both the Remove button and tapping the photo simply did not
+    // work, and there was no other way to take a photo off a meal in a browser.
+    setConfirming(true);
+  };
+
+  const confirmRemove = () => {
+    if (props.logId === undefined) return;
+    remove.mutate(props.logId, {
+      onSuccess: () => {
+        haptics.tap();
+        setConfirming(false);
       },
-    ]);
+      onError: () => haptics.error(),
+    });
   };
 
   const error = upload.isError ? upload.error : remove.isError ? remove.error : null;
@@ -212,6 +218,28 @@ export function MealPhoto(props: AttachedProps | HeldProps) {
       {error ? (
         <Text style={[type.caption, { color: colors.danger }]}>{describeError(error)}</Text>
       ) : null}
+
+      <Dialog
+        visible={confirming}
+        onDismiss={() => !busy && setConfirming(false)}
+        title="Remove this photo?"
+        message="The meal itself stays in your diary."
+        actions={[
+          {
+            label: 'Remove',
+            variant: 'danger',
+            onPress: confirmRemove,
+            disabled: busy,
+            loading: remove.isPending,
+          },
+          {
+            label: 'Keep it',
+            variant: 'secondary',
+            onPress: () => setConfirming(false),
+            disabled: busy,
+          },
+        ]}
+      />
     </View>
   );
 }

@@ -1,4 +1,3 @@
-import Constants from 'expo-constants';
 import { useMemo } from 'react';
 import { Platform, Text, View } from 'react-native';
 
@@ -229,10 +228,15 @@ export function MapScreen() {
         </View>
       ) : null}
 
+      {/* Two different reasons the map is missing, and they need different
+          sentences. Naming Android and Expo Go to someone in a browser points
+          at a cause that has nothing to do with them. */}
       <Text style={[type.caption, { color: colors.muted }]}>
-        {MAPS_UNAVAILABLE
-          ? 'Grouped by area. The map needs a development build on Android, since Expo Go cannot draw one.'
-          : 'Grouped by area, with counts. Places without coordinates do not get a pin yet.'}
+        {!MAPS_UNAVAILABLE
+          ? 'Grouped by area, with counts. Places without coordinates do not get a pin yet.'
+          : Platform.OS === 'web'
+            ? 'Grouped by area. The map itself is native only, so it does not draw in a browser.'
+            : 'Grouped by area. The map needs a development build on Android, since Expo Go cannot draw one.'}
       </Text>
 
       {groups.map((group) => (

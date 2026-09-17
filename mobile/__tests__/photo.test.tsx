@@ -169,23 +169,41 @@ describe('with a photo already attached', () => {
   });
 
   it('confirms before removing, because there is no undo', () => {
-    const { getByText } = render(<MealPhoto logId={LOG_ID} hasPhoto />, { wrapper });
+    const { getByText, queryByText } = render(<MealPhoto logId={LOG_ID} hasPhoto />, { wrapper });
+
+    expect(queryByText('Remove this photo?')).toBeNull();
 
     fireEvent.press(getByText('Remove'));
 
-    expect(Alert.alert).toHaveBeenCalled();
+    expect(getByText('Remove this photo?')).toBeTruthy();
     // Not deleted on the strength of one tap.
     expect(mockedApi.delete).not.toHaveBeenCalled();
   });
 
-  it('deletes once the confirmation is accepted', async () => {
-    jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => {
-      const destructive = buttons?.find((b) => b.style === 'destructive');
-      destructive?.onPress?.();
-    });
+  /**
+   * The confirmation is a Dialog and must never go back to being Alert.alert.
+   *
+   * react-native-web ships Alert as a class whose alert method has an empty
+   * body, so the browser build opened nothing, threw nothing and logged
+   * nothing. Both the Remove button and tapping the photo simply did not work,
+   * and there was no other route to taking a photo off a meal on web.
+   */
+  it('confirms in the tree rather than through Alert, which does nothing on web', () => {
     const { getByText } = render(<MealPhoto logId={LOG_ID} hasPhoto />, { wrapper });
 
     fireEvent.press(getByText('Remove'));
+
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('deletes once the confirmation is accepted', async () => {
+    const { getByText, getAllByText } = render(<MealPhoto logId={LOG_ID} hasPhoto />, { wrapper });
+
+    fireEvent.press(getByText('Remove'));
+    // Two now read "Remove": the button that opened the dialog and the one
+    // inside it. The dialog's is the last to mount.
+    const confirms = getAllByText('Remove');
+    fireEvent.press(confirms[confirms.length - 1]);
 
     await waitFor(() => expect(mockedApi.delete).toHaveBeenCalledWith(`/logs/${LOG_ID}/photo`));
   });

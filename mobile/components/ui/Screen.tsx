@@ -98,8 +98,15 @@ export function Screen({
                 onPress={onBack}
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
-                hitSlop={12}
-                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                // A real box, not hitSlop, which react-native-web drops.
+                style={({ pressed }) => ({
+                  opacity: pressed ? 0.6 : 1,
+                  minWidth: 44,
+                  minHeight: 44,
+                  marginLeft: -spacing.md,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                })}
               >
                 <Text style={[type.title, { color: colors.accent }]}>‹</Text>
               </Pressable>

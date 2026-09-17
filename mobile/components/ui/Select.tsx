@@ -142,8 +142,14 @@ export function Select({
                 onPress={close}
                 accessibilityRole="button"
                 accessibilityLabel="Close"
-                hitSlop={14}
-                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                // A real box, not hitSlop, which react-native-web drops.
+                style={({ pressed }) => ({
+                  opacity: pressed ? 0.6 : 1,
+                  minWidth: 44,
+                  minHeight: 44,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                })}
               >
                 <Icon name="close" size={24} color={colors.text} />
               </Pressable>
@@ -177,7 +183,14 @@ export function Select({
                     onPress={() => setQuery('')}
                     accessibilityRole="button"
                     accessibilityLabel="Clear search"
-                    hitSlop={12}
+                    // A 16pt icon with no box at all in a browser, which was
+                    // the smallest target in the app.
+                    style={{
+                      minWidth: 44,
+                      minHeight: 44,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
                   >
                     <Icon name="close" size={16} color={colors.muted} />
                   </Pressable>

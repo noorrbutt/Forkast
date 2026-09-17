@@ -455,6 +455,31 @@ function RemindersSection() {
   const reminders = useReminders();
   const on = reminders.enabled === true;
 
+  /**
+   * Where reminders cannot work, say so instead of offering a switch.
+   *
+   * This guard was written and then never wired up: the flag was imported into
+   * this file and never read, so Expo Go and the browser both showed a live
+   * Reminders row. Tapping it in Expo Go did nothing and the note below then
+   * blamed the user's device settings, which was simply untrue. The row is not
+   * hidden, because a feature that silently disappears reads as one that was
+   * removed; it is shown as present and explained.
+   */
+  if (!REMINDERS_AVAILABLE) {
+    return (
+      <View style={{ gap: spacing.sm }}>
+        <ListGroup title="Notifications">
+          <ListRow
+            label="Reminders"
+            value="Not here"
+            hint="Reminders need the installed app. Expo Go and the browser cannot schedule them."
+            last
+          />
+        </ListGroup>
+      </View>
+    );
+  }
+
   return (
     <View style={{ gap: spacing.sm }}>
       <ListGroup title="Notifications">
