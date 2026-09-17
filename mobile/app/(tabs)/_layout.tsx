@@ -161,7 +161,11 @@ export function FloatingTabBar({ state, descriptors, navigation, insets }: Botto
                 justifyContent: 'center',
                 gap: 2,
                 borderRadius: radius.pill,
-                backgroundColor: focused ? colors.accentSoft : 'transparent',
+                // No fill on the selected tab. accentSoft over the frosted bar
+                // composites to 1.182:1 on light and 1.338:1 on dark, so it was
+                // a shape nobody could see, and selection is already carried
+                // twice over: the label turns accent and the glyph crossfades
+                // from its outline cut to its filled one.
                 opacity: pressed ? 0.7 : 1,
               })}
             >

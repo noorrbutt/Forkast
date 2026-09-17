@@ -50,6 +50,17 @@ export type Palette = {
    */
   danger: string;
   dangerSoft: string;
+  /**
+   * The unfilled part of a meter.
+   *
+   * Not `surfaceAlt`, which is what the ring used to use. A meter sits on the
+   * hero wash rather than on the page, and against the wash `surfaceAlt`
+   * measured 1.138:1, so the part of the ring that had not been filled was not
+   * on screen and the shape stopped reading as part against whole. This is the
+   * one grey chosen to be seen against the wash while still leaving 3:1 to the
+   * fills that run over it.
+   */
+  meterTrack: string;
   /** Solid colour painted behind a BlurView so the layer never reads as a hole. */
   blurFallback: string;
   /** Tint passed to expo-blur. */
@@ -98,7 +109,12 @@ export const palettes: Record<ThemeName, Palette> = {
     successSoft: 'rgba(135, 175, 106, 0.18)',
     danger: '#DF8F77',
     dangerSoft: 'rgba(223, 143, 119, 0.18)',
-    blurFallback: 'rgba(8, 8, 11, 0.72)',
+    meterTrack: '#4A443E',
+    // Derived from this theme's own surface rather than hand picked. The old
+    // pair composited to 1.004:1 against the page in BOTH themes, so the
+    // frosted header and the floating tab bar, which are on every screen in
+    // the app, had no visible edge and read as holes.
+    blurFallback: 'rgba(43, 41, 39, 0.85)',
     blurTint: 'dark',
     scrim: 'rgba(0, 0, 0, 0.66)',
   },
@@ -120,7 +136,8 @@ export const palettes: Record<ThemeName, Palette> = {
     successSoft: 'rgba(78, 106, 57, 0.14)',
     danger: '#A54427',
     dangerSoft: 'rgba(165, 68, 39, 0.12)',
-    blurFallback: 'rgba(242, 241, 235, 0.72)',
+    meterTrack: '#C7BBA8',
+    blurFallback: 'rgba(253, 251, 250, 0.85)',
     blurTint: 'light',
     scrim: 'rgba(20, 20, 15, 0.42)',
   },
@@ -191,7 +208,13 @@ export const split: Record<ThemeName, { junk: string; clean: string }> = {
  */
 export const heroWash: Record<ThemeName, string[]> = {
   dark: ['#2A2018', '#1A1512', '#0A0908'],
-  light: ['#FBEEDC', '#F8F2EA', '#F4F1EE'],
+  // The light stops go DOWN in value, not up. The page already sits at L 0.96,
+  // so there is no headroom upward and the previous first stop, #FBEEDC,
+  // measured 1.016:1 against it: the field the guide calls the source of the
+  // app's warmth was specified, shipped, and not on screen. A field of colour
+  // on near-white stock is made by adding ink. The last stop is still exactly
+  // bg, so the wash dissolves rather than ending on a line.
+  light: ['#E9DDCD', '#EEE8E1', '#F4F1EE'],
 };
 
 /**

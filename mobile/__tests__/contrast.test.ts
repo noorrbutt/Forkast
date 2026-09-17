@@ -15,14 +15,59 @@
  * rule the secondary button was failing.
  */
 
-import { palettes, series, type Palette, type ThemeName } from '../theme/tokens';
+import { heroWash, palettes, series, type Palette, type ThemeName } from '../theme/tokens';
+
+/**
+ * A colour as channels, from either notation the palette uses.
+ *
+ * It used to accept six digit hex and throw on anything else, which quietly
+ * put every translucent token outside the instrument: `blurFallback`,
+ * `accentSoft`, `successSoft`, `dangerSoft` and `scrim` were all unmeasurable,
+ * and so were `heroWash` and `split`, which were never imported at all. That is
+ * not a gap in coverage, it is the same failure this file's docblock opens
+ * with, one layer down. Four surfaces that the app draws on every screen were
+ * sitting between 1.00:1 and 1.18:1 against what was behind them, and the suite
+ * was green throughout, because it could not see any of them.
+ */
+function channels(colour: string): { rgb: [number, number, number]; alpha: number } {
+  const trimmed = colour.trim();
+  const hex = /^#([0-9a-f]{6})$/i.exec(trimmed);
+  if (hex) {
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16));
+    return { rgb: [r, g, b], alpha: 1 };
+  }
+  const rgba = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(
+    trimmed,
+  );
+  if (rgba) {
+    return {
+      rgb: [Number(rgba[1]), Number(rgba[2]), Number(rgba[3])],
+      alpha: rgba[4] === undefined ? 1 : Number(rgba[4]),
+    };
+  }
+  throw new Error(`not a colour this can measure: ${colour}`);
+}
+
+/**
+ * What a translucent colour actually becomes once it is painted.
+ *
+ * A reader sees the composite, never the token, so measuring the token alone
+ * says nothing. Everything opaque passes straight through.
+ */
+function over(colour: string, backdrop: string): string {
+  const top = channels(colour);
+  if (top.alpha >= 1) return colour;
+  const under = channels(backdrop);
+  const mixed = top.rgb.map((c, i) => Math.round(c * top.alpha + under.rgb[i] * (1 - top.alpha)));
+  return `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`;
+}
 
 /** WCAG 2.1 relative luminance. */
-function luminance(hex: string): number {
-  const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) throw new Error(`not a six digit hex colour: ${hex}`);
-  const channels = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255);
-  const [r, g, b] = channels.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+function luminance(colour: string): number {
+  const { rgb } = channels(colour);
+  const [r, g, b] = rgb
+    .map((c) => c / 255)
+    .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
@@ -186,5 +231,96 @@ describe('the flatness this palette was rebuilt to fix', () => {
     // Light themes can lift a card with a shadow. Dark themes cannot, so the
     // grey ramp has to do the whole job there.
     expect(ratio(palettes.dark.surface, palettes.dark.bg)).toBeGreaterThanOrEqual(1.3);
+  });
+});
+
+/**
+ * The layers that were decided, shipped, and not on screen.
+ *
+ * Every one of these was specified deliberately in tokens.ts, argued for at
+ * length in a comment, and then drawn at a magnitude no eye can resolve. None
+ * of them could fail a test, because the measurement above only accepted six
+ * digit hex and two of the four are translucent while a third was never
+ * imported. They are asserted here so the next person to touch a value finds
+ * out from this file rather than from a screenshot.
+ */
+describe('the layers a reader is supposed to be able to see', () => {
+  /** A field of colour that is not at least this far from the page is not a field. */
+  const FIELD = 1.15;
+  /** A bar floating over content needs an edge, even a soft one. */
+  const LAYER = 1.05;
+
+  it('draws the hero wash as something visible against its own page', () => {
+    // The light wash shipped at 1.016:1, which is the page. Section 6 calls
+    // this field the source of the app's warmth, so in the default theme the
+    // app had none. The fix goes down in value, not up: on near white stock
+    // there is no headroom upward.
+    for (const theme of THEMES) {
+      const [first] = heroWash[theme];
+      expect(ratio(first, palettes[theme].bg)).toBeGreaterThanOrEqual(FIELD);
+    }
+  });
+
+  it('ends the wash exactly on the page, so it dissolves rather than stopping', () => {
+    for (const theme of THEMES) {
+      const stops = heroWash[theme];
+      expect(stops[stops.length - 1].toLowerCase()).toBe(palettes[theme].bg.toLowerCase());
+    }
+  });
+
+  it('keeps the wash monotonic, so the field reads as light falling one way', () => {
+    for (const theme of THEMES) {
+      const towardsPage = heroWash[theme].map((stop) => ratio(stop, palettes[theme].bg));
+      for (let i = 1; i < towardsPage.length; i += 1) {
+        expect(towardsPage[i]).toBeLessThanOrEqual(towardsPage[i - 1]);
+      }
+    }
+  });
+
+  it('gives the frosted header and tab bar an edge against the page', () => {
+    // Both composited to 1.004:1, in both themes, on every screen in the app.
+    for (const theme of THEMES) {
+      const p = palettes[theme];
+      expect(ratio(over(p.blurFallback, p.bg), p.bg)).toBeGreaterThanOrEqual(LAYER);
+    }
+  });
+
+  it('shows the unfilled part of the meter against the wash it sits on', () => {
+    // The ring used surfaceAlt, which measured 1.138:1 against the wash, so the
+    // part of the arc that had not been filled was not on screen and the shape
+    // stopped saying part against whole.
+    for (const theme of THEMES) {
+      expect(ratio(palettes[theme].meterTrack, heroWash[theme][0])).toBeGreaterThanOrEqual(1.35);
+    }
+  });
+
+  it('keeps both meter fills separable from the track they run over', () => {
+    // Whatever the day is doing, the filled arc has to be told from the unfilled
+    // one, so this is the 3:1 non-text boundary rather than a field threshold.
+    for (const theme of THEMES) {
+      const p = palettes[theme];
+      expect(ratio(p.success, p.meterTrack)).toBeGreaterThanOrEqual(SHAPE);
+      expect(ratio(p.danger, p.meterTrack)).toBeGreaterThanOrEqual(SHAPE);
+    }
+  });
+
+  it('keeps text readable on the wash, which is what caps how far it can go', () => {
+    for (const theme of THEMES) {
+      const p = palettes[theme];
+      const field = heroWash[theme][0];
+      expect(ratio(p.text, field)).toBeGreaterThanOrEqual(TEXT);
+      expect(ratio(p.muted, field)).toBeGreaterThanOrEqual(TEXT);
+    }
+  });
+
+  it('can measure a translucent token at all, which is the point of the rewrite', () => {
+    // A guard on the instrument rather than on the palette. If someone
+    // simplifies the parser back to hex only, these throw instead of silently
+    // skipping every layer above.
+    for (const theme of THEMES) {
+      const p = palettes[theme];
+      expect(() => ratio(over(p.accentSoft, p.surface), p.surface)).not.toThrow();
+      expect(() => ratio(over(p.scrim, p.bg), p.bg)).not.toThrow();
+    }
   });
 });
