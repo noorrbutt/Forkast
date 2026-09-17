@@ -104,10 +104,19 @@ export default function StreaksScreen() {
             <Hero
               value={String(current)}
               caption={current === 1 ? 'day without junk' : 'days without junk'}
-              // Ink rather than accent once the run is broken, so a zero reads
-              // as a reading rather than as a thing to celebrate. The number
-              // still carries the meaning on its own.
-              color={current > 0 ? colors.accent : colors.text}
+              /**
+               * Sage while the run is live, ink once it is broken.
+               *
+               * It used to be saffron, which is wrong twice over: saffron is the
+               * one action colour and a figure wearing it looks tappable, and
+               * the palette's own note on sage names "a live streak" as the
+               * example of what it is for. The same fact was being drawn in two
+               * colours depending on which file you were in.
+               *
+               * Zero stays ink, so it reads as a reading rather than as a thing
+               * to celebrate. The number still carries the meaning on its own.
+               */
+              color={current > 0 ? colors.success : colors.text}
             />
           </View>
 

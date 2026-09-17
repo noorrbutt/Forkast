@@ -3,7 +3,6 @@ import { View } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 
 import { useTheme } from '../../theme';
-import { series } from '../../theme/tokens';
 
 type RingProps = {
   /** How much of the target has been used. */
@@ -36,7 +35,7 @@ const THICKNESS = 14;
  * to be carried by colour alone.
  */
 export function Ring({ value, max, size = 220, children }: RingProps) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   const radius = (size - THICKNESS) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -50,12 +49,27 @@ export function Ring({ value, max, size = 220, children }: RingProps) {
   const filled = Math.max(0, Math.min(1, value / scale));
   const targetAt = hasTarget ? max / scale : 1;
 
-  // Data, not brand. Saffron is the one action colour and stays on buttons and
-  // active states; a ring that borrows it makes a reading look like a control
-  // and leaves the screen with nothing that is unambiguously tappable. The
-  // reference dashboards do exactly this split, colouring the ring and the bars
-  // while the primary button stays the brand's own colour.
-  const fill = over ? colors.danger : (isDark ? series.dark : series.light)[0];
+  /**
+   * Status, not series, and not brand either.
+   *
+   * Still not saffron: that is the one action colour, and a meter borrowing it
+   * makes a reading look like a control and leaves the screen with nothing
+   * unambiguously tappable.
+   *
+   * It used to take series[0], a blue, for the under target half while the over
+   * target half took danger. That was one binary drawn in two vocabularies, and
+   * it had a worse consequence than inconsistency: the screen was more colourful
+   * when the day went badly than when it went well. Doing well was grey.
+   *
+   * Inside a target and outside it are two readings of one status, so both
+   * halves wear the status palette. Sage for inside, terracotta for over, which
+   * is also the meaning the user assigns those two colours everywhere else.
+   *
+   * Never split.clean, though it is the same hue family. That token means "food
+   * that was not junk" and this meter asks a different question; the same sage
+   * meaning two things ten points apart in one scroll is worse than no sage.
+   */
+  const fill = over ? colors.danger : colors.success;
 
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>

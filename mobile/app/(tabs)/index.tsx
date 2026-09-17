@@ -10,6 +10,7 @@ import {
   Empty,
   ErrorState,
   Hero,
+  HeroWash,
   ListGroup,
   ListRow,
   Loading,
@@ -215,67 +216,87 @@ function TodayHero({
   );
 
   return (
-    <View
-      style={{
-        alignItems: 'center',
-        gap: spacing.xl,
-        // 48 above and below. Nothing else on this screen gets more than 32.
-        paddingTop: spacing.xxl,
-        paddingBottom: spacing.xxxl,
-      }}
-    >
-      {/* No target means no ring: a meter with no limit is a circle with
-          nothing to fill, so the number stands on its own instead. */}
-      {reading.target === null ? (
-        figure
-      ) : (
-        <Ring value={today.net} max={reading.target} size={size}>
-          {figure}
-        </Ring>
-      )}
+    /**
+     * The warm field the rest of the app already had and this screen did not.
+     *
+     * HeroWash exists precisely for "the one number a screen leads with", and it
+     * was used on the welcome screen and on a meal with no photo while the
+     * dashboard, the screen with the largest hero in the app and the first one
+     * anyone opens, sat on flat background. That is most of why the screen read
+     * as grey: above the fold it painted thirteen things and exactly one of them
+     * carried any colour at all.
+     *
+     * pullUp is off here. The wash normally reclaims the gutter above it, which
+     * is right under a header; this screen has no header, so the only thing
+     * above is the safe area inset and pulling up would put the ring under the
+     * status bar on a notched phone.
+     *
+     * The wash brings its own vertical padding, so the 48 that used to sit above
+     * the hero is gone and only the 48 below it remains. Two paddings stacked
+     * would push the chart off the first screenful.
+     */
+    <HeroWash pullUp={false}>
+      <View
+        style={{
+          alignItems: 'center',
+          gap: spacing.xl,
+          // 48 below. Nothing else on this screen gets more than 32.
+          paddingBottom: spacing.xxxl,
+        }}
+      >
+        {/* No target means no ring: a meter with no limit is a circle with
+            nothing to fill, so the number stands on its own instead. */}
+        {reading.target === null ? (
+          figure
+        ) : (
+          <Ring value={today.net} max={reading.target} size={size}>
+            {figure}
+          </Ring>
+        )}
 
-      <View style={{ alignItems: 'center', gap: spacing.xs }}>
-        {reading.status ? (
-          <Text
-            style={[type.title, { color: reading.over ? colors.danger : colors.text }]}
-          >
-            {reading.status}
+        <View style={{ alignItems: 'center', gap: spacing.xs }}>
+          {reading.status ? (
+            <Text
+              style={[type.title, { color: reading.over ? colors.danger : colors.text }]}
+            >
+              {reading.status}
+            </Text>
+          ) : null}
+          <Text style={[type.caption, { color: colors.muted, textAlign: 'center' }]}>
+            {reading.measures}
           </Text>
-        ) : null}
-        <Text style={[type.caption, { color: colors.muted, textAlign: 'center' }]}>
-          {reading.measures}
-        </Text>
-      </View>
+        </View>
 
-      {/* Centred, because everything above it in this block is: the ring, the
-          status line and the caption all sit on the column's centre line, and a
-          left aligned button under them broke that axis at the one point the
-          eye is already travelling down it. */}
-      {reading.target === null ? (
-        <Button
-          label="Set a daily target"
-          variant="secondary"
-          align="center"
-          onPress={onSetTarget}
-        />
-      ) : null}
-
-      <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
-        <Supporting value={formatNumber(today.consumed)} caption="kcal eaten" />
-        <View
-          style={{
-            width: layout.hairline,
-            alignSelf: 'stretch',
-            backgroundColor: colors.border,
-          }}
-        />
-        <Supporting
-            value={formatNumber(today.burned)}
-            caption="kcal burned"
-            onPress={onEditBurn}
+        {/* Centred, because everything above it in this block is: the ring, the
+            status line and the caption all sit on the column's centre line, and a
+            left aligned button under them broke that axis at the one point the
+            eye is already travelling down it. */}
+        {reading.target === null ? (
+          <Button
+            label="Set a daily target"
+            variant="secondary"
+            align="center"
+            onPress={onSetTarget}
           />
+        ) : null}
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+          <Supporting value={formatNumber(today.consumed)} caption="kcal eaten" />
+          <View
+            style={{
+              width: layout.hairline,
+              alignSelf: 'stretch',
+              backgroundColor: colors.border,
+            }}
+          />
+          <Supporting
+              value={formatNumber(today.burned)}
+              caption="kcal burned"
+              onPress={onEditBurn}
+            />
+        </View>
       </View>
-    </View>
+    </HeroWash>
   );
 }
 
@@ -304,6 +325,17 @@ function monthName(month: string): string {
   const index = Number(month.split('-')[1]) - 1;
   return MONTHS[index] ?? month;
 }
+
+/**
+ * Whether a movement was good, where the app is entitled to an opinion.
+ *
+ * Only the junk ratio gets one. Calories and meals genuinely have no direction
+ * that counts as progress: someone bulking wants the number up, someone cutting
+ * wants it down, and this card does not know which. Eating a smaller share of
+ * junk is the one movement Forkast's own model calls an improvement, which is
+ * why the whole chart is split by it.
+ */
+type Verdict = 'good' | 'bad' | 'level' | 'none';
 
 /**
  * How a number moved, with no verdict attached.
@@ -358,11 +390,16 @@ function TrendCard({ trend }: { trend: ReturnType<typeof useTrend> }) {
   // nobody made. Nothing logged means nothing to compare, and it says so.
   const comparable = before.meals_logged > 0;
 
-  const rows = [
+  // The same rounded points the sentence is built from, so the colour and the
+  // words can never disagree about which way the month went.
+  const junkPoints = Math.round(now.junk_ratio * 100) - Math.round(before.junk_ratio * 100);
+
+  const rows: { label: string; value: string; change: string; verdict: Verdict }[] = [
     {
       label: 'Calories',
       value: formatNumber(now.total_calories),
       change: describeChange(data.change.total_calories, 'kcal', lastName),
+      verdict: 'none',
     },
     {
       label: 'Meals',
@@ -372,17 +409,15 @@ function TrendCard({ trend }: { trend: ReturnType<typeof useTrend> }) {
         Math.abs(data.change.meals_logged) === 1 ? 'meal' : 'meals',
         lastName
       ),
+      verdict: 'none',
     },
     {
       label: 'Junk ratio',
       value: formatRatio(now.junk_ratio),
       // Points taken from the two percentages that actually get printed, so the
       // direction can never disagree with the number sitting beside it.
-      change: describeChange(
-        Math.round(now.junk_ratio * 100) - Math.round(before.junk_ratio * 100),
-        'points',
-        lastName
-      ),
+      change: describeChange(junkPoints, 'points', lastName),
+      verdict: junkPoints === 0 ? 'level' : junkPoints < 0 ? 'good' : 'bad',
     },
   ];
 
@@ -409,8 +444,28 @@ function TrendCard({ trend }: { trend: ReturnType<typeof useTrend> }) {
               >
                 <View style={{ flex: 1, gap: spacing.xs }}>
                   <Text style={[type.body, { color: colors.text }]}>{row.label}</Text>
+                  {/* Coloured only where there is a verdict to carry, which is
+                      the junk ratio alone. The words already say "Up" or
+                      "Down", so the colour is a second reading of the same
+                      fact rather than the only one: nothing here is carried by
+                      colour by itself. The value beside it stays ink on
+                      purpose, so one row never says the same thing twice. */}
                   {comparable ? (
-                    <Text style={[type.caption, { color: colors.muted }]}>{row.change}</Text>
+                    <Text
+                      style={[
+                        type.caption,
+                        {
+                          color:
+                            row.verdict === 'good'
+                              ? colors.success
+                              : row.verdict === 'bad'
+                                ? colors.danger
+                                : colors.muted,
+                        },
+                      ]}
+                    >
+                      {row.change}
+                    </Text>
                   ) : null}
                 </View>
                 {/* Right aligned so three figures in a column can be compared. */}

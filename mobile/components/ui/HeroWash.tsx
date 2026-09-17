@@ -9,6 +9,17 @@ type HeroWashProps = {
   children: ReactNode;
   /** Bleeds past the screen gutter so the colour reaches the edges. */
   bleed?: number;
+  /**
+   * Whether to pull up into the space above, as well as out to the sides.
+   *
+   * On a screen with a header there is a header's worth of padding to reclaim,
+   * and the wash should start under it rather than below it. On a screen
+   * without one there is only the safe area inset, so pulling up puts the wash
+   * and whatever sits on it into the status bar. The dashboard is the second
+   * kind, and it is the only screen where this matters, which is why it is a
+   * prop rather than a guess made inside here.
+   */
+  pullUp?: boolean;
 };
 
 /**
@@ -29,11 +40,11 @@ type HeroWashProps = {
  *
  * One per screen, under the hero only. A second one would make both meaningless.
  */
-export function HeroWash({ children, bleed = 24 }: HeroWashProps) {
+export function HeroWash({ children, bleed = 24, pullUp = true }: HeroWashProps) {
   const { spacing, isDark } = useTheme();
 
   return (
-    <View style={{ marginHorizontal: -bleed, marginTop: -bleed }}>
+    <View style={{ marginHorizontal: -bleed, marginTop: pullUp ? -bleed : 0 }}>
       <LinearGradient
         colors={(isDark ? heroWash.dark : heroWash.light) as [string, string, ...string[]]}
         // Off axis rather than straight down, so the light has a direction and
@@ -43,7 +54,9 @@ export function HeroWash({ children, bleed = 24 }: HeroWashProps) {
         locations={[0, 0.55, 1]}
         style={{
           paddingHorizontal: bleed,
-          paddingTop: bleed + spacing.lg,
+          // The reclaimed margin is paid back as padding when it was taken, so
+          // the content sits where it would have without the wash.
+          paddingTop: (pullUp ? bleed : 0) + spacing.lg,
           paddingBottom: spacing.xxl,
         }}
       >

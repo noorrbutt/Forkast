@@ -2,7 +2,6 @@ import { Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { formatNumber } from '../../lib/format';
 import { useTheme } from '../../theme';
-import { series } from '../../theme/tokens';
 import { Icon } from './Icon';
 
 type ProgressProps = {
@@ -45,9 +44,9 @@ const MARKER_WIDTH = 2;
  * someone who cannot pick red out from amber.
  */
 export function Progress({ value, max, unit = 'kcal', label, caption, style }: ProgressProps) {
-  const { colors, isDark, radius, spacing, type } = useTheme();
+  const { colors, radius, spacing, type } = useTheme();
 
-  // A zero target cannot be stored and dividing by one here would hand yoga a
+  // Zero is a storable target now, and dividing by it here would hand yoga a
   // NaN, so anything that is not a positive number reads as no target at all.
   const target = max !== null && Number.isFinite(max) && max > 0 ? max : null;
   const used = Number.isFinite(value) ? value : 0;
@@ -106,8 +105,11 @@ export function Progress({ value, max, unit = 'kcal', label, caption, style }: P
           style={{
             flex: reached,
             minWidth: used > 0 ? MIN_FILL : 0,
-            // Data, not brand. Saffron is reserved for actions and active states.
-            backgroundColor: (isDark ? series.dark : series.light)[0],
+            // The same status colour the ring uses, for the same reason: this
+            // draws the identical "inside your target" state, and one state
+            // drawn two ways is how a product stops meaning anything. Still
+            // never saffron, which is reserved for actions.
+            backgroundColor: colors.success,
           }}
         />
         {over ? <View style={{ width: MARKER_WIDTH, backgroundColor: colors.bg }} /> : null}

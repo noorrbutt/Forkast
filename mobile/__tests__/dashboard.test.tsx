@@ -46,6 +46,7 @@ import { Card, Icon, ListGroup } from '../components/ui';
 import { AuthProvider } from '../hooks/useAuth';
 import { api, hydrateTokens } from '../lib/api';
 import { ThemeProvider, palettes, split, type } from '../theme';
+import { series } from '../theme/tokens';
 import type { Dashboard, Today } from '../lib/types';
 
 const mockedApi = api as unknown as { get: jest.Mock; put: jest.Mock; delete: jest.Mock };
@@ -433,5 +434,122 @@ describe('nothing logged yet', () => {
     // not a hole to plug with a ring reading zero.
     expect(textSizes(screen).filter((size) => size >= 44)).toHaveLength(0);
     expect(screen.getByText('Log your first meal')).toBeTruthy();
+  });
+});
+
+describe('colour on the dashboard', () => {
+  /**
+   * The screen was 87 percent greyscale, and worse than that above the fold:
+   * thirteen painted roles in the hero block and exactly one of them carried any
+   * chroma at all.
+   *
+   * The deeper fault was which one. The ring took a blue series colour inside
+   * the target and a terracotta status colour past it, so the only two
+   * elements that ever gained colour were the ones announcing a bad day. Doing
+   * well was drawn entirely in grey, on a screen whose whole job is telling you
+   * how today is going.
+   */
+  const fillsIn = (node: unknown): string[] => {
+    const found: string[] = [];
+    const walk = (n: unknown) => {
+      if (!n || typeof n !== 'object') return;
+      if (Array.isArray(n)) return n.forEach(walk);
+      const node = n as { props?: Record<string, unknown>; children?: unknown[] };
+      const style = flat(node.props?.style) as { backgroundColor?: unknown };
+      if (typeof style?.backgroundColor === 'string') found.push(style.backgroundColor);
+      // The ring is SVG, so its colour is a stroke rather than a background,
+      // and the wash is a gradient, so its colours are an array of stops.
+      // react-native-svg does not keep the stroke as a hex string. It
+      // processes it to an ARGB integer wrapped in { type, payload }, so
+      // reading it as a string silently finds nothing and the test passes for
+      // the wrong reason.
+      const stroke = node.props?.stroke as unknown;
+      if (typeof stroke === 'string') found.push(stroke);
+      if (stroke && typeof stroke === 'object' && 'payload' in stroke) {
+        const argb = (stroke as { payload?: unknown }).payload;
+        if (typeof argb === 'number') {
+          found.push(`#${(argb & 0xffffff).toString(16).padStart(6, '0')}`);
+        }
+      }
+      const colors = node.props?.colors;
+      if (Array.isArray(colors)) {
+        for (const stop of colors) if (typeof stop === 'string') found.push(stop);
+      }
+      node.children?.forEach(walk);
+    };
+    walk(node);
+    // A processed colour can come back as a number rather than a hex string, so
+    // anything that is not a string is dropped rather than assumed.
+    return found.filter((value) => typeof value === 'string').map((value) => value.toLowerCase());
+  };
+
+
+
+
+
+  it('never paints the meter in a data series colour', async () => {
+    // series[0] is the only cold hue in the whole token file and it is named by
+    // none of the rules the palette is built on. A meter is a status.
+    const screen = await open(UNDER);
+    const painted = fillsIn(screen.toJSON());
+
+    for (const theme of ['dark', 'light'] as const) {
+      expect(painted).not.toContain(series[theme][0].toLowerCase());
+    }
+  });
+
+  it('draws a day inside its target in the positive colour', async () => {
+    const screen = await open(UNDER);
+    const painted = fillsIn(screen.toJSON());
+    const theme = painted.includes(palettes.dark.bg.toLowerCase()) ? 'dark' : 'light';
+
+    expect(painted).toContain(palettes[theme].success.toLowerCase());
+  });
+
+  it('does not save its only colour for a day that went badly', async () => {
+    // The regression this guards is subtle: it would still "have colour", just
+    // only ever on the bad branch. Under target has to be as coloured as over.
+    const under = fillsIn((await open(UNDER)).toJSON());
+    const over = fillsIn((await open(OVER)).toJSON());
+    const theme = under.includes(palettes.dark.bg.toLowerCase()) ? 'dark' : 'light';
+    const grey = new Set(
+      [
+        palettes[theme].bg,
+        palettes[theme].surface,
+        palettes[theme].surfaceAlt,
+        palettes[theme].border,
+        palettes[theme].outline,
+      ].map((value) => value.toLowerCase()),
+    );
+
+    const chromaUnder = under.filter((value) => !grey.has(value)).length;
+    const chromaOver = over.filter((value) => !grey.has(value)).length;
+
+    expect(chromaUnder).toBeGreaterThan(0);
+    expect(chromaUnder).toBeGreaterThanOrEqual(chromaOver - 1);
+  });
+
+  it('puts the warm field under the hero, like every other hero in the app', async () => {
+    // heroWash is where the design language gets its warmth from, and the
+    // dashboard, the screen with the largest hero and the first one anyone
+    // opens, was the only hero screen not using it.
+    //
+    // Asserted by the presence of the gradient rather than by its stops: the
+    // native adapter processes `colors` into numbers, so matching hex here
+    // would be matching something the renderer no longer holds.
+    const screen = await open(UNDER);
+    const types: string[] = [];
+    const walk = (n: unknown) => {
+      if (!n || typeof n !== 'object') return;
+      if (Array.isArray(n)) return n.forEach(walk);
+      const node = n as { type?: unknown; children?: unknown[] };
+      if (typeof node.type === 'string') types.push(node.type);
+      node.children?.forEach(walk);
+    };
+    walk(screen.toJSON());
+
+    expect(types.some((name) => name.includes('LinearGradient'))).toBe(true);
+    // One per screen. Two washes make both meaningless.
+    expect(types.filter((name) => name.includes('LinearGradient'))).toHaveLength(1);
   });
 });

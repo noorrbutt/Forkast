@@ -305,9 +305,10 @@ Every colour does exactly one job. Tokens only, never a literal hex in a screen.
 | Structure | `bg`, `surface`, `surfaceAlt`, `border` | A solved ramp; each step clears a measured floor against the one below |
 | Control boundary | `outline` | 3:1 or better against `surface` and `surfaceAlt` |
 | Brand and primary action | `accent`, `accentFill`, `accentInk` | Two values, one per theme, because one hex cannot be legible on both. **Actions and active states only** |
-| Data | `series` | Three validated slots, fixed order. The ring, the bars, the chart |
-| Positive state | `success` | Reserved. Never a series colour |
-| Attention state | `danger` | Reserved. Never a series colour |
+| Data | `series` | Three validated slots, fixed order. Charts |
+| Junk and not junk | `split.junk`, `split.clean` | The two halves of a day's calories. Tuned to separate under red-green colour blindness, so always paired with a second cue |
+| Positive state | `success` | Reserved. Never a series colour. Legal on a status meter, see below |
+| Attention state | `danger` | Reserved. Never a series colour. Legal on a status meter, see below |
 | Inactive | `disabledFill`, `disabledInk` | A different fill, never a faded copy of the enabled one |
 
 ### Brand is not data
@@ -319,8 +320,28 @@ Every colour does exactly one job. Tokens only, never a literal hex in a screen.
 - **MUST** Data wears `series`. Buttons, the active tab and selection wear
   `accent`. The reference dashboards do exactly this: a coloured ring and
   coloured bars above a primary button in the brand's own colour.
-- Going over target is the exception, and it wears `danger`, because that is a
-  status rather than a series.
+
+### A meter is a status, not a series
+
+The ring is the exception, and both of its halves are. It answers one question,
+"am I inside my target", and the two answers are two readings of one status
+rather than two categories of anything.
+
+- **MUST** A meter wears `success` inside its limit and `danger` past it.
+- **MUST NOT** Draw one half of a status in the status palette and the other
+  half in `series`. That was the shipped bug: `danger` over target and a blue
+  `series[0]` under it, which meant the screen was **more colourful when the day
+  went badly than when it went well**, and doing well was drawn entirely in
+  grey. A screen whose only colour is failure is a screen that punishes.
+- **MUST NOT** Use `split.clean` on a meter, though it is the same hue family.
+  It means "food that was not junk", and a meter measuring net calories against
+  a target is asking something else. One colour meaning two things in one scroll
+  is worse than one fewer colour.
+- A verdict may tint a caption where the app genuinely has one, which on this
+  data is the junk ratio alone. Calories and meals have no direction that counts
+  as progress, since someone bulking wants a number up and someone cutting wants
+  it down. **MUST** The words still say "Up" or "Down", so the colour is never
+  the only carrier.
 
 ### Cuisine colour
 

@@ -84,6 +84,13 @@ const CASES: Case[] = [
   { what: 'danger text on the page', fg: 'danger', bg: 'bg', min: TEXT },
   { what: 'danger text on a card', fg: 'danger', bg: 'surface', min: TEXT },
   { what: 'success text on the page', fg: 'success', bg: 'bg', min: TEXT },
+
+  // The status meter and the verdict caption, both added when the dashboard
+  // stopped being grey. The meter's two halves are drawn against the ring's
+  // track, not against the page, and the caption sits inside a card.
+  { what: 'success text on a card', fg: 'success', bg: 'surface', min: TEXT },
+  { what: 'a meter inside its limit, against its track', fg: 'success', bg: 'surfaceAlt', min: SHAPE },
+  { what: 'a meter past its limit, against its track', fg: 'danger', bg: 'surfaceAlt', min: SHAPE },
 ];
 
 describe.each(THEMES)('%s theme', (theme) => {
