@@ -19,6 +19,18 @@ type ScreenProps = {
   /** Extra bottom space so the floating tab bar never covers the last row. */
   bottomInset?: number;
   padded?: boolean;
+  /**
+   * Start the content at the very top edge, under the status bar.
+   *
+   * Only for a screen whose first element is meant to bleed off the top, which
+   * in this app is the welcome arch and nothing else. Without it the top
+   * padding is unconditional, so a full bleed band starts an inset and a
+   * spacing step down the page and stops being full bleed.
+   *
+   * Whatever sits in that space has to account for the status bar itself, since
+   * nothing is reserving it any more.
+   */
+  bleedTop?: boolean;
 };
 
 export function Screen({
@@ -31,13 +43,18 @@ export function Screen({
   refreshControl,
   bottomInset,
   padded = true,
+  bleedTop = false,
 }: ScreenProps) {
   const { colors, layout, spacing, type, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [headerHeight, setHeaderHeight] = useState(0);
 
   const hasHeader = Boolean(title || onBack);
-  const topPad = hasHeader ? headerHeight + spacing.lg : insets.top + spacing.lg;
+  const topPad = hasHeader
+    ? headerHeight + spacing.lg
+    : bleedTop
+      ? 0
+      : insets.top + spacing.lg;
   const padH = padded ? layout.screenPadding : 0;
 
   const body = scroll ? (

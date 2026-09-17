@@ -1,106 +1,97 @@
 import { useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
 
-import { Button, Hero, HeroWash, Screen } from '../../components/ui';
+import { ArchHero, Button, Hero, Mark, Screen } from '../../components/ui';
 import { useTheme } from '../../theme';
 
 /**
  * Self-critique, per the style guide section 13.
  *
- * What it was: an uppercase eyebrow, a 48pt headline, three icon rows each with
- * a 44pt coloured disc, and two identical full width buttons.
+ * What it was, immediately before this: a 177pt wash starting 39pt down the
+ * page, a left aligned 64pt "Welcome.", three left aligned pitch items, and two
+ * full width buttons of equal size.
  *
- * What it broke. Section 4: `type.label`, 11px uppercase with letterspacing,
- * used as an eyebrow above the headline, which is the named tell the guide
- * bans outside the tab bar and chart axes. Section 10: three 44pt accentSoft
- * discs drawn behind icons purely to give them presence. Section 8: saffron
- * spent on decoration, when it is the one colour that is supposed to mean "you
- * can press this", so the two real buttons had no colour of their own to claim.
- * Section 7 and section 1: nothing above `display`, and each of the three
- * supporting rows carried a coloured disc plus a 16pt title, so all three
- * weighed about as much as the headline. That is the equal weight failure, on
- * the one screen whose entire job is to lead with a single idea. Section 5: no
- * cap on the content column, so the pitch ran the full width of a browser.
+ * What it broke, measured. The wash was 21 percent of an 844pt screen and did
+ * not reach the top edge, because Screen's top padding is unconditional and
+ * HeroWash only pulled up 24 against 63, so the one element meant to set the
+ * tone arrived as a band floating in the middle of nothing. Section 1: the
+ * three pitch items were six text elements carrying 167pt of the screen, which
+ * is more weight than the promise they were evidence for. Section 7: both
+ * buttons were `size="lg"` and `full`, so the way in and the way back looked
+ * equally likely.
  *
- * What the one thing is now: "Welcome." at `hero`, 64 against a next largest of
- * 21, sitting in the warm wash with 40 above it and 64 below when nothing else
- * on the screen gets more than 32.
+ * What the one thing is now: a full bleed field of colour taking a little over
+ * half the screen, its lower edge curving down through the middle, with the
+ * app's own mark centred in it. Everything else is small, centred and below it.
  *
- * What was demoted, and why that is correct: the three features lost their
- * icons, their discs and their brand colour, and are now a plain sentence case
- * line plus one caption each. They are the evidence for the promise, not the
- * promise, and a stranger should read the promise first and then decide whether
- * to read the evidence at all.
+ * On the picture. The reference this was designed against leads with a
+ * photograph. Forkast has never shipped one: every image in the repo is flat
+ * launcher art, and section 10 bans stock photography twice by name, on the
+ * grounds that the only images in this app are the user's own meals. So the top
+ * half is the warm wash that already gives the rest of the app its character,
+ * carrying the fork the native splash has already shown this person one second
+ * earlier. It continues something rather than decorating nothing.
+ *
+ * The mark is ink and never saffron, at reduced opacity so the field reads
+ * through it. A large saffron shape here would be the brand spent on decoration
+ * and would leave the button below with no claim on the one colour that means
+ * "you can press this".
+ *
+ * On centring. Section 2 asks for one left edge because content is read rather
+ * than admired, and names welcome as the exception: centring is for a screen
+ * with a single focal object. The failure it bans is alternating, and nothing
+ * here alternates. Both auth screens centre their lower block already.
+ *
+ * What was demoted, and why that is correct: the three pitch items are gone as
+ * items and survive as one sentence. The honest cost is specificity, three
+ * concrete claims traded for one compound one. They were the evidence for the
+ * promise, and on a screen whose job is to make a stranger read the promise
+ * first, evidence that outweighs it is evidence in the wrong place.
  */
-
-/** Capped so the pitch never runs the full width of a tablet or a browser. */
-const COLUMN_WIDTH = 420;
 
 /**
- * The three things the app actually does.
+ * Narrower than the 420 the forms use, and deliberately.
  *
- * No icons. Each one is a short claim and a line of proof, and the claim says
- * what it means without a glyph beside it helping.
+ * Centred text wants a shorter measure than left aligned text: at 420 these
+ * three lines come out badly lopsided, because a ragged right edge that is also
+ * centred reads as a triangle. Near 300 the lines land close to equal.
  */
-const PITCH: { title: string; body: string }[] = [
-  {
-    title: 'Log it in seconds',
-    body: 'Pick the dish, tap a size, done. No weighing, no barcodes.',
-  },
-  {
-    title: 'See it coming',
-    body: 'Forkast forecasts your own pattern forward, so the week holds no surprises.',
-  },
-  {
-    title: 'Get a plan that fits',
-    body: 'Built around what you actually eat, not a stranger on the internet.',
-  },
-];
+const COLUMN_WIDTH = 300;
 
 export default function WelcomeScreen() {
   const { colors, spacing, type } = useTheme();
   const router = useRouter();
 
   return (
-    <Screen scroll bottomInset={spacing.xxl}>
+    <Screen scroll bleedTop padded={false} bottomInset={spacing.xxl}>
+      <ArchHero>
+        <Mark size={132} color={colors.text} opacity={0.14} />
+      </ArchHero>
+
       <View
         style={{
           width: '100%',
           maxWidth: COLUMN_WIDTH,
           alignSelf: 'center',
-          gap: spacing.xxl,
+          alignItems: 'center',
+          gap: spacing.xl,
+          paddingHorizontal: spacing.xl,
         }}
       >
-        {/* The only thing on this screen that gets the wash, and the only thing
-            above 21. The promise sits directly under it at a full two steps
-            down, close enough to be read as one thought and small enough that
-            it can never compete. */}
-        <HeroWash>
-          <Hero value="Welcome." />
-          <Text
-            style={[
-              type.title,
-              { color: colors.text, fontWeight: '400', marginTop: spacing.sm },
-            ]}
-          >
-            Eat now. Explain later.
+        <View style={{ alignItems: 'center', gap: spacing.md }}>
+          {/* Eight characters, and that is a constraint rather than a
+              preference: Hero never wraps, so it steps its size down and then
+              overflows. "Welcome to Forkast." is nineteen and cannot be drawn.
+              The full stop matches "Sign in." and "Sign up.", which is the
+              same voice on all three screens someone sees before an account. */}
+          <Hero value="Forkast." align="center" />
+          <Text style={[type.body, { color: colors.muted, textAlign: 'center' }]}>
+            Eat now. Explain later. Log a meal in seconds, watch the week take shape, and get a
+            plan built on what you actually eat.
           </Text>
-        </HeroWash>
-
-        <View style={{ gap: spacing.lg }}>
-          {PITCH.map((item) => (
-            <View key={item.title} style={{ gap: spacing.xs }}>
-              <Text style={[type.subtitle, { color: colors.text }]}>{item.title}</Text>
-              <Text style={[type.caption, { color: colors.muted }]}>{item.body}</Text>
-            </View>
-          ))}
         </View>
 
-        {/* Both doors stay full width. These two are the screen's whole purpose
-            and are genuinely equal in role, so the guide asks for them to be
-            obviously equal in size; the fill is what says which one is the way
-            in for someone who has never been here. */}
-        <View style={{ gap: spacing.md }}>
+        <View style={{ width: '100%', alignItems: 'center', gap: spacing.sm }}>
           <Button
             label="Get started"
             size="lg"
@@ -108,11 +99,20 @@ export default function WelcomeScreen() {
             onPress={() => router.push('/register')}
             accessibilityHint="Create a new Forkast account"
           />
+
+          {/* The quiet door, on the same centre axis as the primary button
+              above it, which is the pattern both auth screens ship. Not the
+              reference's inline text link: a control with no fill and no border
+              measures 1.00:1 and reads as a sentence, which this app has
+              already shipped once and had reported as a missing button. */}
+          <Text
+            style={[type.caption, { color: colors.muted, textAlign: 'center', marginTop: spacing.sm }]}
+          >
+            Already have an account?
+          </Text>
           <Button
             label="Sign in"
             variant="secondary"
-            size="lg"
-            full
             onPress={() => router.push('/login')}
             accessibilityHint="Sign in to an account you already have"
           />

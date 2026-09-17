@@ -138,12 +138,24 @@ describe('the welcome screen', () => {
   it('says what the app is before asking who you are', async () => {
     const { getByText } = render(<WelcomeScreen />, { wrapper });
 
-    await waitFor(() => expect(getByText(/Welcome/)).toBeTruthy());
-    expect(getByText('Eat now. Explain later.')).toBeTruthy();
-    // The three things the app actually does, which the login form said nothing about.
-    expect(getByText('Log it in seconds')).toBeTruthy();
-    expect(getByText('See it coming')).toBeTruthy();
-    expect(getByText('Get a plan that fits')).toBeTruthy();
+    await waitFor(() => expect(getByText('Forkast.')).toBeTruthy());
+
+    /**
+     * The same three claims, now carried by one sentence rather than three
+     * blocks.
+     *
+     * They used to be three titles with a caption each, six text elements
+     * taking 167pt of a screen whose only job is to make a stranger read the
+     * promise first. They were the evidence for the promise and they outweighed
+     * it. Asserted as ideas rather than as headings so the copy can be rewritten
+     * without the test having to be, but not dropped: losing all three would be
+     * a real loss and should fail.
+     */
+    const pitch = getByText(/Eat now\. Explain later\./);
+    expect(pitch).toBeTruthy();
+    expect(pitch.props.children).toMatch(/in seconds/);
+    expect(pitch.props.children).toMatch(/week/);
+    expect(pitch.props.children).toMatch(/plan/);
   });
 
   it('offers both doors as buttons', async () => {
