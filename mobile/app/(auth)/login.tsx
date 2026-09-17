@@ -26,10 +26,12 @@ import { describeError } from '../../lib/api';
  * of 16, naming the screen with the same words as the button that reaches it.
  * The bar keeps the back chevron and drops its title, so the name is said once.
  *
- * What was demoted, and why that is correct: the way to registration is now a
- * medium, outlined button under a caption rather than a second full width slab.
- * Someone on this screen came here to sign in; the other door has to be
- * findable, not equally loud.
+ * What was demoted, and why that is correct: the way to registration is an
+ * outlined button under a caption rather than a second saffron one. It matches
+ * the primary button in size and width, and parts from it in fill. Someone on
+ * this screen came here to sign in; the other door has to be findable, not
+ * equally loud, and a border against a fill says that without also saying "this
+ * control is smaller than the one above it".
  *
  * On the alignment, which changed twice. This block was first centred, then
  * pulled left because a centred line between left aligned blocks changed the
@@ -130,10 +132,23 @@ export default function LoginScreen() {
           <Button label="Sign in" size="lg" full onPress={submit} loading={login.isPending} />
         </View>
 
-        {/* Centred, on the centre line of the primary button above it, so the
-            way out of this screen sits on the same axis as the way through it.
-            Still quieter: outlined rather than filled, and medium rather than
-            large, because someone on this screen came here to sign in.
+        {/* Full width and `size="lg"`, so it is the same control as the button
+            above it in every dimension but fill.
+
+            It used to be medium and unstretched, and Button defaults an
+            unstretched control to flex-start, which quietly beat the
+            `alignItems: 'center'` on this container: a centred caption with a
+            left aligned button under it, which is the exact misalignment
+            centring the pair was meant to remove. Stretching it settles the
+            axis question by removing it.
+
+            Section 7 is the reason this is the right fix rather than
+            `align="center"` on a medium button: two controls should be
+            obviously the same size or obviously different, and near equal is
+            worse than either. Full width against full width is obviously the
+            same, and saffron against an outline is the difference someone reads
+            without measuring.
+
             Labelled with the word people actually look for: "Create an account"
             was the old label, and it is not the phrase anyone scans a screen
             hunting for. */}
@@ -144,6 +159,8 @@ export default function LoginScreen() {
           <Button
             label="Sign up"
             variant="secondary"
+            size="lg"
+            full
             onPress={() => router.replace('/register')}
             disabled={login.isPending}
           />

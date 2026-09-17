@@ -17,8 +17,10 @@ import { useTheme } from '../../theme';
  * tone arrived as a band floating in the middle of nothing. Section 1: the
  * three pitch items were six text elements carrying 167pt of the screen, which
  * is more weight than the promise they were evidence for. Section 7: both
- * buttons were `size="lg"` and `full`, so the way in and the way back looked
- * equally likely.
+ * buttons were `size="lg"`, `full` and saffron, so the way in and the way back
+ * looked equally likely. The two are the same size and width again now, at the
+ * user's request and in line with section 7's rule against near equal, but only
+ * one of them is filled, and fill is the part of a button that says "press me".
  *
  * What the one thing is now: a full bleed field of colour taking a little over
  * half the screen, its lower edge curving down through the middle, with the
@@ -100,11 +102,15 @@ export default function WelcomeScreen() {
             accessibilityHint="Create a new Forkast account"
           />
 
-          {/* The quiet door, on the same centre axis as the primary button
-              above it, which is the pattern both auth screens ship. Not the
-              reference's inline text link: a control with no fill and no border
-              measures 1.00:1 and reads as a sentence, which this app has
-              already shipped once and had reported as a missing button. */}
+          {/* The quiet door, the same size and width as the primary button
+              above it, which is the pattern both auth screens now ship. It was
+              medium and unstretched, and an unstretched Button aligns itself to
+              flex-start, so it sat against the left edge of a centred column.
+
+              Still not the reference's inline text link: a control with no fill
+              and no border measures 1.00:1 and reads as a sentence, which this
+              app has already shipped once and had reported as a missing button.
+              Quiet is a border instead of a fill, never a smaller control. */}
           <Text
             style={[type.caption, { color: colors.muted, textAlign: 'center', marginTop: spacing.sm }]}
           >
@@ -113,6 +119,8 @@ export default function WelcomeScreen() {
           <Button
             label="Sign in"
             variant="secondary"
+            size="lg"
+            full
             onPress={() => router.push('/login')}
             accessibilityHint="Sign in to an account you already have"
           />

@@ -22,9 +22,10 @@ import { describeError } from '../../lib/api';
  * What the one thing is now: "Sign up." at `display`, 48 against a next largest
  * of 16, the same words as the button that reaches it.
  *
- * What was demoted, and why that is correct: the way back to signing in is a
- * medium, outlined button. Someone who already has an account is the exception
- * here, and the exception gets a findable control, not an equal one.
+ * What was demoted, and why that is correct: the way back to signing in is an
+ * outlined button, matching the primary above it in size and width and parting
+ * from it in fill. Someone who already has an account is the exception here,
+ * and the exception gets a findable control, not an equally loud one.
  *
  * It sits centred, at the user's request, on the same axis as the primary
  * button above it. Its twin on the sign in screen does the same, which is the
@@ -118,10 +119,12 @@ export default function RegisterScreen() {
           <Button label="Sign up" size="lg" full onPress={submit} loading={register.isPending} />
         </View>
 
-        {/* Centred, on the centre line of the primary button above it, so the
-            way out of this screen sits on the same axis as the way through it.
-            Still quieter than that button: outlined rather than filled, and
-            medium rather than large. */}
+        {/* Full width and `size="lg"`, for the reason its twin on the sign in
+            screen gives at length: an unstretched Button aligns itself to
+            flex-start and so ignored the centring on this container, and a
+            control that is merely near the size of the one above it is the one
+            arrangement section 7 rules out. Same size, same width, different
+            fill. */}
         <View style={{ gap: spacing.sm, alignItems: 'center' }}>
           <Text style={[type.caption, { color: colors.muted, textAlign: 'center' }]}>
             Already have an account?
@@ -129,6 +132,8 @@ export default function RegisterScreen() {
           <Button
             label="Sign in"
             variant="secondary"
+            size="lg"
+            full
             onPress={() => router.replace('/login')}
             disabled={register.isPending}
           />
