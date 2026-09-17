@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../lib/api';
+import { useAuth } from './useAuth';
 import type { BurnEntry } from '../lib/types';
 
 /**
@@ -12,12 +13,25 @@ import type { BurnEntry } from '../lib/types';
  * deserves to be left alone.
  */
 export function useBurnToday() {
+  const { signedIn } = useAuth();
+
   return useQuery({
     queryKey: ['burn', 'today'],
     queryFn: async () => {
       const response = await api.get<BurnEntry | null>('/burn/today');
       return response.data ?? null;
     },
+    /**
+     * The gate every other query hook has, and this one was missing.
+     *
+     * Signing out clears the cache, which makes every active observer refetch.
+     * All the others sit still because they are disabled the moment signedIn
+     * goes false; this one fired immediately with no token, took the
+     * unrecoverable branch on the 401, and that branch clears the cache again.
+     * The result was a burst of failing requests on every sign out, for as long
+     * as the dashboard stayed mounted behind the redirect.
+     */
+    enabled: signedIn,
   });
 }
 

@@ -46,10 +46,21 @@ export function BurnDialog({ visible, onDismiss }: Props) {
     if (!touched && saved) setDraft(String(saved.calories));
   }, [saved, touched]);
 
-  // Reopening should start from what is stored, not from an abandoned draft.
+  /**
+   * Reopening should start from what is stored, not from an abandoned draft.
+   *
+   * Clearing `touched` alone only did that when something was stored: the
+   * seeding effect above cannot run while `saved` is null, so with no burn
+   * entered today a typed-then-cancelled 500 stayed in the field and came back
+   * pre-filled with Save enabled, while the dashboard still read 0. The dialog
+   * claimed a number that had never been saved. Emptying the draft lets the
+   * seeding effect refill it when there is something to refill it with, and
+   * leaves it genuinely blank when there is not.
+   */
   useEffect(() => {
     if (!visible) {
       setTouched(false);
+      setDraft('');
       save.reset();
       clear.reset();
     }

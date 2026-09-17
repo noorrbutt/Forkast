@@ -95,6 +95,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setAuthFailureHandler(() => {
       setToken(null);
+      // Cleared here too, not just in signOut. A session that dies while the
+      // user is still on the setup screen used to leave this flag true with
+      // nobody signed in, and the router gate reads it the moment anyone signs
+      // back in. See signIn for what that looked like.
+      setNeedsSetup(false);
       queryClient.clear();
     });
     return () => setAuthFailureHandler(null);
@@ -113,6 +118,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (creds: Credentials) => {
       const response = await api.post<TokenPair>('/auth/login', creds);
       await adopt(response.data);
+      /**
+       * Only a brand new account needs setup, and this is the other door.
+       *
+       * The flag survived a session dying on the setup screen, so signing in to
+       * an existing, fully configured account dropped the user on the one time
+       * setup questions. Pressing "Skip for now" there sent the goal anyway,
+       * which quietly overwrote that account's real goal with Maintain. Setting
+       * it false on every sign in means it can only ever be true for the
+       * account that just registered in this session.
+       */
+      setNeedsSetup(false);
     },
     [adopt],
   );

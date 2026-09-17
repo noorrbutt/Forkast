@@ -165,10 +165,25 @@ export default function SetupScreen() {
         ...(withTarget && targetGiven ? { daily_calorie_target: parsed } : {}),
       },
       {
-        // Setup is a convenience, not a gate. If the network is down the account
-        // already exists, so let them in and leave the Profile tab to fix it.
         onSuccess: completeSetup,
-        onError: () => undefined,
+        /**
+         * Setup is a convenience, not a gate. This is where that was written
+         * down and then not done: on a failure both buttons spun, printed an
+         * error and left the user exactly where they were, while the router
+         * gate sent them straight back here from anywhere else. With the API
+         * unreachable, which is the ordinary case of a stale LAN address or a
+         * phone on another network, a new account had no way into the app at
+         * all short of relaunching it.
+         *
+         * So skipping skips, whatever the server said. The account already
+         * exists, the answers here all have defaults, and every one of them is
+         * editable on the Profile tab. Saving still reports its failure and
+         * stays put, because someone who filled the form in wants it kept and
+         * the skip button beside it is the way out.
+         */
+        onError: () => {
+          if (!withTarget) completeSetup();
+        },
       },
     );
   };

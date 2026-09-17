@@ -17,15 +17,23 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
 import { BurnDialog } from '../components/BurnDialog';
-import { api } from '../lib/api';
+import { AuthProvider } from '../hooks/useAuth';
+import { api, hydrateTokens } from '../lib/api';
 
 jest.mock('../lib/api', () => {
   const actual = jest.requireActual('../lib/api');
   return {
     ...actual,
     api: { get: jest.fn(), put: jest.fn(), delete: jest.fn() },
+    hydrateTokens: jest.fn(),
+    clearTokens: jest.fn().mockResolvedValue(undefined),
+    setTokens: jest.fn().mockResolvedValue(undefined),
+    getRefreshToken: jest.fn(() => null),
+    setAuthFailureHandler: jest.fn(),
   };
 });
+
+const mockedHydrate = hydrateTokens as jest.Mock;
 
 const mockedApi = api as unknown as {
   get: jest.Mock;
@@ -43,7 +51,14 @@ function wrapper({ children }: { children: ReactNode }) {
       mutations: { retry: false, gcTime: 0 },
     },
   });
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  // AuthProvider, because useBurnToday is gated on being signed in like every
+  // other query hook. Without a session the query never runs, which is exactly
+  // the behaviour the gate exists for.
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>{children}</AuthProvider>
+    </QueryClientProvider>
+  );
 }
 
 const entry = (calories: number) => ({
@@ -57,6 +72,7 @@ const onDismiss = jest.fn();
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockedHydrate.mockResolvedValue({ access_token: 'a', refresh_token: 'r' });
   mockedApi.get.mockResolvedValue({ data: null });
   mockedApi.put.mockImplementation(async (_url: string, body: { calories: number }) => ({
     data: entry(body.calories),

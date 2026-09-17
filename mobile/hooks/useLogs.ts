@@ -41,6 +41,10 @@ export function useCreateLog() {
       void queryClient.invalidateQueries({ queryKey: ['logs'] });
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       void queryClient.invalidateQueries({ queryKey: ['streaks'] });
+      // The month trend counts this meal too. Without this the card directly
+      // under the dashboard hero kept its pre-meal figures while the hero
+      // moved, so two cards on one screen disagreed about the same day.
+      void queryClient.invalidateQueries({ queryKey: ['trend'] });
     },
   });
 }
@@ -59,6 +63,10 @@ export function useUpdateLog() {
       void queryClient.invalidateQueries({ queryKey: ['logs'] });
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       void queryClient.invalidateQueries({ queryKey: ['streaks'] });
+      // The month trend counts this meal too. Without this the card directly
+      // under the dashboard hero kept its pre-meal figures while the hero
+      // moved, so two cards on one screen disagreed about the same day.
+      void queryClient.invalidateQueries({ queryKey: ['trend'] });
     },
   });
 }
@@ -75,6 +83,10 @@ export function useDeleteLog() {
       void queryClient.invalidateQueries({ queryKey: ['logs'] });
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       void queryClient.invalidateQueries({ queryKey: ['streaks'] });
+      // The month trend counts this meal too. Without this the card directly
+      // under the dashboard hero kept its pre-meal figures while the hero
+      // moved, so two cards on one screen disagreed about the same day.
+      void queryClient.invalidateQueries({ queryKey: ['trend'] });
     },
   });
 }

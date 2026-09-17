@@ -318,6 +318,15 @@ function TargetRow({ target, last }: { target: number | null; last?: boolean }) 
         }
         onPress={() => {
           setAsked(false);
+          // Both of these, not just `asked`. `touched` was cleared only after a
+          // successful save or clear, never on cancel, so typing 9999 and
+          // pressing Cancel left the field showing 9999 for the rest of the
+          // session while the row behind it read the stored number. The seeding
+          // effect is blocked by `touched`, so the real value became unreachable
+          // in the one dialog that exists to edit it, and pressing Update saved
+          // the number the user had already abandoned.
+          setTouched(false);
+          setDraft(target != null ? String(target) : '');
           setOpen(true);
         }}
         last={last}
