@@ -108,7 +108,7 @@ export function ProfileAvatar({ name, hasPicture, size = 88 }: ProfileAvatarProp
         accessibilityHint="Opens the options for changing your picture"
         style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
       >
-        <Avatar uri={source?.uri} headers={source?.headers} name={name} size={size} />
+        <Avatar source={source} name={name} size={size} />
         {/* Sits over the circle's lower right, which is where a photo control
             goes on every app that has one. */}
         <View
