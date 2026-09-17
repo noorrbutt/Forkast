@@ -178,7 +178,7 @@ One family. Weight, size and space do the work.
 | `hero` | 64 / 300 | **Reserved.** The one number or headline a screen leads with |
 | `display` | 48 / 300 | Page title, or a secondary numeral on a hero screen |
 | `displaySm` | 34 / 300 | Paired numerals, such as a streak count |
-| `numeral` | 26 / 300 | A figure inside a stat tile |
+| `numeral` | 26 / 300 | A figure inside a stat tile or a small grouped reading |
 | `title` | 21 / 600 | Section or card title |
 | `subtitle` | 16 / 600 | Row label, button label |
 | `body` | 15 / 400 | Reading text, option labels |
@@ -281,6 +281,32 @@ a list. A row of three serving sizes is a group of equal choices.
   Split it, promote one thing to hero, or demote the rest into list rows.
 - **MUST NOT** Give a hero and a secondary card the same radius, padding and
   border. Hierarchy is expressed in the container too, not only in the type.
+- **MUST** A repeating list of equal weight groups is not counted against the six
+  card ceiling, but it does not get a surface each either. A diary of days and a
+  map of areas are both one `ListGroup` per group, not one `<Card>` per group,
+  because the number of them is decided by the data rather than by the design.
+
+### The wash
+
+A soft field of colour behind the one number a screen leads with, from
+`heroWash` in tokens. This is where the app's warmth comes from: structure alone
+could not fix a near black page, a near white page and a single orange, and a
+card separating correctly from a flat background still reads as austere.
+
+It is not decoration and it is not free. A second one on the same screen makes
+both meaningless, and a screen that leads with a list does not get one at all,
+or the colour stops meaning "this is the answer" and starts meaning "this is the
+top of a page".
+
+- **MUST** At most one wash per screen, directly behind the hero.
+- **MUST** The wash belongs to a screen whose hero *is* the content: the welcome
+  arch, the dashboard ring, and a meal with no photograph, where the figure is
+  standing in for the picture that would otherwise have led. Streaks and the
+  plan lead with a figure over a list, and a transient confirmation is passed
+  through rather than landed on, so none of the three takes one.
+- **MUST** The stops end on the page colour, so the field dissolves into the
+  screen rather than stopping at a hard line, and the figure on top of it still
+  clears contrast.
 
 ---
 
@@ -369,10 +395,29 @@ Therefore:
 
 ### Chart series
 
-- **MUST** Two series maximum on the calorie chart, eaten and burned, which is
-  well inside the cap.
-- **MUST** A chart with two or more series carries a legend, and identity is
-  never colour alone.
+The calorie chart carries three marks per day, not two: what was eaten split
+into junk and not junk, and what was burned beside it.
+
+This rule used to say two, eaten and burned. The split is what makes the chart
+worth drawing at all, because a 2,000 kcal day of nothing but junk and a 2,000
+kcal day of none are the same bar otherwise, so the rule was changed rather
+than the chart. Three is still inside the cap of eight, and well inside the
+point past which adjacent classes blur.
+
+Only two of the three are a categorical palette. Junk and not junk are the two
+halves of one measure and wear `split`, which is tuned so they separate under
+red-green colour blindness. Burned is a different measure rather than a third
+kind of food, so it wears `outline`, the one grey already held at 3:1 against
+the card: visible as a mark without claiming a meaning it does not have.
+
+- **MUST** Three marks maximum on the calorie chart. A fourth means the chart is
+  answering a second question and wants to be a second chart.
+- **MUST** `series` is for a single reading against its own scale, such as the
+  ring and the meter. A chart splitting one measure in two uses `split`.
+- **MUST** A chart with two or more marks carries a legend, and identity is
+  never colour alone. `split` in particular is only legal alongside a second
+  cue: junk is always the top segment, and a 2px surface gap runs between the
+  fills.
 - **MUST NOT** Use a second y axis. Ever. Two measures of different scale means
   two charts.
 - **MUST** Text in a chart wears text tokens, never the series colour. A coloured
@@ -382,8 +427,10 @@ Therefore:
 
 ## 9. Data display
 
-- **A single current value** is a stat tile. The number is the chart. Not a one
-  bar bar chart.
+- **A single current value** is a figure with its label, at `numeral`. The number
+  is the chart. Not a one bar bar chart. There is no `StatTile` component any
+  more: it existed, no screen ever rendered it, and a tile is a handful of lines
+  that the screen needing one should compose against its own hierarchy.
 - **The one number a screen leads with** is a hero figure at `hero`.
 - **A single ratio against a limit** is a meter: one track, one fill, same ramp.
   Not a two slice pie.
@@ -440,15 +487,15 @@ below follows from that one sentence.
 **Banned:**
 - **MUST NOT** Put an icon beside a section heading. This was on 7 screens and is
   a large part of why the app read as templated. A card title and a
-  `SectionLabel` are both headings: they label content you are already looking
-  at, and they are not tappable.
+  `ControlLabel` are both read rather than tapped: they label content or a
+  control you are already looking at, so nothing goes beside either.
 - **MUST NOT** Put a decorative disc behind an icon to give it presence. The
   32pt container `ListRow` draws is not this and is explicitly permitted: it is
   the settings-row idiom, it is identical on every row of a group, and its job
   is aligning the label column rather than inflating a glyph. The ban is on a
   disc added under a lone icon to make it look weightier.
-- **MUST NOT** Put an icon on a stat tile, or on any figure. Data does not get
-  a glyph.
+- **MUST NOT** Put an icon on a figure, or on the label above one. Data does not
+  get a glyph.
 - **MUST NOT** Introduce a glyph that is not in the `Icon` map. Add the meaning to
   the map or do without, and add a meaning only when something actually means
   it, never in advance of a feature.
