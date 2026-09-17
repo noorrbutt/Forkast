@@ -11,11 +11,25 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+import logging
+
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, SessionDep
+from app.db import get_session_factory
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.api.v1.catalog import upsert_restaurant
 from app.models import MAX_PHOTO_BYTES, FoodCategory, FoodLog, FoodLogPhoto, Restaurant
 from app.schemas.insights import TrendOut
@@ -24,6 +38,7 @@ from app.services.ai.base import AIService
 from app.services.ai.deps import get_ai_service
 from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import CalorieAdjustRequest
+from app.models.enums import ServingSize
 from app.services.calories import finalise_estimate
 from app.services.insights import build_trend
 
@@ -35,6 +50,80 @@ trend_router = APIRouter(tags=["insights"])
 router = APIRouter()
 
 AIDep = Annotated[AIService, Depends(get_ai_service)]
+
+# Injected rather than imported, for the reason get_session_factory's own
+# docstring gives: it is a dependency precisely so tests can point it at the
+# test database. Calling it directly from a background task would step past
+# app.dependency_overrides and open a connection to the real one.
+SessionFactoryDep = Annotated[
+    "async_sessionmaker[AsyncSession]", Depends(get_session_factory)
+]
+
+logger = logging.getLogger(__name__)
+
+
+def _provisional_estimate(category: FoodCategory, serving_size: ServingSize) -> int:
+    """The figure to store right now, with no model in the way.
+
+    The midpoint of the category's own range, clamped and scaled exactly as the
+    model's answer would be. It is the same arithmetic on a different input, so
+    a provisional figure and a refined one are never different kinds of number.
+
+    This exists because asking the model first made saving a meal take a median
+    of two seconds against thirty milliseconds for everything else the app does,
+    on the one action the whole product is for. It also made the estimator a
+    hard dependency of logging: a rate limit or an outage turned a save into a
+    502 and the meal was simply lost.
+
+    What the model adds is placement inside a range that is already known, so
+    the honest description of this number is "right kind of figure, not yet
+    refined", and the refinement lands a moment later without anyone waiting on
+    it.
+    """
+    midpoint = (category.base_calorie_min + category.base_calorie_max) / 2
+    return finalise_estimate(
+        midpoint, category.base_calorie_min, category.base_calorie_max, serving_size
+    )
+
+
+async def _refine_estimate(
+    log_id: uuid.UUID,
+    category_id: int,
+    ai: AIService,
+    factory: "async_sessionmaker[AsyncSession]",
+) -> None:
+    """Replace a provisional figure with the model's, after the response is out.
+
+    Runs on its own session, because the request's is closed by the time this
+    is reached. Every failure here is swallowed deliberately: the row already
+    holds a defensible number, and the user has long since moved on, so there is
+    nobody to report a problem to and nothing that a 502 would improve.
+
+    Both the service and the session factory are handed in rather than resolved
+    here, and for the same reason: resolving either one directly steps past
+    app.dependency_overrides. That is what keeps the suite off a paid API, and
+    more importantly what keeps it off the real database, which is the one this
+    module's own factory is bound to.
+    """
+    try:
+        async with factory() as session:
+            log = await session.get(FoodLog, log_id)
+            # Edited or deleted while the model was thinking, which is a race
+            # this has to lose rather than overwrite.
+            if log is None or log.category_id != category_id:
+                return
+            category = await session.get(FoodCategory, category_id)
+            if category is None:
+                return
+
+            refined = await _estimate_calories(
+                ai, category, log.dish_name, log.serving_size
+            )
+            if refined != log.estimated_calories:
+                log.estimated_calories = refined
+                await session.commit()
+    except Exception:
+        logger.warning("Could not refine the estimate for log %s", log_id, exc_info=True)
 
 
 async def _get_category(session: SessionDep, category_id: int) -> FoodCategory:
@@ -120,7 +209,12 @@ async def _load_log(session: SessionDep, user_id: uuid.UUID, log_id: uuid.UUID) 
 
 @logs_router.post("", response_model=FoodLogOut, status_code=status.HTTP_201_CREATED)
 async def create_log(
-    payload: FoodLogCreate, session: SessionDep, user: CurrentUser, ai: AIDep
+    payload: FoodLogCreate,
+    session: SessionDep,
+    user: CurrentUser,
+    ai: AIDep,
+    factory: SessionFactoryDep,
+    background: BackgroundTasks,
 ) -> FoodLog:
     category = await _get_category(session, payload.category_id)
 
@@ -135,7 +229,9 @@ async def create_log(
         )
         restaurant_id = restaurant.id
 
-    estimated = await _estimate_calories(ai, category, payload.dish_name, payload.serving_size)
+    # Saved with a figure that needs nobody's permission, and refined behind
+    # the response. See _provisional_estimate.
+    estimated = _provisional_estimate(category, payload.serving_size)
 
     log = FoodLog(
         user_id=user.id,
@@ -156,6 +252,9 @@ async def create_log(
     await session.flush()
     created = await _load_log(session, user.id, log.id)
     await session.commit()
+    # After the commit, so the row is certainly there when the task opens its
+    # own session, and after the response is built, so nobody waits for it.
+    background.add_task(_refine_estimate, created.id, created.category_id, ai, factory)
     return created
 
 
@@ -195,6 +294,8 @@ async def update_log(
     session: SessionDep,
     user: CurrentUser,
     ai: AIDep,
+    factory: SessionFactoryDep,
+    background: BackgroundTasks,
 ) -> FoodLog:
     log = await _load_log(session, user.id, log_id)
     changes = payload.model_dump(exclude_unset=True)
@@ -209,15 +310,16 @@ async def update_log(
 
     # Anything that feeds the estimate means the estimate has to be redone,
     # otherwise the stored calories quietly stop matching the log.
-    if {"dish_name", "category_id", "serving_size"} & changes.keys():
+    refine = bool({"dish_name", "category_id", "serving_size"} & changes.keys())
+    if refine:
         category = await _get_category(session, log.category_id)
-        log.estimated_calories = await _estimate_calories(
-            ai, category, log.dish_name, log.serving_size
-        )
+        log.estimated_calories = _provisional_estimate(category, log.serving_size)
 
     await session.flush()
     updated = await _load_log(session, user.id, log.id)
     await session.commit()
+    if refine:
+        background.add_task(_refine_estimate, updated.id, updated.category_id, ai, factory)
     return updated
 
 

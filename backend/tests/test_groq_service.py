@@ -225,10 +225,39 @@ async def test_a_dead_ai_provider_is_a_502_not_a_500(auth_client) -> None:
     """The provider is upstream of us, so its outage is not our internal error.
 
     A 500 tells the client to report a bug. A 502 tells it to retry, which is
-    the correct advice when the estimator is briefly unavailable.
+    the correct advice when the planner is briefly unavailable.
+
+    Only the planner is checked here now. Logging a meal used to sit behind the
+    estimator and answer 502 the same way, and that was the wrong trade: it made
+    someone else's outage take away the one action the app exists for. A meal is
+    saved immediately with the category midpoint and refined afterwards, so
+    there is no longer a status code for the estimator being down, because the
+    user is not waiting on it. See tests/test_saving_does_not_wait.py.
     """
     from app.main import app
     from app.services.ai.deps import get_ai_service
+
+    app.dependency_overrides[get_ai_service] = lambda: _AlwaysFailingAI()
+    try:
+        plan = await auth_client.post("/api/v1/plans", json={"goal": "cut"})
+    finally:
+        app.dependency_overrides.pop(get_ai_service, None)
+
+    assert plan.status_code == 502, plan.text
+    assert "unavailable" in plan.json()["detail"]
+
+
+async def test_a_dead_ai_provider_does_not_stop_a_meal_being_logged(auth_client) -> None:
+    """The inverse of the test above, and the reason it shrank.
+
+    A meal someone took the trouble to type in is not lost because a third party
+    is rate limiting us. The row is written with a defensible figure and the
+    model's refinement is applied behind the response, or not at all.
+    """
+    from app.main import app
+    from app.services.ai.deps import get_ai_service
+
+    before = (await auth_client.get("/api/v1/logs")).json()["total"]
 
     app.dependency_overrides[get_ai_service] = lambda: _AlwaysFailingAI()
     try:
@@ -242,39 +271,12 @@ async def test_a_dead_ai_provider_is_a_502_not_a_500(auth_client) -> None:
                 "serving_size": "medium",
             },
         )
-        plan = await auth_client.post("/api/v1/plans", json={"goal": "cut"})
     finally:
         app.dependency_overrides.pop(get_ai_service, None)
 
-    assert log.status_code == 502, log.text
-    assert plan.status_code == 502, plan.text
-    assert "unavailable" in log.json()["detail"]
-
-
-async def test_a_failed_estimate_does_not_leave_a_half_written_log(auth_client) -> None:
-    """The estimate happens before the insert, so a provider outage must leave
-    nothing behind rather than a log with no calories."""
-    from app.main import app
-    from app.services.ai.deps import get_ai_service
-
-    before = (await auth_client.get("/api/v1/logs")).json()["total"]
-
-    app.dependency_overrides[get_ai_service] = lambda: _AlwaysFailingAI()
-    try:
-        categories = (await auth_client.get("/api/v1/categories")).json()
-        await auth_client.post(
-            "/api/v1/logs",
-            json={
-                "dish_name": "ghost",
-                "category_id": categories[0]["id"],
-                "rating": 4,
-                "serving_size": "medium",
-            },
-        )
-    finally:
-        app.dependency_overrides.pop(get_ai_service, None)
-
-    assert (await auth_client.get("/api/v1/logs")).json()["total"] == before
+    assert log.status_code == 201, log.text
+    assert log.json()["estimated_calories"] > 0
+    assert (await auth_client.get("/api/v1/logs")).json()["total"] == before + 1
 
 
 # --- typography ---

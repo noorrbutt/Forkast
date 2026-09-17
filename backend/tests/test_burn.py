@@ -29,7 +29,14 @@ async def _eat(client: AsyncClient, slug: str = "biryani") -> int:
         },
     )
     assert response.status_code == 201, response.text
-    return response.json()["estimated_calories"]
+    # Read back rather than returned from the 201 body. Saving a meal no longer
+    # waits on the calorie model: the row is written with the category midpoint
+    # scaled by serving size, the response goes out, and the refinement lands
+    # behind it. Anything comparing a stored total against a per meal figure has
+    # to use the settled one or it is comparing two different numbers.
+    settled = await client.get(f"{LOGS}/{response.json()['id']}")
+    assert settled.status_code == 200, settled.text
+    return settled.json()["estimated_calories"]
 
 
 async def test_setting_a_burn_stores_it(auth_client: AsyncClient) -> None:

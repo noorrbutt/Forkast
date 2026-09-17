@@ -40,6 +40,18 @@ async def _a_category(client: AsyncClient, slug: str = "biryani") -> dict:
 
 
 async def _log(client: AsyncClient, category: dict, **overrides) -> dict:
+    """Create a meal and hand back its settled state, not its first reply.
+
+    Saving no longer waits on the calorie model. The row is written immediately
+    with the category midpoint scaled by serving size, the response goes out,
+    and the model's refinement is applied behind it, so the figure in the 201
+    body is provisional by design and the stored one is what everything else
+    compares against.
+
+    Re-reading here rather than in each test keeps that detail in the one place
+    it belongs. Under the ASGI transport the background task has already run by
+    the time the response is awaited, so this needs no waiting or polling.
+    """
     payload: dict = {
         "dish_name": "chicken biryani",
         "category_id": category["id"],
@@ -49,7 +61,10 @@ async def _log(client: AsyncClient, category: dict, **overrides) -> dict:
     payload.update(overrides)
     response = await client.post(LOGS, json=payload)
     assert response.status_code == 201, response.text
-    return response.json()
+
+    settled = await client.get(f"{LOGS}/{response.json()['id']}")
+    assert settled.status_code == 200, settled.text
+    return settled.json()
 
 
 async def _repeat(client: AsyncClient, log_id: str) -> dict:

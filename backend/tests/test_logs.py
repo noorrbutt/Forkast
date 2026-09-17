@@ -210,7 +210,7 @@ async def test_editing_only_the_rating_leaves_the_estimate_alone(
     auth_client: AsyncClient,
 ) -> None:
     category = await _a_category(auth_client)
-    created = (
+    posted = (
         await auth_client.post(
             LOGS,
             json={
@@ -221,6 +221,12 @@ async def test_editing_only_the_rating_leaves_the_estimate_alone(
             },
         )
     ).json()
+    # Read back rather than taken from the 201 body. Saving does not wait on the
+    # calorie model any more: the row is written with the category midpoint, the
+    # response goes out, and the refinement lands behind it. The point of this
+    # test is that editing the rating changes nothing, so the figure it compares
+    # against has to be the settled one.
+    created = (await auth_client.get(f"{LOGS}/{posted['id']}")).json()
 
     updated = (await auth_client.patch(f"{LOGS}/{created['id']}", json={"rating": 5})).json()
 
