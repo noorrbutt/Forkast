@@ -48,7 +48,7 @@ jest.mock('../lib/api', () => {
   };
 });
 
-import HistoryScreen from '../app/history';
+import HistoryScreen from '../app/(tabs)/history';
 import EditLogScreen from '../app/logs/[id]';
 import { AuthProvider } from '../hooks/useAuth';
 import { api, hydrateTokens } from '../lib/api';

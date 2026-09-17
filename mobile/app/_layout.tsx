@@ -59,7 +59,6 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="setup" />
         <Stack.Screen name="map" />
-        <Stack.Screen name="history" />
         <Stack.Screen name="logs/[id]" />
       </Stack>
     </>

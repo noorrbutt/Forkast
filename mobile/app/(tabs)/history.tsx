@@ -11,13 +11,13 @@ import {
   Loading,
   Screen,
   SectionLabel,
-} from '../components/ui';
-import { useLogs, useRepeatLog } from '../hooks/useLogs';
-import { describeError } from '../lib/api';
-import { SERVING_LABELS, formatDate, formatNumber } from '../lib/format';
-import { haptics } from '../lib/haptics';
-import type { FoodLog, Uuid } from '../lib/types';
-import { useTheme } from '../theme';
+} from '../../components/ui';
+import { useLogs, useRepeatLog } from '../../hooks/useLogs';
+import { describeError } from '../../lib/api';
+import { SERVING_LABELS, formatDate, formatNumber } from '../../lib/format';
+import { haptics } from '../../lib/haptics';
+import type { FoodLog, Uuid } from '../../lib/types';
+import { useTheme } from '../../theme';
 
 /** How long the confirmation stays on a row before the row goes quiet again. */
 const CONFIRMED_MS = 4000;
@@ -78,7 +78,7 @@ export default function HistoryScreen() {
     <Screen
       title="Your diary"
       eyebrow={logs.data ? `${formatNumber(logs.data.total)} logged` : undefined}
-      onBack={() => router.back()}
+     
       refreshControl={
         <RefreshControl
           refreshing={logs.isRefetching}

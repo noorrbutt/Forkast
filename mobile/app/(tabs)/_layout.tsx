@@ -1,9 +1,12 @@
 import { Tabs, type BottomTabBarProps } from 'expo-router/js-tabs';
-import { Pressable, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { Frosted, Icon, type IconName } from '../../components/ui';
 import { haptics } from '../../lib/haptics';
 import { useTheme } from '../../theme';
+import { motion } from '../../theme/motion';
 
 /**
  * Which glyph belongs to which route, and which one is the raised action.
@@ -15,15 +18,86 @@ import { useTheme } from '../../theme';
  */
 const ICONS: Record<string, IconName> = {
   index: 'dashboard',
-  streaks: 'streaks',
+  history: 'history',
   log: 'log',
-  plan: 'plan',
+  streaks: 'streaks',
   profile: 'profile',
 };
 
 const RAISED_ROUTE = 'log';
 
-function FloatingTabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
+/**
+ * Routes that live in the tab group but do not earn a slot in the bar.
+ *
+ * Five is the most a centred raised button allows, since the button has to land
+ * on the middle one. Plan is reached from a card on Home instead: a plan is
+ * generated once in a while, and the bar is for the places you go every day.
+ */
+const HIDDEN_ROUTES = new Set(['plan']);
+
+/** How small the filled glyph starts before it grows into place. */
+const FILL_FROM = 0.85;
+
+type TabIconProps = {
+  name: IconName;
+  focused: boolean;
+  size: number;
+};
+
+/**
+ * The tab glyph, as an outline that fills in when its tab is selected.
+ *
+ * Both cuts are in the tree at once and their opacities are opposites, which
+ * is what makes this a cross fade rather than a swap: there is no frame with
+ * nothing in it, and no frame with two glyphs at full strength. The filled one
+ * also grows the last fraction of its size on the way in, so the change reads
+ * as the icon arriving rather than as the colour being repainted.
+ *
+ * On the duration. The ask was a fill in about 10ms, which is worth taking
+ * literally for a moment: one frame at 60Hz is 16.7ms, so a 10ms fade ends
+ * before the screen can draw a single intermediate state and the icon simply
+ * snaps, which is what it already did. motion.quick, at 220ms, is the shortest
+ * timing this app has that a person can actually watch resolve, and it is the
+ * one every other everyday transition already uses, so the tab bar keeps time
+ * with the rest of the app instead of inventing its own tempo.
+ */
+function TabIcon({ name, focused, size }: TabIconProps) {
+  const { colors } = useTheme();
+  // Seeded from the current state, so the tab that is already selected when
+  // the bar mounts is drawn filled rather than animating in behind the first
+  // frame the user sees.
+  const fill = useSharedValue(focused ? 1 : 0);
+
+  useEffect(() => {
+    fill.value = withTiming(focused ? 1 : 0, motion.quick);
+  }, [fill, focused]);
+
+  const outlineStyle = useAnimatedStyle(() => ({ opacity: 1 - fill.value }));
+  const filledStyle = useAnimatedStyle(() => ({
+    opacity: fill.value,
+    transform: [{ scale: FILL_FROM + fill.value * (1 - FILL_FROM) }],
+  }));
+
+  return (
+    <View style={{ width: size, height: size }}>
+      <Animated.View
+        testID={`tab-glyph-${name}-outline`}
+        style={[StyleSheet.absoluteFill, outlineStyle]}
+      >
+        <Icon name={name} variant="outline" size={size} color={colors.muted} />
+      </Animated.View>
+      <Animated.View
+        testID={`tab-glyph-${name}-filled`}
+        style={[StyleSheet.absoluteFill, filledStyle]}
+      >
+        <Icon name={name} variant="filled" size={size} color={colors.accent} />
+      </Animated.View>
+    </View>
+  );
+}
+
+/** Exported for the tests, which drive it with a fabricated navigation state. */
+export function FloatingTabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
   const { colors, layout, radius, spacing, type } = useTheme();
 
   const go = (route: (typeof state.routes)[number], focused: boolean) => {
@@ -66,6 +140,8 @@ function FloatingTabBar({ state, descriptors, navigation, insets }: BottomTabBar
           const focused = state.index === index;
           const icon = ICONS[route.name] ?? 'dashboard';
 
+          if (HIDDEN_ROUTES.has(route.name)) return null;
+
           // The raised action leaves a gap here and is drawn over the bar
           // below, so the other tabs still divide the width evenly.
           if (route.name === RAISED_ROUTE) return <View key={route.key} style={{ flex: 1 }} />;
@@ -88,7 +164,7 @@ function FloatingTabBar({ state, descriptors, navigation, insets }: BottomTabBar
                 opacity: pressed ? 0.7 : 1,
               })}
             >
-              <Icon name={icon} size={20} color={focused ? colors.accent : colors.muted} />
+              <TabIcon name={icon} focused={focused} size={20} />
               <Text
                 style={[
                   type.labelSoft,
@@ -147,12 +223,18 @@ export default function TabsLayout() {
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg } }}
     >
       {/* Order matters: log sits third of five so the raised button lands dead
-          centre of the bar. */}
+          centre of the bar, and five is the most a centred button allows.
+          Meals takes the slot Plan had. Looking back at what you ate is a daily
+          act and it was reachable only from one card near the bottom of the
+          dashboard, whereas a plan is generated once in a while, so Plan moves
+          to a card on Home where an occasional action belongs. */}
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="streaks" options={{ title: 'Streaks' }} />
+      <Tabs.Screen name="history" options={{ title: 'Meals' }} />
       <Tabs.Screen name="log" options={{ title: 'Log' }} />
-      <Tabs.Screen name="plan" options={{ title: 'Plan' }} />
+      <Tabs.Screen name="streaks" options={{ title: 'Streaks' }} />
       <Tabs.Screen name="profile" options={{ title: 'You' }} />
+      {/* Still a route, just not a tab. */}
+      <Tabs.Screen name="plan" options={{ title: 'Plan' }} />
     </Tabs>
   );
 }
