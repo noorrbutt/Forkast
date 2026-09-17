@@ -395,21 +395,42 @@ glance; donuts are an anti pattern for comparing close values, which this is not
 Icons come from `@expo/vector-icons` through `components/ui/Icon.tsx`, which maps
 a **meaning** to a glyph so the same idea is never drawn two ways.
 
+**The line:** an icon goes on the thing you tap, never on the thing you read. It
+may name a destination or an action; it may not decorate a label. Everything
+below follows from that one sentence.
+
 **Allowed:**
 - The tab bar, one per tab, outline when inactive and filled when active.
 - Navigation and interaction affordances: back, close, search, the chevron on a
   row, the raised add button.
+- A leading icon on a navigation row or button, where it names the destination.
+  The row is a control, so the icon is on something you tap. Where the
+  destination is also a tab or a route with its own glyph, it **MUST** be that
+  same glyph: arriving somewhere should show the icon that sent you.
+- Within one `ListGroup`, either every row carries an icon or none does. The
+  icon box is a sibling of the text column, so a bare row starts its label 44pt
+  further left and the group loses its edge.
 - One icon inside an empty state.
-- A button icon where it clarifies the action, such as a trash on a delete.
+- A button icon where it clarifies the action, such as a trash on a delete. An
+  icon that merely restates the label is not clarifying it and costs 25pt of a
+  row that may need the width.
 - Cuisine emoji in lists and pickers, which is identity, not decoration.
 
 **Banned:**
 - **MUST NOT** Put an icon beside a section heading. This was on 7 screens and is
-  a large part of why the app read as templated.
-- **MUST NOT** Put a decorative disc behind an icon to give it presence.
-- **MUST NOT** Put an icon on a stat tile.
+  a large part of why the app read as templated. A card title and a
+  `SectionLabel` are both headings: they label content you are already looking
+  at, and they are not tappable.
+- **MUST NOT** Put a decorative disc behind an icon to give it presence. The
+  32pt container `ListRow` draws is not this and is explicitly permitted: it is
+  the settings-row idiom, it is identical on every row of a group, and its job
+  is aligning the label column rather than inflating a glyph. The ban is on a
+  disc added under a lone icon to make it look weightier.
+- **MUST NOT** Put an icon on a stat tile, or on any figure. Data does not get
+  a glyph.
 - **MUST NOT** Introduce a glyph that is not in the `Icon` map. Add the meaning to
-  the map or do without.
+  the map or do without, and add a meaning only when something actually means
+  it, never in advance of a feature.
 
 ### Imagery
 

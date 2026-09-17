@@ -94,8 +94,11 @@ const CONTENT_MAX = 560;
  * and the reader has no way to tell which one is lying.
  */
 function readToday(today: Today) {
-  // A zero target cannot be stored and dividing by one would produce nothing
-  // readable, so anything that is not a positive number reads as no target.
+  // Zero can be stored now that the floor is 0 rather than 800, and it is the
+  // one value a meter cannot express: there is nothing to be a fraction of, and
+  // every reading would be infinitely over. So any non-positive target reads as
+  // no target here, which is the same thing the ring does with it, and the
+  // screen falls back to the plain figure for the day.
   const target =
     today.target !== null && Number.isFinite(today.target) && today.target > 0
       ? today.target
@@ -506,20 +509,36 @@ export default function DashboardScreen() {
         ) : null}
 
         {/* Three destinations are a list, not three headlines. One surface, one
-            left edge, no eyebrow above it, and a 56pt row apiece. */}
+            left edge, no eyebrow above it, and a 56pt row apiece.
+
+            Each carries the glyph its destination already owns elsewhere:
+            `history` is the same meaning the Meals tab uses, `plan` the same
+            one the plan route uses. One idea is never drawn two ways, so
+            arriving at a screen shows the icon that sent you there.
+
+            All three together, never two of three. ListRow lays the icon out as
+            a sibling of the text column, so a row without one starts its label
+            44pt further left and the group's edge visibly breaks.
+
+            This is the line section 10 draws: the icon is on the thing you tap,
+            naming where the tap goes. It is not on a heading, which is the
+            decoration the guide bans and which this screen used to wear. */}
         <View style={{ paddingTop: spacing.xxl }}>
           <ListGroup>
             <ListRow
+              icon="history"
               label="Your diary"
               hint="Past meals, with a typo to fix or a double log to delete."
               onPress={() => router.push('/history')}
             />
             <ListRow
+              icon="map"
               label="Map"
               hint="Where you eat, grouped by area."
               onPress={() => router.push('/map')}
             />
             <ListRow
+              icon="plan"
               label="AI meal plan"
               hint="A week of suggestions shaped around your goal."
               onPress={() => router.push('/plan')}

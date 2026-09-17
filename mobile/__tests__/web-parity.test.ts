@@ -165,3 +165,131 @@ describe('reminders', () => {
     expect(code('app/(tabs)/profile.tsx')).toMatch(/if \(!REMINDERS_AVAILABLE\)/);
   });
 });
+
+describe('a row of three buttons', () => {
+  /**
+   * The photo row overflowed its screen and wrapped.
+   *
+   * With a photo attached it asks for "Retake", "Choose" and "Remove". At the
+   * old 24pt of horizontal padding a side that measured about 360pt against the
+   * 342pt a 390pt phone actually offers, so the third button dropped to a second
+   * line and left-aligned under the first. It missed by 18pt, which is why it
+   * reproduces on an iPhone 14 and not on a Pro Max or in a browser.
+   *
+   * These guard the fix at the source rather than by re-measuring text, which a
+   * test runner cannot do honestly: it has no font metrics.
+   */
+  it('gives Button a compact padding that is tighter but not zero', () => {
+    const source = code('components/ui/Button.tsx');
+
+    expect(source).toMatch(/compact\?: boolean/);
+    expect(source).toMatch(/const horizontalPad = compact \? spacing\.lg : spacing\.xl/);
+    expect(source).toMatch(/paddingHorizontal: horizontalPad/);
+  });
+
+  it('never makes compact mean shorter, which would break the tap target', () => {
+    // Button has no minHeight, unlike Chip, so its height is entirely the
+    // vertical padding plus the line height. Taking padding off there would
+    // drop it under 48pt with nothing to catch it.
+    const source = code('components/ui/Button.tsx');
+    const vertical = /const verticalPad = [^;]+;/.exec(source);
+
+    expect(vertical).not.toBeNull();
+    expect(vertical?.[0]).not.toMatch(/compact/);
+  });
+
+  it('applies compact at both copies of the photo row', () => {
+    // app/logs/[id].tsx does not use MealPhoto, it reimplements the control, so
+    // fixing only the component leaves the meal screen broken.
+    for (const file of ['components/MealPhoto.tsx', 'app/logs/[id].tsx']) {
+      const source = code(file);
+      const compacts = source.match(/\bcompact\b/g) ?? [];
+
+      expect(compacts.length).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('keeps the row wrapping, which is the sanctioned way to degrade', () => {
+    // Above the largest non-accessibility text size three labels cannot share a
+    // line on any phone at any padding. The guide says wrap, never truncate, so
+    // flexWrap has to survive anyone tidying it away once the row fits.
+    for (const file of ['components/MealPhoto.tsx', 'app/logs/[id].tsx']) {
+      expect(code(file)).toMatch(/flexWrap: 'wrap'/);
+    }
+  });
+
+  it('never truncates a button label', () => {
+    // "Maintain" became "Maint..." once already, from exactly this shape of
+    // problem solved with flex: 1 and numberOfLines.
+    expect(code('components/ui/Button.tsx')).not.toMatch(/numberOfLines/);
+  });
+});
+
+describe('icons name a destination, never a heading', () => {
+  it('puts one on each of the three dashboard navigation rows', () => {
+    const source = code('app/(tabs)/index.tsx');
+
+    expect(source).toMatch(/icon="history"/);
+    expect(source).toMatch(/icon="map"/);
+    expect(source).toMatch(/icon="plan"/);
+  });
+
+  it('gives all three or none, because a bare row breaks the group edge', () => {
+    // ListRow lays the icon out beside the text column, so a row without one
+    // starts its label 44pt further left than its neighbours.
+    const group = /<ListGroup>[\s\S]*?<\/ListGroup>/.exec(code('app/(tabs)/index.tsx'));
+
+    expect(group).not.toBeNull();
+    const rows = group?.[0].match(/<ListRow/g) ?? [];
+    const icons = group?.[0].match(/icon="/g) ?? [];
+    expect(icons.length).toBe(rows.length);
+  });
+
+  it('does not put one back beside the photo heading', () => {
+    // Section 10's original offence. SectionLabel is a heading: it labels
+    // content you are already looking at and it is not tappable.
+    const source = code('components/MealPhoto.tsx');
+    const heading = /<SectionLabel>Photo<\/SectionLabel>/.exec(source);
+
+    expect(heading).not.toBeNull();
+    expect(source).not.toMatch(/<Icon[^>]*\/>\s*<SectionLabel>/);
+  });
+});
+
+describe('an authenticated image on Android', () => {
+  /**
+   * The header only reaches Android if the source is an array.
+   *
+   * This is the third variation of one bug: the same {uri, headers} source
+   * works on iOS, is ignored by react-native-web, and is silently stripped by
+   * Android. The first two were fixed with a web twin; this one is a shape.
+   */
+  it('still has a reason to exist: Android reads headers only from an array', () => {
+    const android = readDep('react-native/Libraries/Image/Image.android.js');
+
+    // The array branch hoists them onto the native prop.
+    expect(android).toMatch(/if \(Array\.isArray\(source_\)\)/);
+    expect(android).toMatch(/nativeProps\.headers = sourceHeaders/);
+
+    // And the object branch destructures uri, width and height, never headers.
+    const objectBranch = /\} else \{\s*const \{uri, width: sourceWidth, height: sourceHeight\} = source_;/.exec(
+      android,
+    );
+    expect(objectBranch).not.toBeNull();
+  });
+
+  it('hands the native platforms an array, not a bare object', () => {
+    const source = code('lib/authedImage.ts');
+
+    expect(source).toMatch(/return source \? \[source\] : undefined/);
+  });
+
+  it('does not let Avatar rebuild the broken shape in the middle', () => {
+    // Avatar used to take a uri and a headers map and reassemble them into the
+    // exact plain object the array exists to avoid.
+    const source = code('components/ui/Avatar.tsx');
+
+    expect(source).not.toMatch(/\{ uri, headers \}/);
+    expect(source).toMatch(/source\?: ImageSourcePropType/);
+  });
+});
