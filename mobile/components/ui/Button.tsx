@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated from 'react-native-reanimated';
 
@@ -44,6 +44,13 @@ export function Button({
 }: ButtonProps) {
   const { colors, radius, spacing, type } = useTheme();
   const inactive = disabled || loading;
+  // Reanimated has to inspect the style object in order to animate it, so an
+  // animated component silently drops the ({ pressed }) => style callback form
+  // that plain Pressable supports. On web that meant Button and Chip rendered
+  // with no fill, no border and no padding at all: bare text on the page, which
+  // is exactly what the welcome screen looked like. The pressed flag is tracked
+  // here instead so the style stays a plain array.
+  const [pressed, setPressed] = useState(false);
   // No tick on a primary action: the meaningful haptic is the success one that
   // fires when the work completes, and two in a row reads as a stutter.
   const { animatedStyle, onPressIn, onPressOut, reset } = usePressScale({
@@ -97,14 +104,20 @@ export function Button({
   return (
     <AnimatedPressable
       onPress={onPress}
-      onPressIn={onPressIn}
-      onPressOut={onPressOut}
+      onPressIn={() => {
+        setPressed(true);
+        onPressIn();
+      }}
+      onPressOut={() => {
+        setPressed(false);
+        onPressOut();
+      }}
       disabled={inactive}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: inactive, busy: loading }}
-      style={({ pressed }: { pressed: boolean }) => [
+      style={[
         {
           borderRadius: radius.pill,
           backgroundColor: fill,

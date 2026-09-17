@@ -68,7 +68,7 @@ describe('Chip', () => {
     const plain = render(<Chip label="Medium" />).getByText('Medium');
     const picked = render(<Chip label="Medium" selected />).getByText('Medium');
 
-    const weightOf = (node: { props: { style: unknown } }) =>
+    const weightOf = (node: { props: Record<string, unknown> }) =>
       [node.props.style].flat(3).find((s) => s && typeof s === 'object' && 'fontWeight' in s);
 
     expect(weightOf(picked)).toEqual(weightOf(plain));
@@ -133,5 +133,38 @@ describe('Button', () => {
     fireEvent.press(getByText('Log it'));
 
     expect(onPress).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('styles survive the animation wrapper', () => {
+  // Reanimated has to inspect the style object to animate it, so an animated
+  // component silently drops the ({ pressed }) => style callback that plain
+  // Pressable accepts. Button and Chip both used that form, and on web it meant
+  // they rendered with no fill, no border and no padding: bare text on the page.
+  // The welcome screen shipped looking exactly like that.
+  const flat = (node: { props: Record<string, unknown> }) => [node.props.style].flat(4);
+
+  it.each([
+    ['Button', () => render(<Button label="Sign in" />).getByRole('button')],
+    ['Chip', () => render(<Chip label="Medium" />).getByRole('button')],
+  ])('%s passes a resolved style, never a function', (_name, get) => {
+    const node = get();
+
+    expect(typeof node.props.style).not.toBe('function');
+    const fill = flat(node).find((s) => s && typeof s === 'object' && 'backgroundColor' in s);
+    expect(fill).toBeDefined();
+  });
+
+  it.each([
+    ['Button', () => render(<Button label="Sign in" />).getByRole('button')],
+    ['Chip', () => render(<Chip label="Medium" />).getByRole('button')],
+  ])('%s actually renders a shape, not just a label', (_name, get) => {
+    const style = Object.assign({}, ...flat(get()).filter((s) => s && typeof s === 'object'));
+
+    // A control with no fill, no radius and no padding is text.
+    expect(style.backgroundColor).toBeTruthy();
+    expect(style.borderRadius).toBeGreaterThan(0);
+    expect(style.paddingHorizontal).toBeGreaterThan(0);
   });
 });

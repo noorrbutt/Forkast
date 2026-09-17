@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated from 'react-native-reanimated';
 
@@ -56,19 +57,32 @@ export function Chip({
 }: ChipProps) {
   const { colors, radius, spacing, type } = useTheme();
   const { animatedStyle, onPressIn, onPressOut } = usePressScale({ disabled });
+  // Reanimated has to inspect the style object in order to animate it, so an
+  // animated component silently drops the ({ pressed }) => style callback form
+  // that plain Pressable supports. On web that meant Button and Chip rendered
+  // with no fill, no border and no padding at all: bare text on the page, which
+  // is exactly what the welcome screen looked like. The pressed flag is tracked
+  // here instead so the style stays a plain array.
+  const [pressed, setPressed] = useState(false);
 
   return (
     <AnimatedPressable
       onPress={onPress}
-      onPressIn={onPressIn}
-      onPressOut={onPressOut}
+      onPressIn={() => {
+        setPressed(true);
+        onPressIn();
+      }}
+      onPressOut={() => {
+        setPressed(false);
+        onPressOut();
+      }}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ selected, disabled }}
       // Whatever the padding works out to, the touchable area clears the
       // platform minimum.
       hitSlop={8}
-      style={({ pressed }: { pressed: boolean }) => [
+      style={[
         {
           flexDirection: 'row',
           alignItems: 'center',
