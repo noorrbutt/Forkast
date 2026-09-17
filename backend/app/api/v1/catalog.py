@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import func, or_, select, text
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import CurrentUser, SessionDep
 from app.models import Cuisine, FoodCategory, FoodLog, Restaurant
@@ -228,12 +229,26 @@ async def upsert_restaurant(
     """
     normalised_area = area.strip() if area and area.strip() else None
 
-    existing = await session.scalar(
-        select(Restaurant).where(
-            func.lower(Restaurant.name) == name.strip().lower(),
-            func.coalesce(func.lower(Restaurant.area), "") == (normalised_area or "").lower(),
+    async def find() -> Restaurant | None:
+        return await session.scalar(
+            select(Restaurant).where(
+                # func.lower on BOTH sides, never Python's str.lower on one of
+                # them. They are not the same function: PostgreSQL leaves U+0130
+                # (the Turkish dotted capital I) and U+1E9E (capital sharp s)
+                # alone, while Python folds them to 'i' plus a combining dot and
+                # to 'ss'. The unique index uses PostgreSQL's, so a Python
+                # folded lookup missed a row that was already there, the insert
+                # below ran anyway, and the index rejected it with an
+                # IntegrityError nothing caught. The second person to log a meal
+                # at a restaurant with such a character in its name got a 500
+                # and lost the meal.
+                func.lower(Restaurant.name) == func.lower(name.strip()),
+                func.coalesce(func.lower(Restaurant.area), "")
+                == func.lower(normalised_area or ""),
+            )
         )
-    )
+
+    existing = await find()
     if existing is not None:
         # Backfill coordinates if this caller happens to know them.
         if latitude is not None and existing.latitude is None:
@@ -250,7 +265,21 @@ async def upsert_restaurant(
         created_by=created_by,
     )
     session.add(restaurant)
-    await session.flush()
+
+    try:
+        await session.flush()
+    except IntegrityError:
+        # The lookup above is not atomic, the same way register's is not. Two
+        # people logging a meal at the same new restaurant at the same moment
+        # both miss, and the index catches the loser. That is a shared registry
+        # working correctly, not an error, so the loser adopts the row the
+        # winner just made.
+        await session.rollback()
+        found = await find()
+        if found is None:
+            raise
+        return found, False
+
     return restaurant, True
 
 
