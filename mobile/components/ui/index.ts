@@ -9,7 +9,7 @@ export { Icon, type IconName } from './Icon';
 export { Loading } from './Loading';
 export { Progress } from './Progress';
 export { Screen } from './Screen';
-export { SectionLabel } from './SectionLabel';
+export { ControlLabel } from './ControlLabel';
 export { StatTile } from './StatTile';
 export { Avatar, initialsOf } from './Avatar';
 export { Dialog } from './Dialog';

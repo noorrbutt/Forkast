@@ -245,14 +245,26 @@ describe('icons name a destination, never a heading', () => {
     expect(icons.length).toBe(rows.length);
   });
 
-  it('does not put one back beside the photo heading', () => {
-    // Section 10's original offence. SectionLabel is a heading: it labels
-    // content you are already looking at and it is not tappable.
+  it('does not put one back beside the photo label', () => {
+    // Section 10's original offence. A ControlLabel labels content you are
+    // already looking at and it is not tappable, so nothing goes beside it.
     const source = code('components/MealPhoto.tsx');
-    const heading = /<SectionLabel>Photo<\/SectionLabel>/.exec(source);
+    const heading = /<ControlLabel>Photo<\/ControlLabel>/.exec(source);
 
     expect(heading).not.toBeNull();
-    expect(source).not.toMatch(/<Icon[^>]*\/>\s*<SectionLabel>/);
+    expect(source).not.toMatch(/<Icon[^>]*\/>\s*<ControlLabel>/);
+  });
+
+  it('labels a group of controls the same way on both forms', () => {
+    // The log form and the meal screen ask the same four questions. They used
+    // to draw them at two different ranks, 12/500 on one and 16/600 on the
+    // other, which is the rule against two screens solving one problem two
+    // ways. Neither may reintroduce a local label to do it.
+    for (const screen of ['app/(tabs)/log.tsx', 'app/logs/[id].tsx']) {
+      const source = code(screen);
+      expect(source).toMatch(/<ControlLabel>Serving size<\/ControlLabel>/);
+      expect(source).not.toMatch(/function ControlLabel/);
+    }
   });
 });
 

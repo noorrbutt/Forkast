@@ -8,6 +8,7 @@ import {
   Button,
   Card,
   Chip,
+  ControlLabel,
   ErrorState,
   Field,
   Hero,
@@ -140,20 +141,6 @@ const FORM_WIDTH = 420;
 
 /** Where the photo has got to, given it can only be sent once the log exists. */
 type PhotoStatus = 'none' | 'uploading' | 'attached' | 'failed';
-
-/**
- * The label above a group of controls that is not a text input.
- *
- * Deliberately the same 12/500 sentence case that Field and Select already
- * print above themselves, so a row of chips and a row of inputs read as the
- * same rank of question. It is not a section heading, and it is not `label`,
- * the 11px uppercase style the guide restricts to the tab bar and chart axes.
- */
-function ControlLabel({ children }: { children: string }) {
-  const { colors, type } = useTheme();
-
-  return <Text style={[type.labelSoft, { color: colors.muted }]}>{children}</Text>;
-}
 
 export default function LogScreen() {
   const { colors, spacing, type } = useTheme();

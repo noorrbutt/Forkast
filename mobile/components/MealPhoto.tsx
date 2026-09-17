@@ -12,7 +12,7 @@ import { describeError } from '../lib/api';
 import { haptics } from '../lib/haptics';
 import { useTheme } from '../theme';
 import type { Uuid } from '../lib/types';
-import { Button, Dialog, SectionLabel } from './ui';
+import { Button, ControlLabel, Dialog } from './ui';
 
 /** A meal that exists, so a picked photo goes to the server there and then. */
 type AttachedProps = {
@@ -143,7 +143,7 @@ export function MealPhoto(props: AttachedProps | HeldProps) {
 
   return (
     <View style={{ gap: spacing.lg }}>
-      <SectionLabel>Photo</SectionLabel>
+      <ControlLabel>Photo</ControlLabel>
 
       {thumbnail && attached ? (
         <Pressable

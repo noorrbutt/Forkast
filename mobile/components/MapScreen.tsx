@@ -9,7 +9,7 @@ import { describeError } from '../lib/api';
 import { formatNumber } from '../lib/format';
 import type { FoodLog, Restaurant } from '../lib/types';
 import { useTheme } from '../theme';
-import { Card, Empty, ErrorState, Loading, SectionLabel } from './ui';
+import { Card, Empty, ErrorState, Loading } from './ui';
 
 const UNLISTED = 'Area not set';
 
@@ -243,7 +243,9 @@ export function MapScreen() {
         <Card key={group.area}>
           <View style={{ gap: spacing.lg }}>
             <View style={{ gap: spacing.xs }}>
-              <SectionLabel>{group.area}</SectionLabel>
+              {/* A real section heading, so it wears `title` like every other
+                  heading in the app rather than a component of its own. */}
+              <Text style={[type.title, { color: colors.text }]}>{group.area}</Text>
               <Text style={[type.displaySm, { color: colors.text }]}>{formatNumber(group.total)}</Text>
               <Text style={[type.caption, { color: colors.muted }]}>
                 {group.total === 1 ? 'meal logged here' : 'meals logged here'}

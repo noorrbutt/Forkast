@@ -13,7 +13,7 @@ import {
   HeroWash,
   Loading,
   Screen,
-  SectionLabel,
+  ControlLabel,
   Select,
   type SelectOption,
 } from '../../components/ui';
@@ -491,12 +491,12 @@ export default function MealScreen() {
           />
 
           <View style={{ gap: spacing.md }}>
-            <SectionLabel>Rating</SectionLabel>
+            <ControlLabel>Rating</ControlLabel>
             <StarRating value={rating} onChange={setRating} />
           </View>
 
           <View style={{ gap: spacing.md }}>
-            <SectionLabel>Fun scale</SectionLabel>
+            <ControlLabel>Fun scale</ControlLabel>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               {FUN_LEVELS.map((level) => (
                 <Chip
@@ -511,7 +511,7 @@ export default function MealScreen() {
           </View>
 
           <View style={{ gap: spacing.md }}>
-            <SectionLabel>Who was there</SectionLabel>
+            <ControlLabel>Who was there</ControlLabel>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
               {FRIEND_SCALES.map((scale) => (
                 <Chip
@@ -526,7 +526,7 @@ export default function MealScreen() {
           </View>
 
           <View style={{ gap: spacing.md }}>
-            <SectionLabel>Serving size</SectionLabel>
+            <ControlLabel>Serving size</ControlLabel>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               {SERVING_SIZES.map((size) => (
                 <Chip
@@ -544,7 +544,7 @@ export default function MealScreen() {
               is the rarest thing anyone does here, and these three controls at
               the top of the screen would turn the one thing into a toolbar. */}
           <View style={{ gap: spacing.md }}>
-            <SectionLabel>Photo</SectionLabel>
+            <ControlLabel>Photo</ControlLabel>
             {hasPhoto ? null : (
               <Text style={[type.caption, { color: colors.muted }]}>
                 Optional. A picture turns a list of dishes into something worth looking back at.
