@@ -467,7 +467,12 @@ function TrendCard({ trend }: { trend: ReturnType<typeof useTrend> }) {
                   ) : null}
                 </View>
                 {/* Right aligned so three figures in a column can be compared. */}
-                <Text style={[type.subtitle, { color: colors.text, textAlign: 'right' }]}>
+                <Text
+                  style={[
+                    type.subtitle,
+                    { color: colors.text, textAlign: 'right', fontVariant: ['tabular-nums'] },
+                  ]}
+                >
                   {row.value}
                 </Text>
               </View>

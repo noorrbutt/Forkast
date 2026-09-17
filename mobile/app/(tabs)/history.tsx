@@ -268,8 +268,6 @@ function MealRowBase({ log, last, onOpen, onRepeat, sending, confirmed, error }:
                 color: colors.text,
                 minWidth: CALORIES,
                 textAlign: 'right',
-                // Lining figures, so a column of digits stays a column.
-                fontVariant: ['tabular-nums'],
               },
             ]}
           >

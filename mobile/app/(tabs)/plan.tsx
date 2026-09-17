@@ -219,7 +219,13 @@ export default function PlanRoute() {
                             <Text style={[type.body, { color: colors.text }]}>{meal.suggestion}</Text>
                           </View>
                           <Text
-                            style={[type.subtitle, { color: colors.muted }]}
+                            style={[
+                              type.subtitle,
+                              // The column right-aligns so nine values can be
+                              // read down it, which only works if the digits
+                              // share an advance.
+                              { color: colors.muted, fontVariant: ['tabular-nums'] },
+                            ]}
                             // The column carries the unit visually. A screen
                             // reader has no column, so it gets the unit said.
                             accessibilityLabel={`${formatNumber(meal.approx_calories)} kcal`}

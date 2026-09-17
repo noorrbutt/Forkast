@@ -284,6 +284,22 @@ export const layout = {
  * Editorial type scale: large light-weight display numerals set against
  * tiny uppercase letterspaced labels.
  */
+  /**
+   * Lining, fixed-advance figures on every token that sets a number.
+   *
+   * The whole type scale above `title` exists to set figures, and all of it was
+   * proportional. Two consequences, both visible today. A figure that changes in
+   * place jitters: the dashboard's eaten and burned numbers physically move as
+   * the day's totals change, because a 1 is narrower than a 7. And a column of
+   * numbers does not line up, so the diary, the plan and the month comparison
+   * each right-align a column that then agrees on its right edge and nowhere
+   * else. The repo had exactly one `fontVariant`, hand-rolled at one of those
+   * four sites, with the correct reasoning written beside it.
+   *
+   * Deliberately NOT on `subtitle`. That is the row-label and button-label
+   * token, so it would set dish names and running sentences in fixed-advance
+   * figures, where a 1 takes a full figure width and leaves a hole.
+   */
 export const type = {
   /**
    * 64 / 300. Reserved for the one number or headline a screen leads with, at
@@ -306,6 +322,7 @@ export const type = {
     fontWeight: '300',
     letterSpacing: -2.2,
     lineHeight: 70,
+    fontVariant: ['tabular-nums'],
   } satisfies TextStyle,
   /** 48 / 300. A page title, or a secondary numeral on a screen with a hero. */
   display: {
@@ -313,6 +330,7 @@ export const type = {
     fontWeight: '300',
     letterSpacing: -1.4,
     lineHeight: 54,
+    fontVariant: ['tabular-nums'],
   } satisfies TextStyle,
   /** 34 / 300. Secondary numerals, for example streak counts in a pair. */
   displaySm: {
@@ -320,6 +338,7 @@ export const type = {
     fontWeight: '300',
     letterSpacing: -0.8,
     lineHeight: 40,
+    fontVariant: ['tabular-nums'],
   } satisfies TextStyle,
   /** 26 / 300. Numerals inside a stat tile. */
   numeral: {
@@ -327,6 +346,7 @@ export const type = {
     fontWeight: '300',
     letterSpacing: -0.4,
     lineHeight: 32,
+    fontVariant: ['tabular-nums'],
   } satisfies TextStyle,
   title: {
     fontSize: 21,
