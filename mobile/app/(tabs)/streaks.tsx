@@ -1,40 +1,11 @@
 import { useRouter } from 'expo-router';
 import { RefreshControl, Text, View } from 'react-native';
 
-import {
-  Button,
-  Card,
-  Empty,
-  ErrorState,
-  Icon,
-  Loading,
-  Screen,
-  SectionLabel,
-  type IconName,
-} from '../../components/ui';
+import { Button, Card, ErrorState, Hero, Loading, Screen } from '../../components/ui';
 import { useStreaks } from '../../hooks/useInsights';
 import { describeError } from '../../lib/api';
 import { formatDate } from '../../lib/format';
 import { useTheme } from '../../theme';
-
-/** The three numbers this screen keeps, spelled out while there are none. */
-const PREVIEW: { icon: IconName; title: string; caption: string }[] = [
-  {
-    icon: 'streaks',
-    title: 'Current streak',
-    caption: 'Days in a row where nothing you logged counted as junk.',
-  },
-  {
-    icon: 'trophy',
-    title: 'Longest',
-    caption: 'Your best run so far. A slip never takes it away.',
-  },
-  {
-    icon: 'history',
-    title: 'Last slip',
-    caption: 'The last day something junk went on the board.',
-  },
-];
 
 /** Encouraging on every branch. A streak at zero is a starting line, not a failure. */
 function supportiveCopy(current: number, longest: number): string {
@@ -54,23 +25,20 @@ function supportiveCopy(current: number, longest: number): string {
 }
 
 /**
- * A section label with its icon.
+ * The one thing: the current streak, as a single figure in days.
  *
- * Kept here rather than folded into SectionLabel because that component puts
- * its children straight into a Text, and an icon riding inside a line box of
- * fifteen pixels clips on Android.
+ * This screen answers one question, how long is the run, so it leads with the
+ * answer and nothing else competes with it. Everything that was a card of its
+ * own before is either supporting detail under the figure or gone.
+ *
+ * Before there is any run at all, the figure would be a zero, and a zero is a
+ * measurement of nothing rather than an answer: nothing has been broken because
+ * nothing has started. So an untouched account leads with the day it is about
+ * to begin instead, which is the same shape of composition carrying an
+ * invitation rather than a verdict. Once anything is on the board the figure is
+ * the truth again, including a zero after a slip, because that is a real
+ * reading of a real run and the line under it does the encouraging.
  */
-function IconLabel({ icon, children }: { icon: IconName; children: string }) {
-  const { spacing } = useTheme();
-
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-      <Icon name={icon} size={14} />
-      <SectionLabel>{children}</SectionLabel>
-    </View>
-  );
-}
-
 export default function StreaksScreen() {
   const { colors, spacing, type } = useTheme();
   const router = useRouter();
@@ -83,10 +51,14 @@ export default function StreaksScreen() {
   // is a different thing from a run that has just been broken.
   const started = Boolean(data && (current > 0 || longest > 0 || data.last_junk_date));
 
+  // The scroll already puts lg between its children, so xxl on each side of the
+  // hero lands its surrounding space on xxxl, which nothing else on the screen
+  // is allowed to have.
+  const heroSpace = { paddingTop: spacing.xxl, paddingBottom: spacing.xxl };
+
   return (
     <Screen
       title="Streaks"
-      eyebrow="Keep it going"
       refreshControl={
         <RefreshControl
           refreshing={streaks.isRefetching}
@@ -95,7 +67,11 @@ export default function StreaksScreen() {
         />
       }
     >
-      {streaks.isLoading ? <Loading label="Counting your days" /> : null}
+      {/* isPending rather than isLoading, because the query is disabled until
+          the stored token has been read back from the keystore and a disabled
+          query is not "loading". Reading it that way left the first paint of a
+          cold start blank rather than showing a state anyone designed. */}
+      {streaks.isPending ? <Loading label="Counting your days" /> : null}
 
       {streaks.isError && !data ? (
         <ErrorState
@@ -107,77 +83,61 @@ export default function StreaksScreen() {
 
       {data && !started ? (
         <>
-          <Empty
-            icon="streaks"
-            title="Day one is one meal away"
-            message="A streak counts the days in a row where nothing you logged was junk. Nothing is on the board yet, so nothing has been broken either."
-            actionLabel="Log a meal"
-            actionIcon="log"
-            onAction={() => router.navigate('/log')}
-          />
+          <View style={heroSpace}>
+            <Hero
+              value="Day one"
+              caption="A streak counts the days in a row where nothing you log is junk."
+            />
+          </View>
 
-          <Card>
-            <View style={{ gap: spacing.lg }}>
-              <IconLabel icon="chart">What you will see</IconLabel>
-              {PREVIEW.map((row) => (
-                <View
-                  key={row.title}
-                  style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}
-                >
-                  <Icon name={row.icon} size={18} />
-                  <View style={{ flex: 1, gap: spacing.xs }}>
-                    <Text style={[type.subtitle, { color: colors.text }]}>{row.title}</Text>
-                    <Text style={[type.caption, { color: colors.muted }]}>{row.caption}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          </Card>
+          <Text style={[type.caption, { color: colors.muted }]}>
+            Nothing is on the board yet, so nothing has been broken either.
+          </Text>
+
+          <Button label="Log a meal" icon="log" size="lg" full onPress={() => router.navigate('/log')} />
         </>
       ) : null}
 
       {data && started ? (
         <>
-          <Card>
-            <View style={{ gap: spacing.xs }}>
-              <IconLabel icon="streaks">Current streak</IconLabel>
-              <Text style={[type.display, { color: current > 0 ? colors.accent : colors.text }]}>
-                {current}
-              </Text>
-              <Text style={[type.caption, { color: colors.muted }]}>
-                {current === 1 ? 'day without junk' : 'days without junk'}
-              </Text>
-            </View>
-          </Card>
-
-          <View style={{ flexDirection: 'row', gap: spacing.md }}>
-            <Card alt style={{ flex: 1 }}>
-              <View style={{ gap: spacing.xs }}>
-                <IconLabel icon="trophy">Longest</IconLabel>
-                <Text style={[type.displaySm, { color: colors.text }]}>{longest}</Text>
-                <Text style={[type.caption, { color: colors.muted }]}>personal best</Text>
-              </View>
-            </Card>
-            <Card alt style={{ flex: 1 }}>
-              <View style={{ gap: spacing.xs }}>
-                <IconLabel icon="history">Last slip</IconLabel>
-                <Text style={[type.subtitle, { color: colors.text }]} numberOfLines={1}>
-                  {data.last_junk_date ? formatDate(data.last_junk_date) : 'None yet'}
-                </Text>
-                <Text style={[type.caption, { color: colors.muted }]}>no big deal</Text>
-              </View>
-            </Card>
+          <View style={heroSpace}>
+            <Hero
+              value={String(current)}
+              caption={current === 1 ? 'day without junk' : 'days without junk'}
+              // Ink rather than accent once the run is broken, so a zero reads
+              // as a reading rather than as a thing to celebrate. The number
+              // still carries the meaning on its own.
+              color={current > 0 ? colors.accent : colors.text}
+            />
           </View>
 
+          {/* The record, which is reference rather than the answer, so it sits
+              two full steps of the scale below the figure above it. The two
+              values share a right edge so they read as one column. */}
           <Card>
-            <View style={{ gap: spacing.md }}>
-              <IconLabel icon="chart">How it is going</IconLabel>
-              <Text style={[type.body, { color: colors.text }]}>{supportiveCopy(current, longest)}</Text>
-              {data.message ? (
-                <Text style={[type.caption, { color: colors.muted }]}>{data.message}</Text>
-              ) : null}
+            <View style={{ gap: spacing.lg }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.lg }}>
+                <Text style={[type.body, { color: colors.muted, flex: 1 }]}>Longest run</Text>
+                <Text style={[type.displaySm, { color: colors.text }]}>{longest}</Text>
+              </View>
+
+              <View style={{ height: 1, backgroundColor: colors.border }} />
+
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.lg }}>
+                <Text style={[type.body, { color: colors.muted, flex: 1 }]}>Last slip</Text>
+                <Text style={[type.subtitle, { color: colors.text }]}>
+                  {data.last_junk_date ? formatDate(data.last_junk_date) : 'None yet'}
+                </Text>
+              </View>
             </View>
           </Card>
+
+          <View style={{ gap: spacing.sm }}>
+            <Text style={[type.body, { color: colors.text }]}>{supportiveCopy(current, longest)}</Text>
+            {data.message ? (
+              <Text style={[type.caption, { color: colors.muted }]}>{data.message}</Text>
+            ) : null}
+          </View>
 
           <Button label="Log a meal" icon="log" size="lg" full onPress={() => router.navigate('/log')} />
         </>

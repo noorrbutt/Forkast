@@ -125,6 +125,8 @@ export type LogPage = {
 };
 
 export type CaloriesByDay = {
+  /** How much of the day came from junk, so the chart can show its shape. */
+  junk_calories: number;
   day: string;
   calories: number;
   /** What the user said they burned. Zero when nothing was entered. */

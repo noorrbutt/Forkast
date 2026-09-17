@@ -8,15 +8,12 @@ import {
   Button,
   Card,
   Chip,
-  Empty,
   ErrorState,
   Field,
-  Icon,
+  Hero,
   Loading,
   Screen,
-  SectionLabel,
   Select,
-  type IconName,
   type SelectOption,
 } from '../../components/ui';
 import { useCategories, useCuisines, useSearch } from '../../hooks/useCatalog';
@@ -37,6 +34,87 @@ import {
   type ServingSize,
 } from '../../lib/types';
 import { useTheme } from '../../theme';
+
+/**
+ * Logging a meal, and the one screen state that follows it.
+ *
+ * THE ONE THING, while the form is being filled in: the question "What did you
+ * eat?" at `display`, with the two controls that answer it directly underneath.
+ * Everything below that is a step of the type scale quieter and a step of the
+ * spacing scale closer together.
+ *
+ * THE ONE THING, once the meal is saved: the estimate, as the only `hero` in
+ * this file. The two states are mutually exclusive renders of one component, so
+ * the screen still only ever shows one hero.
+ *
+ * Section 13 critique of what this replaced.
+ *
+ * 1. What it was. One capped column holding fifteen top level blocks at a
+ *    single gap of 24: four cards, four text fields, two pickers and four rows
+ *    of chips, each of the last five introduced by a heading with an icon
+ *    beside it. Nothing on it was larger than 16 until the meal had been saved.
+ *
+ * 2. Which rules it broke.
+ *    - Section 2 contrast, and the first composition line of Section 14: the
+ *      largest type anywhere on the form was `subtitle` at 16, which is also
+ *      what every field label, chip and button used. The gap between the first
+ *      and second element was zero steps against a floor of one full step, so
+ *      there was nothing for the eye to land on and no honest answer to "what
+ *      is the one thing".
+ *    - Section 10: an icon beside all seven headings, through the local
+ *      IconLabel helper. Estimated, How a log works, Matches, Rating, Fun
+ *      scale, Who was there and Serving size.
+ *    - Section 6: four cards on a screen that is one task. The explainer card,
+ *      the matches card and both empty states were surfaces around content that
+ *      needed no surface of its own, and a card around a chip row is what turns
+ *      a form into a stack.
+ *    - Section 3 usability: the primary action shipped `disabled={!canSubmit}`.
+ *      The guide names this exactly, "MUST NOT disable the primary action of a
+ *      form until the form is valid", and calls hiding the affordance behind
+ *      the action it invites the worst version of it.
+ *    - Section 5: all fifteen blocks were separated by the same 24, so the gap
+ *      inside a group equalled the gap around it and the grouping said nothing.
+ *      Serving size sat four blocks away from the category even though those
+ *      two together are the whole calorie estimate.
+ *    - Section 10 again: both empty states passed an icon to `Empty`, which
+ *      draws it on a 56pt accent disc.
+ *    - Section 12: the header wore "Nice one" as an eyebrow, which does no job.
+ *
+ * 3. What the one thing is now. The question the form asks, at 48 over a body
+ *    line that says how the estimate is arrived at, with 32 of space beneath it
+ *    against 24 everywhere else. After a save it is the estimate at 64, alone
+ *    in the top third with 48 above and below it.
+ *
+ * 4. What was demoted or cut, and why that is correct.
+ *    Demoted: the seven headings. Four became the same 12/500 sentence case
+ *    label that Field and Select already print above themselves, because a row
+ *    of chips is a question of exactly the same rank as a text input and
+ *    dressing it as a section made every question look like a section. The
+ *    other three are gone: search results under a search field, and a photo
+ *    picker with a photo in it, are obvious from their content.
+ *    Demoted: the form itself, from fifteen blocks to four groups, "what you
+ *    ate", "where you ate it", "how it was" and the photo, with serving size
+ *    moved up beside the category it scales.
+ *    Cut: the three step explainer card, replaced by one line under the
+ *    question that stays put rather than vanishing at the first tap, and the
+ *    two `Empty` cards, replaced by a sentence and the one button that fixes
+ *    the situation.
+ *
+ * Why the estimate is NOT a hero on the form.
+ *
+ * It was the obvious candidate and it is the wrong call twice over. The number
+ * does not exist yet: the server picks a value inside the category's range and
+ * only then multiplies it by the serving size, so the most the client can
+ * honestly say before submitting is a range. The style guide requires a hero to
+ * be a number or a short headline, and a range is neither. Second, a 64pt
+ * figure that appears only once a category is chosen would take the top of the
+ * hierarchy away from the controls mid task and shove every remaining field
+ * down under the reader's finger at the moment they are using it. The range
+ * lives where it is acted on instead, as the hint under the category picker,
+ * which is also what this screen's tests assert. Once the meal is saved the
+ * number is real and the screen has nothing else to say, and that is where the
+ * hero goes.
+ */
 
 const FUN_LEVELS = [1, 2, 3, 4, 5];
 
@@ -60,36 +138,25 @@ const ANY_CUISINE = 'any';
  */
 const FORM_WIDTH = 420;
 
-/** The whole form in three lines, for someone opening it for the first time. */
-const STEPS: { icon: IconName; text: string }[] = [
-  { icon: 'search', text: 'Search for what you ate, or pick a cuisine and a category.' },
-  { icon: 'meal', text: 'Name the dish, say where you ate it and how big the serving was.' },
-  { icon: 'chart', text: 'Log it. Forkast estimates the calories and your week updates.' },
-];
-
 /** Where the photo has got to, given it can only be sent once the log exists. */
 type PhotoStatus = 'none' | 'uploading' | 'attached' | 'failed';
 
 /**
- * A section label with its icon.
+ * The label above a group of controls that is not a text input.
  *
- * Kept here rather than folded into SectionLabel because that component puts
- * its children straight into a Text, and an icon riding inside a line box of
- * fifteen pixels clips on Android.
+ * Deliberately the same 12/500 sentence case that Field and Select already
+ * print above themselves, so a row of chips and a row of inputs read as the
+ * same rank of question. It is not a section heading, and it is not `label`,
+ * the 11px uppercase style the guide restricts to the tab bar and chart axes.
  */
-function IconLabel({ icon, children }: { icon: IconName; children: string }) {
-  const { spacing } = useTheme();
+function ControlLabel({ children }: { children: string }) {
+  const { colors, type } = useTheme();
 
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-      <Icon name={icon} size={14} />
-      <SectionLabel>{children}</SectionLabel>
-    </View>
-  );
+  return <Text style={[type.labelSoft, { color: colors.muted }]}>{children}</Text>;
 }
 
 export default function LogScreen() {
-  const { colors, spacing, type, name: themeName } = useTheme();
+  const { colors, spacing, type } = useTheme();
   const router = useRouter();
 
   const [query, setQuery] = useState('');
@@ -106,6 +173,10 @@ export default function LogScreen() {
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
   const [photoStatus, setPhotoStatus] = useState<PhotoStatus>('none');
   const [saved, setSaved] = useState<FoodLog | null>(null);
+  // Whether "Log it" has been pressed on a form that was not ready. The button
+  // stays live either way; this only decides whether the line under it is said
+  // quietly or urgently.
+  const [refused, setRefused] = useState(false);
 
   const cuisines = useCuisines();
   // Every category, once, rather than a fetch per cuisine. Choosing a category
@@ -125,13 +196,18 @@ export default function LogScreen() {
   const cuisineOptions = useMemo<SelectOption[]>(
     () => [
       { value: ANY_CUISINE, label: 'Any cuisine', hint: 'Search every category' },
+      // No colour dot. Cuisine identity is the emoji plus the name: the ten
+      // generated cuisine colours failed the palette validator on three of six
+      // checks, worst adjacent pair 9.3 against a normal vision floor of 15 and
+      // 5.8 deutan against a floor of 8, and a picker is exactly where two of
+      // them end up side by side.
       ...(cuisines.data ?? []).map((cuisine) => ({
         value: String(cuisine.id),
         label: cuisine.name,
         emoji: cuisine.emoji ?? undefined,
       })),
     ],
-    [cuisines.data, themeName],
+    [cuisines.data],
   );
 
   const cuisineById = useMemo(
@@ -160,7 +236,7 @@ export default function LogScreen() {
           hint: cuisine?.name,
         };
       }),
-    [visibleCategories, cuisineById, themeName],
+    [visibleCategories, cuisineById],
   );
 
   const resetForm = () => {
@@ -177,6 +253,7 @@ export default function LogScreen() {
     setServingSize('medium');
     setPhoto(null);
     setPhotoStatus('none');
+    setRefused(false);
     createLog.reset();
     uploadPhoto.reset();
   };
@@ -200,11 +277,19 @@ export default function LogScreen() {
     setCuisineId(category.cuisine_id);
   };
 
-  const canSubmit = dishName.trim().length > 0 && categoryId !== null && !createLog.isPending;
+  /**
+   * What the form still needs, in the order the controls appear.
+   *
+   * Worked out whether or not anybody has pressed anything, because the button
+   * is never disabled and a reader has to be able to see what is outstanding
+   * without first pressing a control to find out.
+   */
+  const gaps = [
+    dishName.trim().length === 0 ? 'a dish name' : null,
+    categoryId === null ? 'a category' : null,
+  ].filter((gap): gap is string => gap !== null);
 
-  // Nothing typed and nothing picked, so the form is still a blank page and can
-  // afford to explain itself. It gets out of the way at the first tap.
-  const pristine = query.trim().length === 0 && dishName.trim().length === 0 && categoryId === null;
+  const outstanding = gaps.length === 0 ? null : `Still needs ${gaps.join(' and ')}.`;
 
   /**
    * Send the held photo, now that the meal has an id to hang it on.
@@ -226,7 +311,16 @@ export default function LogScreen() {
   };
 
   const submit = () => {
-    if (!canSubmit || categoryId === null) return;
+    if (createLog.isPending) return;
+
+    // The button was live, so a press on an unfinished form is answered by
+    // saying what is missing rather than by having been unpressable.
+    if (categoryId === null || gaps.length > 0) {
+      setRefused(true);
+      haptics.error();
+      return;
+    }
+    setRefused(false);
 
     const input: LogInput = {
       dish_name: dishName.trim(),
@@ -267,25 +361,40 @@ export default function LogScreen() {
   };
   const optionChip = { flexGrow: 1 };
 
+  /**
+   * A group of questions. Inside is 16 and around is 24, which is the proximity
+   * rule: the gap inside a group is a full step smaller than the gap outside.
+   * Inside a single question, label to control, it drops again to 8.
+   */
+  const group = { gap: spacing.lg };
+
   if (saved) {
     return (
-      <Screen title="Logged" eyebrow="Nice one">
+      // No frosted header here on purpose. A bar reading "Logged" above a 64pt
+      // figure that already says so would be the same statement twice, and it
+      // would eat the top third the hero is meant to own.
+      <Screen>
         <View style={column}>
-          <Card>
-            <View style={{ gap: spacing.xs }}>
-              <IconLabel icon="check">Estimated</IconLabel>
-              <Text style={[type.display, { color: colors.accent }]}>
-                {formatNumber(saved.estimated_calories)}
-              </Text>
-              <Text style={[type.caption, { color: colors.muted }]}>
-                kcal for {saved.dish_name}
-                {saved.restaurant ? ` at ${saved.restaurant.name}` : ''}.
-              </Text>
-            </View>
-          </Card>
+          <View
+            style={{
+              alignItems: 'center',
+              // The only xxxl in this file. That reservation is what makes this
+              // read as the hero before its size is even considered.
+              paddingTop: spacing.xxl,
+              paddingBottom: spacing.xxxl,
+            }}
+          >
+            <Hero
+              value={formatNumber(saved.estimated_calories)}
+              caption={`kcal for ${saved.dish_name}${
+                saved.restaurant ? ` at ${saved.restaurant.name}` : ''
+              }`}
+              align="center"
+            />
+          </View>
 
           <Text style={[type.body, { color: colors.muted }]}>
-            That is on the board, and your dashboard and streak have already moved.
+            Your dashboard and your streak have already moved.
           </Text>
 
           {photoStatus === 'uploading' ? <Loading label="Attaching your photo" fill={false} /> : null}
@@ -295,18 +404,19 @@ export default function LogScreen() {
           ) : null}
 
           {photoStatus === 'failed' ? (
+            // The one card on this state. A problem that needs its own surface
+            // to hold it apart from the success above it is what a card is for.
             <Card>
-              <View style={{ gap: spacing.md }}>
-                <IconLabel icon="warning">Photo</IconLabel>
-                <Text style={[type.body, { color: colors.text }]}>
-                  The meal is saved. The photo did not attach, so it is not on it yet.
+              <View style={{ gap: spacing.md, alignItems: 'flex-start' }}>
+                <Text style={[type.subtitle, { color: colors.text }]}>
+                  The photo did not attach
                 </Text>
                 <Text style={[type.caption, { color: colors.muted }]}>
-                  Send it again from here, or add it later from the meal in your diary.
+                  The meal itself is saved. Send the picture again, or add it later from the meal in
+                  your diary.
                 </Text>
                 <Button
                   label="Try the photo again"
-                  icon="meal"
                   variant="secondary"
                   onPress={() => {
                     if (photo) void attachPhoto(saved.id, photo);
@@ -345,100 +455,108 @@ export default function LogScreen() {
     );
   }
 
+  // Results only count once the query is long enough to have produced them, so
+  // this is undefined rather than empty while someone is still typing the first
+  // letter. Held in one const so the blocks below narrow off it.
+  const results = query.trim().length >= 2 ? search.data : undefined;
+  const noMatches =
+    results !== undefined && results.dishes.length === 0 && results.categories.length === 0;
+
   return (
-    <Screen title="Log a meal" eyebrow="What did you eat">
+    <Screen title="Log a meal">
       <View style={column}>
-        {pristine ? (
-          <Card>
-            <View style={{ gap: spacing.lg }}>
-              <IconLabel icon="log">How a log works</IconLabel>
-              {STEPS.map((step, index) => (
-                <View
-                  key={step.icon}
-                  style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}
-                >
-                  <Icon name={step.icon} size={18} />
-                  <Text style={[type.body, { color: colors.text, flex: 1 }]}>
-                    {`${index + 1}. ${step.text}`}
-                  </Text>
-                </View>
-              ))}
+        {/* The one thing. 48 against a next largest of 21, and 32 of space
+            beneath it against 24 between everything else. */}
+        <View style={{ gap: spacing.sm, paddingBottom: spacing.sm }}>
+          <Text style={[type.display, { color: colors.text }]}>What did you eat?</Text>
+          <Text style={[type.body, { color: colors.muted }]}>
+            Search what people have already logged, or name the dish and pick the category it
+            belongs to. The category and the serving size are what Forkast estimates the calories
+            from.
+          </Text>
+        </View>
+
+        {/* Group one: the meal, and the two answers the estimate is built out
+            of. No heading, because the question above it is the heading. */}
+        <View style={group}>
+          <Field
+            label="Search"
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Biryani, ramen, burger"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          {search.isFetching ? <Loading label="Searching" fill={false} /> : null}
+
+          {noMatches ? (
+            <View style={{ gap: spacing.md, alignItems: 'flex-start' }}>
+              <Text style={[type.caption, { color: colors.muted }]}>
+                Nothing matched. Forkast only knows the dishes people have logged so far, so name
+                the dish below and pick the category it belongs to.
+              </Text>
+              <Button label="Clear the search" variant="secondary" onPress={() => setQuery('')} />
             </View>
-          </Card>
-        ) : null}
+          ) : null}
 
-        <Field
-          label="Search"
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Biryani, ramen, burger"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-
-        {search.isFetching ? <Loading label="Searching" fill={false} /> : null}
-
-        {search.data && query.trim().length >= 2 ? (
-          <Card>
-            <View style={{ gap: spacing.lg }}>
-              <IconLabel icon="search">Matches</IconLabel>
-              {search.data.dishes.length === 0 && search.data.categories.length === 0 ? (
-                <Empty
-                  icon="search"
-                  title="Nothing matched"
-                  message="Forkast only knows the dishes people have logged so far. Clear the search, then type the dish below and pick the category it belongs to."
-                  actionLabel="Clear the search"
-                  actionIcon="close"
-                  actionVariant="secondary"
-                  onAction={() => setQuery('')}
-                />
-              ) : null}
-
-              {search.data.dishes.length > 0 ? (
-                <View style={optionRow}>
-                  {search.data.dishes.slice(0, 8).map((dish, index) => (
-                    <Chip
-                      key={`${dish.dish_name}-${index}`}
-                      label={dish.dish_name}
-                      selected={dishName === dish.dish_name}
-                      showCheck
-                      style={optionChip}
-                      onPress={() => {
-                        setDishName(dish.dish_name);
-                        setCategoryId(dish.category_id);
-                        setQuery('');
-                      }}
-                    />
-                  ))}
-                </View>
-              ) : null}
-
-              {search.data.categories.length > 0 ? (
-                <View style={optionRow}>
-                  {search.data.categories.slice(0, 8).map((category) => (
-                    <Chip
-                      key={String(category.id)}
-                      label={category.name}
-                      selected={String(categoryId) === String(category.id)}
-                      showCheck
-                      style={optionChip}
-                      onPress={() => {
-                        setCuisineId(category.cuisine_id);
-                        setCategoryId(category.id);
-                        setQuery('');
-                      }}
-                    />
-                  ))}
-                </View>
-              ) : null}
+          {/* Results sit directly under the field that produced them, with no
+              heading and no surface. Both would be saying the obvious. */}
+          {results && results.dishes.length > 0 ? (
+            <View style={{ gap: spacing.sm }}>
+              <ControlLabel>Dishes people logged</ControlLabel>
+              <View style={optionRow}>
+                {results.dishes.slice(0, 8).map((dish, index) => (
+                  <Chip
+                    key={`${dish.dish_name}-${index}`}
+                    label={dish.dish_name}
+                    selected={dishName === dish.dish_name}
+                    showCheck
+                    style={optionChip}
+                    onPress={() => {
+                      setDishName(dish.dish_name);
+                      setCategoryId(dish.category_id);
+                      setQuery('');
+                    }}
+                  />
+                ))}
+              </View>
             </View>
-          </Card>
-        ) : null}
+          ) : null}
 
-        {/* Ten cuisines and thirty eight categories. As chips that is a wall of
-            tiny text with no way to search it, which is what made this screen
-            unreadable, so both are fields that open a searchable list. */}
-        <View style={{ gap: spacing.lg }}>
+          {results && results.categories.length > 0 ? (
+            <View style={{ gap: spacing.sm }}>
+              <ControlLabel>Categories</ControlLabel>
+              <View style={optionRow}>
+                {results.categories.slice(0, 8).map((category) => (
+                  <Chip
+                    key={String(category.id)}
+                    label={category.name}
+                    selected={String(categoryId) === String(category.id)}
+                    showCheck
+                    style={optionChip}
+                    onPress={() => {
+                      setCuisineId(category.cuisine_id);
+                      setCategoryId(category.id);
+                      setQuery('');
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          <Field
+            label="Dish"
+            value={dishName}
+            onChangeText={setDishName}
+            placeholder="Chicken karahi"
+          />
+
+          {/* Ten cuisines and thirty eight categories. As chips that is a wall
+              of tiny text with no way to search it, which is what made this
+              screen unreadable, so both are fields that open a searchable
+              list. */}
           {cuisines.isError ? (
             <ErrorState
               title="Cuisines unavailable"
@@ -487,114 +605,135 @@ export default function LogScreen() {
             />
           )}
 
+          {/* A cuisine with nothing filed under it is a designed state, not a
+              card: one sentence and the single button that gets out of it. */}
           {categories.data && visibleCategories.length === 0 ? (
-            <Empty
-              icon="category"
-              title="No categories here yet"
-              message="Nothing is mapped to this cuisine. The category is what Forkast estimates calories from, so pick one from the full list instead."
-              actionLabel="Show every cuisine"
-              actionIcon="cuisine"
-              actionVariant="secondary"
-              onAction={() => pickCuisine(null)}
-            />
+            <View style={{ gap: spacing.md, alignItems: 'flex-start' }}>
+              <Text style={[type.caption, { color: colors.muted }]}>
+                Nothing is filed under this cuisine yet, and the category is what the estimate is
+                built from.
+              </Text>
+              <Button
+                label="Search every category"
+                variant="secondary"
+                onPress={() => pickCuisine(null)}
+              />
+            </View>
           ) : null}
-        </View>
 
-        <Field label="Dish" value={dishName} onChangeText={setDishName} placeholder="Chicken karahi" />
-
-        <View style={{ gap: spacing.md }}>
-          <Field
-            label="Restaurant"
-            value={restaurantName}
-            onChangeText={(value) => {
-              setRestaurantName(value);
-              setRestaurantId(null);
-            }}
-            placeholder="Leave blank if you cooked"
-          />
-          {restaurants.data && restaurantName.trim().length > 0 && restaurantId === null ? (
+          {/* Beside the category on purpose. These two are the whole estimate:
+              the category gives the range and this multiplies it. They used to
+              sit four blocks apart. */}
+          <View style={{ gap: spacing.sm }}>
+            <ControlLabel>Serving size</ControlLabel>
             <View style={optionRow}>
-              {restaurants.data.slice(0, 6).map((restaurant) => (
+              {SERVING_SIZES.map((size) => (
                 <Chip
-                  key={String(restaurant.id)}
-                  label={restaurant.name}
+                  key={size}
+                  label={SERVING_LABELS[size]}
+                  selected={servingSize === size}
+                  showCheck
                   style={optionChip}
-                  onPress={() => {
-                    setRestaurantId(restaurant.id);
-                    setRestaurantName(restaurant.name);
-                    if (restaurant.area) setArea(restaurant.area);
-                  }}
+                  onPress={() => setServingSize(size)}
                 />
               ))}
             </View>
-          ) : null}
-        </View>
-
-        <Field label="Area" value={area} onChangeText={setArea} placeholder="Optional neighbourhood" />
-
-        <View style={{ gap: spacing.md }}>
-          <IconLabel icon="star">Rating</IconLabel>
-          {/* The stars keep the left edge every heading and field uses, and the
-              count takes the right, so the row ends where the column does
-              rather than stopping halfway across it. */}
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: spacing.md,
-            }}
-          >
-            <StarRating value={rating} onChange={setRating} />
-            <Text style={[type.caption, { color: colors.muted }]}>{rating} of 5</Text>
+            <Text style={[type.caption, { color: colors.muted }]}>
+              The estimate scales with this, so a large portion goes past the range above.
+            </Text>
           </View>
         </View>
 
-        <View style={{ gap: spacing.md }}>
-          <IconLabel icon="fun">Fun scale</IconLabel>
-          <View style={optionRow}>
-            {FUN_LEVELS.map((level) => (
-              <Chip
-                key={level}
-                label={String(level)}
-                selected={funScale === level}
-                showCheck
-                style={optionChip}
-                onPress={() => setFunScale(funScale === level ? null : level)}
-              />
-            ))}
+        <View style={group}>
+          <Text style={[type.title, { color: colors.text }]}>Where you ate it</Text>
+
+          <View style={{ gap: spacing.md }}>
+            <Field
+              label="Restaurant"
+              value={restaurantName}
+              onChangeText={(value) => {
+                setRestaurantName(value);
+                setRestaurantId(null);
+              }}
+              placeholder="Leave blank if you cooked"
+            />
+            {restaurants.data && restaurantName.trim().length > 0 && restaurantId === null ? (
+              <View style={optionRow}>
+                {restaurants.data.slice(0, 6).map((restaurant) => (
+                  <Chip
+                    key={String(restaurant.id)}
+                    label={restaurant.name}
+                    style={optionChip}
+                    onPress={() => {
+                      setRestaurantId(restaurant.id);
+                      setRestaurantName(restaurant.name);
+                      if (restaurant.area) setArea(restaurant.area);
+                    }}
+                  />
+                ))}
+              </View>
+            ) : null}
           </View>
+
+          <Field
+            label="Area"
+            value={area}
+            onChangeText={setArea}
+            placeholder="Optional neighbourhood"
+          />
         </View>
 
-        <View style={{ gap: spacing.md }}>
-          <IconLabel icon="friends">Who was there</IconLabel>
-          <View style={optionRow}>
-            {FRIEND_SCALES.map((scale) => (
-              <Chip
-                key={scale}
-                label={FRIEND_LABELS[scale]}
-                selected={friendScale === scale}
-                showCheck
-                style={optionChip}
-                onPress={() => setFriendScale(friendScale === scale ? null : scale)}
-              />
-            ))}
-          </View>
-        </View>
+        <View style={group}>
+          <Text style={[type.title, { color: colors.text }]}>How it was</Text>
 
-        <View style={{ gap: spacing.md }}>
-          <IconLabel icon="meal">Serving size</IconLabel>
-          <View style={optionRow}>
-            {SERVING_SIZES.map((size) => (
-              <Chip
-                key={size}
-                label={SERVING_LABELS[size]}
-                selected={servingSize === size}
-                showCheck
-                style={optionChip}
-                onPress={() => setServingSize(size)}
-              />
-            ))}
+          <View style={{ gap: spacing.sm }}>
+            <ControlLabel>Rating</ControlLabel>
+            {/* The stars keep the left edge every heading and field uses, and
+                the count takes the right, so the row ends where the column does
+                rather than stopping halfway across it. */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: spacing.md,
+              }}
+            >
+              <StarRating value={rating} onChange={setRating} />
+              <Text style={[type.caption, { color: colors.muted }]}>{rating} of 5</Text>
+            </View>
+          </View>
+
+          <View style={{ gap: spacing.sm }}>
+            <ControlLabel>Fun scale</ControlLabel>
+            <View style={optionRow}>
+              {FUN_LEVELS.map((level) => (
+                <Chip
+                  key={level}
+                  label={String(level)}
+                  selected={funScale === level}
+                  showCheck
+                  style={optionChip}
+                  onPress={() => setFunScale(funScale === level ? null : level)}
+                />
+              ))}
+            </View>
+          </View>
+
+          <View style={{ gap: spacing.sm }}>
+            <ControlLabel>Who was there</ControlLabel>
+            <View style={optionRow}>
+              {FRIEND_SCALES.map((scale) => (
+                <Chip
+                  key={scale}
+                  label={FRIEND_LABELS[scale]}
+                  selected={friendScale === scale}
+                  showCheck
+                  style={optionChip}
+                  onPress={() => setFriendScale(friendScale === scale ? null : scale)}
+                />
+              ))}
+            </View>
           </View>
         </View>
 
@@ -607,6 +746,8 @@ export default function LogScreen() {
         ) : null}
 
         <View style={{ gap: spacing.sm }}>
+          {/* Never disabled. An unfinished form is answered by the line below,
+              which is on screen before the press as well as after it. */}
           <Button
             label={createLog.isPending ? 'Saving' : 'Log it'}
             icon="check"
@@ -614,12 +755,16 @@ export default function LogScreen() {
             full
             onPress={submit}
             loading={createLog.isPending}
-            disabled={!canSubmit}
           />
 
-          {categoryId === null ? (
-            <Text style={[type.caption, { color: colors.muted, textAlign: 'center' }]}>
-              Pick a category so Forkast can estimate the calories.
+          {outstanding ? (
+            <Text
+              style={[
+                type.caption,
+                { color: refused ? colors.danger : colors.muted, textAlign: 'center' },
+              ]}
+            >
+              {outstanding}
             </Text>
           ) : null}
         </View>

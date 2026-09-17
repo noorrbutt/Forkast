@@ -1,16 +1,22 @@
 /**
- * The burned calories card.
+ * Entering what you burned today.
  *
- * Mostly input handling, which is where this kind of card actually goes wrong:
- * a number that will not save, a save button live when there is nothing to
- * save, or a draft silently replaced while the user is typing.
+ * It used to be a card sitting permanently on the dashboard, holding a field
+ * and two buttons. A dashboard answers how today is going, and a form on it is
+ * not an answer: it takes the same visual weight as the numbers around it and
+ * is empty almost every time you look at the screen. It is asked for now, by
+ * tapping the burned figure, so these exercise it as a dialog.
+ *
+ * Still mostly input handling, which is where this goes wrong in practice: a
+ * number that will not save, a save button live when there is nothing to save,
+ * or a draft silently replaced while the user is typing.
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
-import { BurnCard } from '../components/BurnCard';
+import { BurnDialog } from '../components/BurnDialog';
 import { api } from '../lib/api';
 
 jest.mock('../lib/api', () => {
@@ -47,6 +53,8 @@ const entry = (calories: number) => ({
   updated_at: '2026-09-16T10:00:00Z',
 });
 
+const onDismiss = jest.fn();
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockedApi.get.mockResolvedValue({ data: null });
@@ -58,13 +66,13 @@ beforeEach(() => {
 
 describe('with nothing entered yet', () => {
   it('invites a number without insisting on one', async () => {
-    const { getByText } = render(<BurnCard />, { wrapper });
+    const { getByText } = render(<BurnDialog visible onDismiss={onDismiss} />, { wrapper });
 
     await waitFor(() => expect(getByText(/Optional/)).toBeTruthy());
   });
 
   it('keeps save disabled until something is typed', async () => {
-    const { getByText, getByPlaceholderText } = render(<BurnCard />, { wrapper });
+    const { getByText, getByPlaceholderText } = render(<BurnDialog visible onDismiss={onDismiss} />, { wrapper });
     await waitFor(() => expect(getByPlaceholderText('e.g. 420')).toBeTruthy());
 
     fireEvent.press(getByText('Save'));
@@ -73,7 +81,7 @@ describe('with nothing entered yet', () => {
   });
 
   it('saves a typed number', async () => {
-    const { getByText, getByPlaceholderText } = render(<BurnCard />, { wrapper });
+    const { getByText, getByPlaceholderText } = render(<BurnDialog visible onDismiss={onDismiss} />, { wrapper });
     await waitFor(() => expect(getByPlaceholderText('e.g. 420')).toBeTruthy());
 
     fireEvent.changeText(getByPlaceholderText('e.g. 420'), '420');
@@ -83,7 +91,7 @@ describe('with nothing entered yet', () => {
   });
 
   it('accepts zero, which is a real answer rather than an empty one', async () => {
-    const { getByText, getByPlaceholderText } = render(<BurnCard />, { wrapper });
+    const { getByText, getByPlaceholderText } = render(<BurnDialog visible onDismiss={onDismiss} />, { wrapper });
     await waitFor(() => expect(getByPlaceholderText('e.g. 420')).toBeTruthy());
 
     fireEvent.changeText(getByPlaceholderText('e.g. 420'), '0');
@@ -95,7 +103,7 @@ describe('with nothing entered yet', () => {
 
 describe('input handling', () => {
   it('strips anything that is not a digit as it is typed', async () => {
-    const { getByPlaceholderText } = render(<BurnCard />, { wrapper });
+    const { getByPlaceholderText } = render(<BurnDialog visible onDismiss={onDismiss} />, { wrapper });
     const input = await waitFor(() => getByPlaceholderText('e.g. 420'));
 
     fireEvent.changeText(input, '4a2-0.');
@@ -104,7 +112,7 @@ describe('input handling', () => {
   });
 
   it('refuses a number past the plausible ceiling, before any round trip', async () => {
-    const { getByText, getByPlaceholderText } = render(<BurnCard />, { wrapper });
+    const { getByText, getByPlaceholderText } = render(<BurnDialog visible onDismiss={onDismiss} />, { wrapper });
     const input = await waitFor(() => getByPlaceholderText('e.g. 420'));
 
     fireEvent.changeText(input, '99999');
@@ -121,19 +129,19 @@ describe('with a value already stored', () => {
   });
 
   it('prefills with what was saved', async () => {
-    const { getByPlaceholderText } = render(<BurnCard />, { wrapper });
+    const { getByPlaceholderText } = render(<BurnDialog visible onDismiss={onDismiss} />, { wrapper });
 
     await waitFor(() => expect(getByPlaceholderText('e.g. 420').props.value).toBe('300'));
   });
 
   it('offers to update rather than save', async () => {
-    const { getByText } = render(<BurnCard />, { wrapper });
+    const { getByText } = render(<BurnDialog visible onDismiss={onDismiss} />, { wrapper });
 
     await waitFor(() => expect(getByText('Update')).toBeTruthy());
   });
 
   it('will not resend an unchanged value', async () => {
-    const { getByText } = render(<BurnCard />, { wrapper });
+    const { getByText } = render(<BurnDialog visible onDismiss={onDismiss} />, { wrapper });
     await waitFor(() => expect(getByText('Update')).toBeTruthy());
 
     fireEvent.press(getByText('Update'));
@@ -142,7 +150,7 @@ describe('with a value already stored', () => {
   });
 
   it('sends a changed value', async () => {
-    const { getByText, getByPlaceholderText } = render(<BurnCard />, { wrapper });
+    const { getByText, getByPlaceholderText } = render(<BurnDialog visible onDismiss={onDismiss} />, { wrapper });
     await waitFor(() => expect(getByText('Update')).toBeTruthy());
 
     fireEvent.changeText(getByPlaceholderText('e.g. 420'), '500');
@@ -152,7 +160,7 @@ describe('with a value already stored', () => {
   });
 
   it('does not overwrite what is being typed when the query settles', async () => {
-    const { getByPlaceholderText } = render(<BurnCard />, { wrapper });
+    const { getByPlaceholderText } = render(<BurnDialog visible onDismiss={onDismiss} />, { wrapper });
     const input = await waitFor(() => getByPlaceholderText('e.g. 420'));
 
     fireEvent.changeText(input, '777');
@@ -162,10 +170,10 @@ describe('with a value already stored', () => {
   });
 
   it('can take the entry back entirely', async () => {
-    const { getByText } = render(<BurnCard />, { wrapper });
-    await waitFor(() => expect(getByText('Clear')).toBeTruthy());
+    const { getByText } = render(<BurnDialog visible onDismiss={onDismiss} />, { wrapper });
+    await waitFor(() => expect(getByText('Remove it')).toBeTruthy());
 
-    fireEvent.press(getByText('Clear'));
+    fireEvent.press(getByText('Remove it'));
 
     await waitFor(() => expect(mockedApi.delete).toHaveBeenCalledWith('/burn/2026-09-16'));
   });

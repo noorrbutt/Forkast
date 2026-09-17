@@ -124,16 +124,25 @@ async def build_dashboard(session: AsyncSession, user: User) -> DashboardOut:
         select(
             _local_day(user).label("day"),
             FoodLog.estimated_calories.label("calories"),
+            # Carried through the subquery so the junk split is one pass over the
+            # same rows rather than a second trip to the database.
+            case((FoodCategory.is_junk, FoodLog.estimated_calories), else_=0).label("junk"),
         )
+        .join(FoodCategory, FoodCategory.id == FoodLog.category_id)
         .where(FoodLog.user_id == user.id, _local_day(user) >= window_start)
         .subquery()
     )
     day_rows = (
         await session.execute(
-            select(daily.c.day, func.sum(daily.c.calories).label("calories")).group_by(daily.c.day)
+            select(
+                daily.c.day,
+                func.sum(daily.c.calories).label("calories"),
+                func.sum(daily.c.junk).label("junk"),
+            ).group_by(daily.c.day)
         )
     ).all()
     by_day = {row.day: int(row.calories) for row in day_rows}
+    junk_by_day = {row.day: int(row.junk or 0) for row in day_rows}
 
     burned_rows = (
         await session.execute(
@@ -151,6 +160,7 @@ async def build_dashboard(session: AsyncSession, user: User) -> DashboardOut:
         CaloriesByDay(
             day=window_start + dt.timedelta(days=offset),
             calories=by_day.get(window_start + dt.timedelta(days=offset), 0),
+            junk_calories=junk_by_day.get(window_start + dt.timedelta(days=offset), 0),
             burned=burned_by_day.get(window_start + dt.timedelta(days=offset), 0),
         )
         for offset in range(CHART_DAYS)

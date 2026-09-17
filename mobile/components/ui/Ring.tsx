@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 
 import { useTheme } from '../../theme';
+import { series } from '../../theme/tokens';
 
 type RingProps = {
   /** How much of the target has been used. */
@@ -35,7 +36,7 @@ const THICKNESS = 14;
  * to be carried by colour alone.
  */
 export function Ring({ value, max, size = 220, children }: RingProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   const radius = (size - THICKNESS) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -49,7 +50,12 @@ export function Ring({ value, max, size = 220, children }: RingProps) {
   const filled = Math.max(0, Math.min(1, value / scale));
   const targetAt = hasTarget ? max / scale : 1;
 
-  const fill = over ? colors.danger : colors.accentFill;
+  // Data, not brand. Saffron is the one action colour and stays on buttons and
+  // active states; a ring that borrows it makes a reading look like a control
+  // and leaves the screen with nothing that is unambiguously tappable. The
+  // reference dashboards do exactly this split, colouring the ring and the bars
+  // while the primary button stays the brand's own colour.
+  const fill = over ? colors.danger : (isDark ? series.dark : series.light)[0];
 
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>

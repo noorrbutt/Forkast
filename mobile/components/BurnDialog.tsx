@@ -6,23 +6,31 @@ import { describeError } from '../lib/api';
 import { formatNumber } from '../lib/format';
 import { haptics } from '../lib/haptics';
 import { useTheme } from '../theme';
-import { Button, Card, Field, SectionLabel } from './ui';
+import { Dialog, Field } from './ui';
 
 /** Matches ck_burn_logs_calories_plausible, so a typo is caught before a round trip. */
 const MAX_BURN = 10_000;
 
+type Props = {
+  visible: boolean;
+  onDismiss: () => void;
+};
+
 /**
- * Today's burned calories, typed by hand.
+ * Entering what you burned today, asked for rather than sitting there.
  *
- * Optional by design: the card invites a number and is perfectly happy without
- * one. Nothing else in the app nags about it, and the dashboard reads the same
- * whether or not it is filled in.
+ * This used to be a card on the dashboard holding a text field, a Save button
+ * and a Clear button. A dashboard answers how today is going; a form on it is
+ * not an answer, it is a piece of furniture that takes the same visual weight as
+ * the numbers around it and is empty almost every time you look at the screen.
+ * Every reference app shows burned as a small figure beside the hero and asks
+ * for it only when you go looking.
  *
- * There is no estimation here on purpose. The figure comes off the user's watch
- * or treadmill, and guessing at something they already know would be worse than
- * asking.
+ * So the figure on the dashboard is the control now: tap it and this opens. The
+ * number is still optional, nothing nags about it, and the dashboard reads the
+ * same whether or not it has one.
  */
-export function BurnCard() {
+export function BurnDialog({ visible, onDismiss }: Props) {
   const { colors, spacing, type } = useTheme();
   const today = useBurnToday();
   const save = useSetBurn();
@@ -38,13 +46,22 @@ export function BurnCard() {
     if (!touched && saved) setDraft(String(saved.calories));
   }, [saved, touched]);
 
+  // Reopening should start from what is stored, not from an abandoned draft.
+  useEffect(() => {
+    if (!visible) {
+      setTouched(false);
+      save.reset();
+      clear.reset();
+    }
+  }, [visible]);
+
   const trimmed = draft.trim();
   const parsed = Number(trimmed);
   // Number('') is 0 and Number('12a') is NaN, so both are checked rather than
   // relying on the parse alone.
-  const valid =
-    trimmed.length > 0 && Number.isInteger(parsed) && parsed >= 0 && parsed <= MAX_BURN;
+  const valid = trimmed.length > 0 && Number.isInteger(parsed) && parsed >= 0 && parsed <= MAX_BURN;
   const unchanged = saved != null && valid && parsed === saved.calories;
+  const busy = save.isPending || clear.isPending;
 
   const problem =
     trimmed.length > 0 && !valid
@@ -57,6 +74,7 @@ export function BurnCard() {
       onSuccess: () => {
         haptics.success();
         setTouched(false);
+        onDismiss();
       },
       onError: () => haptics.error(),
     });
@@ -69,25 +87,44 @@ export function BurnCard() {
         haptics.tap();
         setDraft('');
         setTouched(false);
+        onDismiss();
       },
       onError: () => haptics.error(),
     });
   };
 
-  const busy = save.isPending || clear.isPending;
+  const error = save.isError ? save.error : clear.isError ? clear.error : null;
 
   return (
-    <Card>
-      <View style={{ gap: spacing.lg }}>
-        <View style={{ gap: spacing.xs }}>
-          <SectionLabel>Burned today</SectionLabel>
-          <Text style={[type.caption, { color: colors.muted }]}>
-            {saved
-              ? 'Taken off your total on the dashboard.'
-              : 'Optional. Add it if you tracked a workout or a long walk.'}
-          </Text>
-        </View>
-
+    <Dialog
+      visible={visible}
+      onDismiss={busy ? () => undefined : onDismiss}
+      title="Burned today"
+      message="Optional. Add it if you tracked a workout or a long walk, and it comes off your total."
+      icon="burn"
+      actions={[
+        {
+          label: saved ? 'Update' : 'Save',
+          variant: 'primary',
+          onPress: onSave,
+          disabled: !valid || unchanged || busy,
+          loading: save.isPending,
+        },
+        ...(saved
+          ? [
+              {
+                label: 'Remove it',
+                variant: 'secondary' as const,
+                onPress: onClear,
+                disabled: busy,
+                loading: clear.isPending,
+              },
+            ]
+          : []),
+        { label: 'Cancel', variant: 'ghost' as const, onPress: onDismiss, disabled: busy },
+      ]}
+    >
+      <View style={{ gap: spacing.md }}>
         <Field
           label="Calories"
           value={draft}
@@ -105,32 +142,10 @@ export function BurnCard() {
           maxLength={5}
           hint={problem ?? undefined}
         />
-
-        <View style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'center' }}>
-          <Button
-            label={save.isPending ? 'Saving' : saved ? 'Update' : 'Save'}
-            onPress={onSave}
-            disabled={!valid || unchanged || busy}
-            loading={save.isPending}
-          />
-          {saved ? (
-            <Button
-              label="Clear"
-              variant="ghost"
-              onPress={onClear}
-              disabled={busy}
-              loading={clear.isPending}
-            />
-          ) : null}
-        </View>
-
-        {save.isError ? (
-          <Text style={[type.caption, { color: colors.danger }]}>{describeError(save.error)}</Text>
-        ) : null}
-        {clear.isError ? (
-          <Text style={[type.caption, { color: colors.danger }]}>{describeError(clear.error)}</Text>
+        {error ? (
+          <Text style={[type.caption, { color: colors.danger }]}>{describeError(error)}</Text>
         ) : null}
       </View>
-    </Card>
+    </Dialog>
   );
 }

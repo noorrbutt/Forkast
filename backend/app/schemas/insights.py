@@ -20,6 +20,10 @@ from app.models.enums import Goal
 class CaloriesByDay(BaseModel):
     day: dt.date
     calories: int
+    # How much of that day's total came from junk flagged categories. The chart
+    # stacks it under the rest, so a day reads as its shape rather than only its
+    # height: two days can total the same and be nothing alike.
+    junk_calories: int = 0
     # What the user said they burned that day. Zero when nothing was entered,
     # which the chart draws the same way as a deliberate zero.
     burned: int = 0

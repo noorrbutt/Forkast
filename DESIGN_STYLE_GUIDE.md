@@ -304,10 +304,23 @@ Every colour does exactly one job. Tokens only, never a literal hex in a screen.
 |---|---|---|
 | Structure | `bg`, `surface`, `surfaceAlt`, `border` | A solved ramp; each step clears a measured floor against the one below |
 | Control boundary | `outline` | 3:1 or better against `surface` and `surfaceAlt` |
-| Brand and primary action | `accent`, `accentFill`, `accentInk` | Two values, one per theme, because one hex cannot be legible on both |
+| Brand and primary action | `accent`, `accentFill`, `accentInk` | Two values, one per theme, because one hex cannot be legible on both. **Actions and active states only** |
+| Data | `series` | Three validated slots, fixed order. The ring, the bars, the chart |
 | Positive state | `success` | Reserved. Never a series colour |
 | Attention state | `danger` | Reserved. Never a series colour |
 | Inactive | `disabledFill`, `disabledInk` | A different fill, never a faded copy of the enabled one |
+
+### Brand is not data
+
+- **MUST NOT** Fill a ring, a bar or a chart series with `accentFill`. Saffron is
+  the one colour that means "you can press this", and a reading painted in it
+  looks like a control while leaving the screen with nothing that unmistakably
+  is one.
+- **MUST** Data wears `series`. Buttons, the active tab and selection wear
+  `accent`. The reference dashboards do exactly this: a coloured ring and
+  coloured bars above a primary button in the brand's own colour.
+- Going over target is the exception, and it wears `danger`, because that is a
+  status rather than a series.
 
 ### Cuisine colour
 

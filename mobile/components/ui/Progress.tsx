@@ -2,6 +2,7 @@ import { Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { formatNumber } from '../../lib/format';
 import { useTheme } from '../../theme';
+import { series } from '../../theme/tokens';
 import { Icon } from './Icon';
 
 type ProgressProps = {
@@ -44,7 +45,7 @@ const MARKER_WIDTH = 2;
  * someone who cannot pick red out from amber.
  */
 export function Progress({ value, max, unit = 'kcal', label, caption, style }: ProgressProps) {
-  const { colors, radius, spacing, type } = useTheme();
+  const { colors, isDark, radius, spacing, type } = useTheme();
 
   // A zero target cannot be stored and dividing by one here would hand yoga a
   // NaN, so anything that is not a positive number reads as no target at all.
@@ -105,7 +106,8 @@ export function Progress({ value, max, unit = 'kcal', label, caption, style }: P
           style={{
             flex: reached,
             minWidth: used > 0 ? MIN_FILL : 0,
-            backgroundColor: colors.accentFill,
+            // Data, not brand. Saffron is reserved for actions and active states.
+            backgroundColor: (isDark ? series.dark : series.light)[0],
           }}
         />
         {over ? <View style={{ width: MARKER_WIDTH, backgroundColor: colors.bg }} /> : null}
