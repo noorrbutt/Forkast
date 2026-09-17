@@ -1,4 +1,4 @@
-"""Users and refresh tokens."""
+"""Users, their refresh tokens and their profile pictures."""
 
 from __future__ import annotations
 
@@ -10,13 +10,16 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
+    LargeBinary,
     String,
     Text,
     Uuid,
     func,
+    select,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 
 from app.models.base import Base, new_uuid7, str_enum
 from app.models.enums import Goal
@@ -107,3 +110,78 @@ class RefreshToken(Base):
         # is the hottest lookup in the schema.
         Index("ix_refresh_tokens_session_id", "session_id"),
     )
+
+
+# 512 KiB. Deliberately under Starlette's 1 MiB request body ceiling, which
+# rejects the upload before the route ever runs, so a larger number here would
+# never be reachable and the friendlier message on the route would never be
+# seen. Lower than the meal photo ceiling because this is a small square shown
+# at the size of a thumbnail, so anything bigger is bytes nobody ever sees.
+MAX_AVATAR_BYTES = 512 * 1024
+
+
+class UserAvatar(Base):
+    """One profile picture per account, stored as bytes in Postgres.
+
+    Its own table rather than a column on users, because users is read on every
+    authenticated request and an image is orders of magnitude larger than the
+    row it hangs off; a column would drag the picture through the auth check.
+
+    Bytes in the database rather than object storage is the same trade
+    food_log_photos makes: no second service and no account, it survives a
+    redeploy that would wipe a container's disk, and it is covered by the same
+    backup as everything else. The route hands the caller bytes rather than a
+    location, so this can become a URL column later without any client noticing.
+    """
+
+    __tablename__ = "user_avatars"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=new_uuid7,
+        server_default=text("uuidv7()"),
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    content_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    # No relationship back to User on purpose. Nothing needs to navigate from a
+    # user row to these bytes, the routes load the row they want directly, and
+    # leaving the attribute off means no accidental access can pull an image
+    # into the query that authenticates every request.
+
+    __table_args__ = (
+        CheckConstraint(
+            f"byte_size > 0 AND byte_size <= {MAX_AVATAR_BYTES}",
+            name="avatar_size_sane",
+        ),
+        # One picture per account. A second row would make "the" avatar
+        # ambiguous, and there is no ordering column to break the tie.
+        Index("uq_user_avatars_user_id", "user_id", unique=True),
+    )
+
+
+# Whether an account has a picture, answered by the database as part of the same
+# SELECT that loads the user. A boolean rather than a relationship, so /me costs
+# one EXISTS and never a byte of image data. Defined here rather than inside the
+# class because it needs UserAvatar, which needs User.
+User.has_avatar = column_property(
+    select(1).where(UserAvatar.user_id == User.id).exists().label("has_avatar"),
+    # A SQL expression property is expired by default whenever its row is
+    # flushed, and re-reading it is IO, which a route that has already returned
+    # its user cannot do: serialising the reply would raise MissingGreenlet.
+    # Nothing that writes to users can change this answer anyway, because the
+    # picture lives in another table, so the loaded value is still true after an
+    # UPDATE here. The routes that add or remove a picture re-read the row
+    # themselves, since writing user_avatars would not expire this either way.
+    expire_on_flush=False,
+)

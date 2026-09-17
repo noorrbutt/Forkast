@@ -9,7 +9,7 @@ from app.models.photo import MAX_PHOTO_BYTES, FoodLogPhoto
 from app.models.rate_limit import RateLimitCounter
 from app.models.reference import Cuisine, FoodCategory
 from app.models.restaurant import Restaurant
-from app.models.user import RefreshToken, User
+from app.models.user import MAX_AVATAR_BYTES, RefreshToken, User, UserAvatar
 
 __all__ = [
     "AIPlan",
@@ -19,6 +19,7 @@ __all__ = [
     "FoodCategory",
     "FoodLog",
     "FoodLogPhoto",
+    "MAX_AVATAR_BYTES",
     "MAX_PHOTO_BYTES",
     "FriendScale",
     "Goal",
@@ -27,4 +28,5 @@ __all__ = [
     "Restaurant",
     "ServingSize",
     "User",
+    "UserAvatar",
 ]

@@ -4,6 +4,9 @@ All real now. Dashboard and streaks are computed from food_logs on every
 request, bucketed into the user's own calendar days; see services/insights.py
 for why that matters. Plans read the real log history and store the result, and
 only the text generation comes from the AI seam.
+
+The profile half is everything addressed at /me: reading it, editing it,
+changing the password, the profile picture, and closing the account.
 """
 
 from __future__ import annotations
@@ -11,26 +14,53 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import select
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
+from fastapi.security import HTTPAuthorizationCredentials
+from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import CurrentUser, RateLimiterDep, SessionDep
+from app.api.deps import CurrentUser, RateLimiterDep, SessionDep, bearer_scheme
+# The signature check that decides whether an upload really is an image, shared
+# with the meal photo route rather than written twice, so the two cannot drift
+# into accepting different files from each other.
+from app.api.v1.logs import _sniff
 from app.config import get_settings
-from app.models import AIPlan, FoodCategory, FoodLog, User
-from app.schemas.auth import AccountDelete, UserOut, UserUpdate
+from app.models import (
+    MAX_AVATAR_BYTES,
+    AIPlan,
+    FoodCategory,
+    FoodLog,
+    RefreshToken,
+    User,
+    UserAvatar,
+)
+from app.schemas.auth import AccountDelete, PasswordChange, UserOut, UserUpdate
 from app.schemas.insights import DashboardOut, PlanCreate, PlanOut, StreaksOut
 from app.services.ai.base import AIService
 from app.services.ai.deps import get_ai_service
 from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import PlanContext, PlanLogSummary, PlanRequest
 from app.services.insights import build_dashboard, compute_streaks
-from app.services.security import verify_password_async
+from app.services.security import (
+    decode_access_token,
+    hash_password_async,
+    verify_password_async,
+)
 from app.services.rate_limit import client_identity
 
 router = APIRouter(tags=["insights"])
 
 AIDep = Annotated[AIService, Depends(get_ai_service)]
+CallerToken = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)]
 
 # How many recent logs to hand the planner. Enough to spot a pattern, small
 # enough to keep the prompt cheap once a real model is behind it.
@@ -80,6 +110,174 @@ async def delete_me(
 
     await session.delete(user)
     await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def _caller_session_id(credentials: HTTPAuthorizationCredentials | None) -> uuid.UUID | None:
+    """Which of the account's sessions is the one making this request.
+
+    CurrentUser has already proved this token is valid, so reading it again is
+    not a second check; it is the only way the handler learns its own session id
+    without the user row carrying it. None means the token could not be read at
+    all, and the one caller below turns that into "end every session", so a
+    surprise here can only be too strict, never too lax.
+    """
+    if credentials is None:
+        return None
+    claims = decode_access_token(credentials.credentials)
+    return claims.session_id if claims is not None else None
+
+
+@router.put("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_password(
+    payload: PasswordChange,
+    session: SessionDep,
+    user: CurrentUser,
+    credentials: CallerToken,
+) -> Response:
+    """Change the password, and sign every other device out.
+
+    A new password under 8 characters is refused by the schema before any of
+    this runs, so a change cannot land a password registration would have
+    turned away.
+    """
+    # The same constant time comparison login uses, and asked for the same
+    # reason deletion asks: the session proves the phone, not the person
+    # holding it.
+    if not await verify_password_async(payload.current_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="That password does not match, so nothing was changed.",
+        )
+
+    user.password_hash = await hash_password_async(payload.new_password)
+
+    # Every other session ends here; this one deliberately does not. Someone
+    # changing a password is usually reacting to a device they no longer
+    # control, so leaving the other sessions alive would defeat the point,
+    # while ending this one too would drop the caller at a login screen the
+    # moment they proved they knew both passwords.
+    #
+    # The other sessions' rows are deleted rather than stamped revoked_at, and
+    # that is the part worth being careful about. A revoked row is exactly what
+    # /auth/refresh reads as a leaked token chain, and its answer to that is to
+    # revoke every live token on the account, this caller's included. Marking
+    # the other devices revoked would therefore arm a trap: the next time any
+    # of them refreshed, the person who had just changed their password would
+    # be signed out by it. With no row at all those devices get the same plain
+    # 401 a token that never existed gets, and their access tokens stop working
+    # immediately, because get_current_user only accepts one whose session still
+    # has a live refresh token. The caller's own rows, spent ones included, are
+    # left exactly as they were, so reuse detection still guards the chain that
+    # is actually in use.
+    ending = delete(RefreshToken).where(RefreshToken.user_id == user.id)
+    caller_session = _caller_session_id(credentials)
+    if caller_session is not None:
+        ending = ending.where(RefreshToken.session_id != caller_session)
+    await session.execute(ending)
+
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put("/me/avatar", response_model=UserOut)
+async def set_avatar(
+    session: SessionDep,
+    user: CurrentUser,
+    file: Annotated[UploadFile, File()],
+) -> User:
+    """Set or replace the profile picture.
+
+    PUT rather than POST: there is one picture per account, so uploading twice
+    leaves the same state instead of stacking a second one, which makes a retry
+    after a dropped connection safe by construction.
+    """
+    # Read with one byte of headroom so a file exactly on the limit passes and
+    # anything over it is caught here rather than by the CHECK constraint, which
+    # would surface as a 500.
+    data = await file.read(MAX_AVATAR_BYTES + 1)
+    if len(data) > MAX_AVATAR_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"Avatars must be {MAX_AVATAR_BYTES // 1024} KB or smaller.",
+        )
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="That file was empty.",
+        )
+
+    # The declared type is whatever the client typed. These bytes are served
+    # back later with a content type of their own, so the signature decides.
+    content_type = _sniff(data)
+    if content_type is None:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Avatars must be JPEG, PNG or WebP.",
+        )
+
+    existing = await session.scalar(select(UserAvatar).where(UserAvatar.user_id == user.id))
+    if existing is None:
+        session.add(
+            UserAvatar(
+                user_id=user.id,
+                content_type=content_type,
+                byte_size=len(data),
+                data=data,
+            )
+        )
+    else:
+        existing.content_type = content_type
+        existing.byte_size = len(data)
+        existing.data = data
+
+    await session.commit()
+    # has_avatar was answered by the SELECT that loaded this user, which ran
+    # before the row above existed, so without a re-read the reply would still
+    # say there is no picture.
+    await session.refresh(user)
+    return user
+
+
+@router.get("/me/avatar")
+async def get_avatar(session: SessionDep, user: CurrentUser) -> Response:
+    """The image bytes.
+
+    Only ever your own. No route addresses somebody else's picture, so one
+    account cannot ask for another's bytes at all.
+
+    Returns the file rather than a URL, which keeps the storage decision behind
+    this route: moving the bytes to object storage later becomes a redirect from
+    here, and no client changes.
+    """
+    avatar = await session.scalar(select(UserAvatar).where(UserAvatar.user_id == user.id))
+    if avatar is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No avatar on this account",
+        )
+
+    return Response(
+        content=avatar.data,
+        media_type=avatar.content_type,
+        headers={
+            # Unlike a meal photo, this address is stable while its contents are
+            # not: replacing the picture reuses the same URL. Held for a day it
+            # would keep showing the old face, so it is revalidated every time.
+            "Cache-Control": "private, no-cache",
+            "Content-Length": str(avatar.byte_size),
+        },
+    )
+
+
+@router.delete("/me/avatar", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_avatar(session: SessionDep, user: CurrentUser) -> Response:
+    avatar = await session.scalar(select(UserAvatar).where(UserAvatar.user_id == user.id))
+    # Removing a picture that is not there is the state the caller asked for, so
+    # it is not an error.
+    if avatar is not None:
+        await session.delete(avatar)
+        await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

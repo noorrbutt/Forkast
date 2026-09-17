@@ -41,6 +41,9 @@ class UserOut(BaseModel):
     timezone: str
     goal: Goal
     daily_calorie_target: int | None = None
+    # Computed by the database as part of the same SELECT, so reading a profile
+    # never loads a byte of image data to answer it.
+    has_avatar: bool = False
     created_at: dt.datetime
 
 
@@ -53,6 +56,20 @@ class AccountDelete(BaseModel):
     """
 
     password: str
+
+
+class PasswordChange(BaseModel):
+    """Changing a password asks for the current one too.
+
+    The access token already says who this is. The current password says it is
+    the account holder rather than whoever picked the phone up, which is the
+    same reason deleting an account asks for it.
+    """
+
+    current_password: str = Field(min_length=1, max_length=256)
+    # The floor registration already enforces. A change must not be a side door
+    # to a weaker password than signing up would have accepted.
+    new_password: str = Field(min_length=8, max_length=256)
 
 
 class UserUpdate(BaseModel):
