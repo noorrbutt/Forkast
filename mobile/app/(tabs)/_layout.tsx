@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
+import { CrashView } from '../../components/CrashView';
 import { Frosted, Icon, type IconName } from '../../components/ui';
 import { haptics } from '../../lib/haptics';
 import { useTheme } from '../../theme';
@@ -237,4 +238,17 @@ export default function TabsLayout() {
       <Tabs.Screen name="plan" options={{ title: 'Plan' }} />
     </Tabs>
   );
+}
+
+/**
+ * A second boundary, one level in.
+ *
+ * The root one catches everything, but it replaces the whole app including the
+ * tab bar, so a crash on Streaks would look identical to a crash in the
+ * providers. Caught here, the failure is contained to the tab group and the
+ * retry re-renders just that, which is both truer to what went wrong and a far
+ * shorter way back.
+ */
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
+  return <CrashView error={error} retry={() => void retry()} />;
 }

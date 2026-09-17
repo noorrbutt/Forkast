@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { CrashView } from '../components/CrashView';
 import { AuthProvider, useAuth } from '../hooks/useAuth';
 import { queryClient } from '../lib/queryClient';
 import { ThemeProvider, useTheme } from '../theme';
@@ -63,6 +64,23 @@ function RootNavigator() {
       </Stack>
     </>
   );
+}
+
+/**
+ * The app's last line of defence, picked up by expo-router.
+ *
+ * Exporting a component with this exact name from a layout makes expo-router
+ * wrap that layout in its `Try` boundary. Without one, a single throw during
+ * render unmounts the whole tree: in Expo Go and the browser that is the red
+ * screen, and in a shipped build it is a blank page with no route left to
+ * navigate back to.
+ *
+ * This one sits at the root, so it catches anything the tab level boundary does
+ * not, including a failure in the providers themselves. That is also why
+ * CrashView refuses to use the theme context: at this level, it is gone.
+ */
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
+  return <CrashView error={error} retry={() => void retry()} />;
 }
 
 export default function RootLayout() {
