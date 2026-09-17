@@ -111,7 +111,7 @@ export function ListGroup({ title, children }: { title?: string; children: React
   return (
     <View style={{ gap: spacing.sm }}>
       {title ? (
-        <Text style={[type.label, { color: colors.muted, paddingHorizontal: spacing.xs }]}>
+        <Text style={[type.labelSoft, { color: colors.muted, paddingHorizontal: spacing.xs }]}>
           {title}
         </Text>
       ) : null}

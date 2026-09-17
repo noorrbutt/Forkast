@@ -105,7 +105,7 @@ export function Screen({
               </Pressable>
             ) : null}
             <View style={{ flex: 1 }}>
-              {eyebrow ? <Text style={[type.label, { color: colors.muted }]}>{eyebrow}</Text> : null}
+              {eyebrow ? <Text style={[type.labelSoft, { color: colors.muted }]}>{eyebrow}</Text> : null}
               {title ? (
                 <Text style={[type.title, { color: colors.text }]} numberOfLines={1}>
                   {title}

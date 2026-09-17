@@ -28,7 +28,7 @@ export function ErrorState({
         alignItems: 'flex-start',
       }}
     >
-      <Text style={[type.label, { color: colors.danger }]}>Offline</Text>
+      <Text style={[type.labelSoft, { color: colors.danger }]}>Offline</Text>
       <Text style={[type.subtitle, { color: colors.text }]}>{title}</Text>
       <Text style={[type.caption, { color: colors.muted }]}>{message}</Text>
       {onRetry ? (

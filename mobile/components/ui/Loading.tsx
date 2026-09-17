@@ -22,7 +22,7 @@ export function Loading({ label = 'Loading', fill = true }: LoadingProps) {
       }}
     >
       <ActivityIndicator color={colors.accent} />
-      <Text style={[type.label, { color: colors.muted }]}>{label}</Text>
+      <Text style={[type.labelSoft, { color: colors.muted }]}>{label}</Text>
     </View>
   );
 }

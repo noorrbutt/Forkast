@@ -37,7 +37,7 @@ export function StatTile({ label, value, hint, tone = 'default', style }: StatTi
         style,
       ]}
     >
-      <Text style={[type.label, { color: colors.muted }]} numberOfLines={1}>
+      <Text style={[type.labelSoft, { color: colors.muted }]} numberOfLines={1}>
         {label}
       </Text>
       <Text style={[type.numeral, { color: tones[tone] }]} numberOfLines={1} adjustsFontSizeToFit>

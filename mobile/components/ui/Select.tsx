@@ -76,7 +76,7 @@ export function Select({
 
   return (
     <View style={{ gap: spacing.sm }}>
-      <Text style={[type.label, { color: colors.muted }]}>{label}</Text>
+      <Text style={[type.labelSoft, { color: colors.muted }]}>{label}</Text>
 
       <Pressable
         onPress={() => !disabled && setOpen(true)}

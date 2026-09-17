@@ -268,6 +268,11 @@ export const type = {
     lineHeight: 19,
   } satisfies TextStyle,
   /** 11 / uppercase / letterSpacing 1. Always paired with the muted colour. */
+  /**
+   * 11 / 600 uppercase. RESTRICTED: the tab bar and chart axis or legend text
+   * only. See DESIGN_STYLE_GUIDE.md section 4. Anywhere else it is the eyebrow
+   * this app is trying to stop wearing.
+   */
   label: {
     fontSize: 11,
     fontWeight: '600',
@@ -281,12 +286,20 @@ export const type = {
     lineHeight: 34,
   } satisfies TextStyle,
   /** Same metrics as label but a touch softer, for inline meta text. */
+  /**
+   * 12 / 500, sentence case. The quiet small label.
+   *
+   * It used to be uppercase with letterspacing, like `label`. A tracked out
+   * uppercase eyebrow above every block is one of the named tells of generated
+   * design, and Forkast wore it on seven screens through SectionLabel, Field
+   * and the ListGroup title. Sentence case is what a field label looks like
+   * when it is there to be read rather than to decorate.
+   */
   labelSoft: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
-    letterSpacing: 0.9,
-    lineHeight: 15,
-    textTransform: 'uppercase',
+    letterSpacing: 0,
+    lineHeight: 16,
   } satisfies TextStyle,
 } as const;
 

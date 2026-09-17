@@ -14,7 +14,7 @@ export function Field({ label, hint, style, onFocus, onBlur, ...rest }: FieldPro
 
   return (
     <View style={{ gap: spacing.sm }}>
-      <Text style={[type.label, { color: colors.muted }]}>{label}</Text>
+      <Text style={[type.labelSoft, { color: colors.muted }]}>{label}</Text>
       <TextInput
         {...rest}
         onFocus={(event) => {
