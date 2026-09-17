@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 import { useEffect, useState, type ComponentProps } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Switch, Text, View } from 'react-native';
 
 import { ChangePassword } from '../../components/ChangePassword';
 import { DeleteAccount } from '../../components/DeleteAccount';
@@ -56,9 +56,15 @@ import { useTheme } from '../../theme';
  * rather than for something invented to fill the slot.
  *
  * What was demoted, and why that is correct: every row lost its icon. The
- * labels, "Goal", "Daily calorie target", "Timezone", "Reminders", "Sign out",
- * already say what they are, and an icon carrying meaning a word carries is
- * what the guide bans. The version line moved to the left edge and stayed at 12.
+ * labels, "Goal", "Daily calorie target", "Timezone", "Reminders", "Change
+ * password", "Sign out", "Delete my account", already say what they are, and an
+ * icon carrying meaning a word carries is what the guide bans. Section 10 does
+ * allow one on a navigation row that names where it goes, but nothing here
+ * navigates: every row opens a dialog or flips a setting in place. Change
+ * password and Delete my account kept theirs for a while and sat in groups
+ * beside rows that had none, which left their labels 44pt further right than
+ * their neighbours' and broke the group's left edge. The version line moved to
+ * the left edge and stayed at 12.
  */
 
 /** The range the server accepts, checked here so a typo never costs a 422. */
@@ -501,6 +507,23 @@ function RemindersSection() {
           onPress={() => {
             void (on ? reminders.disable() : reminders.enable());
           }}
+          // A switch, not the chevron this row used to draw. A chevron promises
+          // another screen, and this is the only setting here that changes
+          // where it stands rather than opening something. The row stays the
+          // control and the switch is inert, so there is one target rather than
+          // two overlapping ones, and it is the whole width of the row.
+          trailing={
+            reminders.enabled === null ? undefined : (
+              <View pointerEvents="none">
+                <Switch
+                  value={on}
+                  trackColor={{ true: colors.accentSoft, false: colors.surfaceAlt }}
+                  thumbColor={on ? colors.accent : colors.muted}
+                  ios_backgroundColor={colors.surfaceAlt}
+                />
+              </View>
+            )
+          }
           last
         />
       </ListGroup>

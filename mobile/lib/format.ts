@@ -97,6 +97,20 @@ export const FRIEND_LABELS: Record<FriendScale, string> = {
   squad: 'Squad',
 };
 
+/** The five points on the fun scale, in order. Declared once, used on both forms. */
+export const FUN_LEVELS = [1, 2, 3, 4, 5];
+
+/**
+ * What the ends of the fun scale mean.
+ *
+ * The control was five bare numerals under the words "Fun scale", which asks
+ * someone to rate a meal on a scale whose ends nobody has ever defined. Every
+ * other choice on that form says what it means in words, and a label that says
+ * what it means is the rule; a number on its own does not, however obvious the
+ * direction feels to whoever wrote it.
+ */
+export const FUN_HINT = '1 was a meal, 5 was a night worth remembering.';
+
 /**
  * The daily calorie target a goal proposes.
  *

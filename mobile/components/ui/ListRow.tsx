@@ -92,8 +92,13 @@ export function ListRow({
       {/* Wraps rather than truncating. It was held to one line, which is how a
           setting could report itself as "America/Argentina/Bue..." and leave
           the one thing the row exists to tell you unreadable. Shrinking before
-          the label does, because the label names what the value belongs to. */}
-      {value ? (
+          the label does, because the label names what the value belongs to.
+
+          Not drawn when something has been put in the trailing slot, because
+          that thing is already showing the state. The value still reaches a
+          screen reader through accessibilityValue above, so a switch does not
+          have to be read as a shape to be understood. */}
+      {value && !trailing ? (
         <Text style={[type.body, { color: colors.muted, flexShrink: 1, textAlign: 'right' }]}>
           {value}
         </Text>

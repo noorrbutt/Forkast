@@ -23,7 +23,13 @@ import { useSetPhoto, type PickedPhoto } from '../../hooks/usePhoto';
 import { useRestaurants } from '../../hooks/useRestaurants';
 import { describeError } from '../../lib/api';
 import { haptics } from '../../lib/haptics';
-import { FRIEND_LABELS, SERVING_LABELS, formatNumber } from '../../lib/format';
+import {
+  FRIEND_LABELS,
+  FUN_HINT,
+  FUN_LEVELS,
+  SERVING_LABELS,
+  formatNumber,
+} from '../../lib/format';
 import {
   FRIEND_SCALES,
   SERVING_SIZES,
@@ -117,7 +123,6 @@ import { useTheme } from '../../theme';
  * hero goes.
  */
 
-const FUN_LEVELS = [1, 2, 3, 4, 5];
 
 /** Stands for "no cuisine filter". Never collides with an id, which is numeric. */
 const ANY_CUISINE = 'any';
@@ -704,6 +709,10 @@ export default function LogScreen() {
                 />
               ))}
             </View>
+            {/* The ends said in words. Five numerals on their own are a scale
+                nobody has defined, and every other choice on this form says
+                what it means. */}
+            <Text style={[type.caption, { color: colors.muted }]}>{FUN_HINT}</Text>
           </View>
 
           <View style={{ gap: spacing.sm }}>

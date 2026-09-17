@@ -14,6 +14,9 @@
  * expo-router's routing.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { fireEvent, render } from '@testing-library/react-native';
@@ -30,10 +33,10 @@ const mockedHaptics = Haptics as jest.Mocked<typeof Haptics>;
 /** The five routes in the order the layout declares them, log dead centre. */
 const TABS = [
   { route: 'index', title: 'Home', glyph: 'dashboard' },
-  { route: 'history', title: 'Meals', glyph: 'history' },
+  { route: 'history', title: 'Diary', glyph: 'history' },
   { route: 'log', title: 'Log', glyph: 'log' },
   { route: 'streaks', title: 'Streaks', glyph: 'streaks' },
-  { route: 'profile', title: 'You', glyph: 'profile' },
+  { route: 'profile', title: 'Profile', glyph: 'profile' },
 ];
 
 /** Every glyph that gets the outline treatment, so the raised one is excluded. */
@@ -121,7 +124,7 @@ describe('the glyph the selection draws', () => {
   it('tells assistive tech which tab is selected, rather than leaving it to the fill', () => {
     const { screen } = mountBar(1);
 
-    expect(screen.getByLabelText('Meals').props.accessibilityState.selected).toBe(true);
+    expect(screen.getByLabelText('Diary').props.accessibilityState.selected).toBe(true);
     expect(screen.getByLabelText('Home').props.accessibilityState.selected).toBe(false);
   });
 });
@@ -130,7 +133,7 @@ describe('moving between tabs', () => {
   it('navigates to the tab that was tapped', () => {
     const { screen, navigate } = mountBar(0);
 
-    fireEvent.press(screen.getByLabelText('Meals'));
+    fireEvent.press(screen.getByLabelText('Diary'));
 
     expect(navigate).toHaveBeenCalledWith('history', undefined);
   });
@@ -177,5 +180,30 @@ describe('the raised centre button', () => {
     const { screen } = mountBar(0);
 
     expect(screen.queryByLabelText('Log')).toBeNull();
+  });
+});
+
+describe('what each tab is called', () => {
+  /**
+   * One name per destination.
+   *
+   * The guide states this outright, and notes that the app has already shipped
+   * the mistake once with Sign up against Create account. The bar then did it
+   * twice more: "Meals" opened a screen headed "Your diary", and "You" opened
+   * one headed "Profile".
+   */
+  const HEADINGS: Record<string, RegExp> = {
+    'app/(tabs)/history.tsx': /title="Your diary"/,
+    'app/(tabs)/profile.tsx': /<Screen title="Profile">/,
+    'app/(tabs)/streaks.tsx': /title="Streaks"/,
+  };
+
+  it.each(Object.entries(HEADINGS))('%s is headed with the word its tab uses', (file, heading) => {
+    const source = readFileSync(join(__dirname, '..', file), 'utf8');
+    const match = heading.exec(source);
+    expect(match).not.toBeNull();
+
+    const tab = TABS.find((entry) => file.includes(`/${entry.route}.tsx`))!;
+    expect(match![0].toLowerCase()).toContain(tab.title.toLowerCase());
   });
 });

@@ -128,7 +128,10 @@ export function CalorieBars({ data }: { data: CaloriesByDay[] }) {
     <View style={{ gap: spacing.md }}>
       {/* Identity is the swatch plus the word, never the colour alone, and the
           words wear a text token rather than the colour of their series. */}
-      <View style={{ flexDirection: 'row', gap: spacing.lg }}>
+      {/* Wraps. Three entries, one of them reading "Everything else", do not
+          fit across a narrow phone once the system text size goes up, and a
+          legend that runs off the card explains nothing. */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg }}>
         {series.map((entry) => (
           <View
             key={entry.key}

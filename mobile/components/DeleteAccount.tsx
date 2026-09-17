@@ -63,7 +63,6 @@ export function DeleteAccount() {
     <>
       <ListGroup title="Danger zone">
         <ListRow
-          icon="trash"
           label="Delete my account"
           hint="Everything you have logged goes with it."
           tone="danger"

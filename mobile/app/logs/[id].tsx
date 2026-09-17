@@ -26,7 +26,13 @@ import {
   useSetPhoto,
 } from '../../hooks/usePhoto';
 import { describeError } from '../../lib/api';
-import { FRIEND_LABELS, SERVING_LABELS, formatNumber } from '../../lib/format';
+import {
+  FRIEND_LABELS,
+  FUN_HINT,
+  FUN_LEVELS,
+  SERVING_LABELS,
+  formatNumber,
+} from '../../lib/format';
 import { haptics } from '../../lib/haptics';
 import {
   FRIEND_SCALES,
@@ -93,7 +99,6 @@ import { useTheme } from '../../theme';
  */
 
 
-const FUN_LEVELS = [1, 2, 3, 4, 5];
 
 /**
  * When the meal was eaten, in words.
@@ -495,7 +500,10 @@ export default function MealScreen() {
 
           <View style={{ gap: spacing.md }}>
             <ControlLabel>Fun scale</ControlLabel>
-            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            {/* Wraps, like every other chip row in the app. Five pills at a
+                48pt minimum in a row that cannot wrap overflow the column on a
+                narrow phone, and at a raised system text size on any phone. */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
               {FUN_LEVELS.map((level) => (
                 <Chip
                   key={level}
@@ -506,6 +514,7 @@ export default function MealScreen() {
                 />
               ))}
             </View>
+            <Text style={[type.caption, { color: colors.muted }]}>{FUN_HINT}</Text>
           </View>
 
           <View style={{ gap: spacing.md }}>
@@ -525,7 +534,7 @@ export default function MealScreen() {
 
           <View style={{ gap: spacing.md }}>
             <ControlLabel>Serving size</ControlLabel>
-            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
               {SERVING_SIZES.map((size) => (
                 <Chip
                   key={size}

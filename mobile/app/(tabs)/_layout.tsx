@@ -225,15 +225,19 @@ export default function TabsLayout() {
     >
       {/* Order matters: log sits third of five so the raised button lands dead
           centre of the bar, and five is the most a centred button allows.
-          Meals takes the slot Plan had. Looking back at what you ate is a daily
-          act and it was reachable only from one card near the bottom of the
-          dashboard, whereas a plan is generated once in a while, so Plan moves
-          to a card on Home where an occasional action belongs. */}
+          The diary takes the slot Plan had. Looking back at what you ate is a
+          daily act and it was reachable only from one card near the bottom of
+          the dashboard, whereas a plan is generated once in a while, so Plan
+          moves to a card on Home where an occasional action belongs. */}
+      {/* Each label is the name of the screen it opens. "Meals" led to a screen
+          titled "Your diary" and "You" led to one titled "Profile", which is
+          the one-name-per-destination rule the guide states outright and which
+          this app had already got wrong once with Sign up. */}
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="history" options={{ title: 'Meals' }} />
+      <Tabs.Screen name="history" options={{ title: 'Diary' }} />
       <Tabs.Screen name="log" options={{ title: 'Log' }} />
       <Tabs.Screen name="streaks" options={{ title: 'Streaks' }} />
-      <Tabs.Screen name="profile" options={{ title: 'You' }} />
+      <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
       {/* Still a route, just not a tab. */}
       <Tabs.Screen name="plan" options={{ title: 'Plan' }} />
     </Tabs>

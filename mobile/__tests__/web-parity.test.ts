@@ -350,3 +350,41 @@ describe('the content column', () => {
     }
   });
 });
+
+/**
+ * Within one ListGroup, either every row carries an icon or none does.
+ *
+ * Section 10 added this when it allowed a leading icon on a navigation row. The
+ * icon box is a sibling of the text column, so a bare row next to an iconned
+ * one starts its label 44pt further left and the group visibly loses its edge.
+ * The profile screen shipped exactly that: Change password and Delete my
+ * account wore glyphs while Sign out, Goal, Timezone and Reminders did not.
+ */
+describe('icons inside a group of rows', () => {
+  const GROUPS = [
+    'app/(tabs)/index.tsx',
+    'app/(tabs)/profile.tsx',
+    'components/ChangePassword.tsx',
+    'components/DeleteAccount.tsx',
+  ];
+
+  it('never mixes iconned and bare rows in the profile settings', () => {
+    // The three components that render into the profile's groups, read
+    // together, because the group is assembled across files.
+    const source = GROUPS.slice(1).map(code).join('\n');
+    const rows = source.match(/<ListRow/g) ?? [];
+    const icons = source.match(/^\s*icon="/gm) ?? [];
+
+    expect(rows.length).toBeGreaterThan(0);
+    expect(icons).toHaveLength(0);
+  });
+
+  it('keeps the dashboard destinations all iconned, which is the other half of the rule', () => {
+    const group = /<ListGroup>[\s\S]*?<\/ListGroup>/.exec(code('app/(tabs)/index.tsx'));
+    const rows = group?.[0].match(/<ListRow/g) ?? [];
+    const icons = group?.[0].match(/icon="/g) ?? [];
+
+    expect(rows.length).toBeGreaterThan(0);
+    expect(icons.length).toBe(rows.length);
+  });
+});
