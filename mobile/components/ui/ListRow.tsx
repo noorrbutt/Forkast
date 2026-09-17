@@ -89,8 +89,12 @@ export function ListRow({
         {hint ? <Text style={[type.caption, { color: colors.muted }]}>{hint}</Text> : null}
       </View>
 
+      {/* Wraps rather than truncating. It was held to one line, which is how a
+          setting could report itself as "America/Argentina/Bue..." and leave
+          the one thing the row exists to tell you unreadable. Shrinking before
+          the label does, because the label names what the value belongs to. */}
       {value ? (
-        <Text style={[type.body, { color: colors.muted }]} numberOfLines={1}>
+        <Text style={[type.body, { color: colors.muted, flexShrink: 1, textAlign: 'right' }]}>
           {value}
         </Text>
       ) : null}

@@ -278,10 +278,20 @@ export function MapScreen() {
                     borderColor: colors.border,
                   }}
                 >
-                  <Text style={[type.body, { color: colors.text, flex: 1 }]} numberOfLines={1}>
-                    {spot.name}
-                  </Text>
-                  <Text style={[type.labelSoft, { color: colors.accent }]}>
+                  {/* Wraps. A restaurant name cut to "Bundu Khan Kar..." is a
+                      label the guide calls a failure rather than a cosmetic
+                      issue, and a pill two lines tall is the cheaper problem. */}
+                  <Text style={[type.body, { color: colors.text, flex: 1 }]}>{spot.name}</Text>
+                  {/* Muted, not saffron. This is a count, and the brand colour
+                      is reserved for things you can press. Lining figures so a
+                      column of them can be read down the card. */}
+                  <Text
+                    style={[
+                      type.body,
+                      { color: colors.muted, fontVariant: ['tabular-nums'] },
+                    ]}
+                    accessibilityLabel={`${spot.count} ${spot.count === 1 ? 'visit' : 'visits'}`}
+                  >
                     {`${spot.count}x`}
                   </Text>
                 </View>

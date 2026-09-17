@@ -397,10 +397,10 @@ function TimezoneRow({ zone, last }: { zone: string; last?: boolean }) {
   return (
     <>
       {/* The zone reads on the hint line rather than in the value column, and
-          it is the one setting here that has to. A value is held to one line,
-          and "America/Argentina/Buenos_Aires" at 15pt is 224 wide against 268
-          of column, which becomes 290 the moment the system text size goes up:
-          a truncated timezone is a wrong timezone. The hint wraps. */}
+          it is the one setting here that has to. The value column no longer
+          truncates, but it is the narrow half of the row, so
+          "America/Argentina/Buenos_Aires" would wrap to three stacked lines
+          against a one word label. The hint has the full width. */}
       <ListRow
         label="Timezone"
         hint={
