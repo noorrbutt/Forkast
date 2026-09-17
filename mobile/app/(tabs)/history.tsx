@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Pressable, RefreshControl, Text, View } from 'react-native';
+import { FlatList, Image, Pressable, RefreshControl, Text, View } from 'react-native';
 
 import {
   Button,
@@ -11,9 +11,10 @@ import {
   ListGroup,
   Loading,
   Screen,
+  useScreenInsets,
   initialsOf,
 } from '../../components/ui';
-import { useLogs, useRepeatLog } from '../../hooks/useLogs';
+import { useInfiniteLogs, useRepeatLog } from '../../hooks/useLogs';
 import { usePhotoSource } from '../../hooks/usePhoto';
 import { describeError } from '../../lib/api';
 import { SERVING_LABELS, formatNumber } from '../../lib/format';
@@ -337,9 +338,10 @@ function MealRowBase({ log, last, onOpen, onRepeat, sending, confirmed, error }:
 const MealRow = memo(MealRowBase);
 
 export default function HistoryScreen() {
-  const { colors, layout, spacing } = useTheme();
+  const { colors, layout, spacing, type } = useTheme();
   const router = useRouter();
-  const logs = useLogs(100, 0);
+  const logs = useInfiniteLogs();
+  const screenInsets = useScreenInsets();
   const repeat = useRepeatLog();
 
   const [confirmed, setConfirmed] = useState<Uuid | null>(null);
@@ -397,7 +399,12 @@ export default function HistoryScreen() {
     });
   };
 
-  const items: FoodLog[] = logs.data?.items ?? [];
+  const items: FoodLog[] = useMemo(
+    () => (logs.data?.pages ?? []).flatMap((page) => page.items),
+    [logs.data],
+  );
+  /** The real number the server holds, which the header reports. */
+  const total = logs.data?.pages[0]?.total ?? 0;
 
   // Read by askToRepeat, which has to stay stable for the memo above to hold
   // and therefore cannot close over `items`.
@@ -410,75 +417,121 @@ export default function HistoryScreen() {
   // the data under it being refreshed at the same moment.
   const days = useMemo(() => groupByDay(items, new Date()), [items]);
 
+  const loadMore = useCallback(() => {
+    if (logs.hasNextPage && !logs.isFetchingNextPage) void logs.fetchNextPage();
+  }, [logs]);
+
   return (
     <Screen
+      // The list does its own scrolling, because a hundred rows in a ScrollView
+      // are a hundred mounted rows, each holding a photo request, on the one
+      // screen in this app built to be scrolled for a long time. A FlatList
+      // over days keeps a day's worth of rows mounted around the viewport and
+      // lets the rest go.
+      scroll={false}
+      padded={false}
       title="Your diary"
-      eyebrow={logs.data ? `${formatNumber(logs.data.total)} logged` : undefined}
-      refreshControl={
-        <RefreshControl
-          refreshing={logs.isRefetching}
-          onRefresh={() => void logs.refetch()}
-          tintColor={colors.accent}
-        />
-      }
+      eyebrow={logs.data ? `${formatNumber(total)} logged` : undefined}
     >
-      <View style={{ width: '100%', maxWidth: layout.contentWidth, alignSelf: 'center' }}>
-        {logs.isLoading ? <Loading label="Reading your diary" /> : null}
-
-        {logs.isError && !logs.data ? (
-          <ErrorState
-            title="Diary unavailable"
-            message={describeError(logs.error)}
-            onRetry={() => void logs.refetch()}
+      <FlatList<DiaryDay>
+        testID="diary"
+        data={days}
+        keyExtractor={(day) => day.key}
+        refreshControl={
+          <RefreshControl
+            refreshing={logs.isRefetching && !logs.isFetchingNextPage}
+            onRefresh={() => void logs.refetch()}
+            tintColor={colors.accent}
           />
-        ) : null}
+        }
+        // The column cap lives on the content container, which is the one box
+        // a list lets you centre.
+        contentContainerStyle={{
+          width: '100%',
+          maxWidth: layout.contentWidth,
+          alignSelf: 'center',
+          paddingTop: screenInsets.top,
+          paddingHorizontal: layout.screenPadding,
+          paddingBottom: layout.scrollBottomInset + screenInsets.bottom,
+          gap: spacing.lg,
+        }}
+        showsVerticalScrollIndicator={false}
+        onEndReached={loadMore}
+        // Half a screen out, so the next page is usually there by the time the
+        // last row is.
+        onEndReachedThreshold={0.5}
+        ListHeaderComponent={
+          <>
+            {logs.isPending ? <Loading label="Reading your diary" /> : null}
 
-        {/* No icon, because the component draws a disc behind one and a
-            decorative disc is exactly what section 10 bans. */}
-        {logs.data && items.length === 0 ? (
-          <Empty
-            title="Your diary is empty"
-            message="Every meal you log lands here, newest first, with its photo and its calories. Tap one to fix a typo or delete it."
-            actionLabel="Log your first meal"
-            actionIcon="log"
-            onAction={() => router.navigate('/log')}
-          />
-        ) : null}
+            {logs.isError && !logs.data ? (
+              <ErrorState
+                title="Diary unavailable"
+                message={describeError(logs.error)}
+                onRetry={() => void logs.refetch()}
+              />
+            ) : null}
+          </>
+        }
+        ListEmptyComponent={
+          logs.data && items.length === 0 ? (
+            <Empty
+              icon="empty"
+              title="Your diary is empty"
+              message="Every meal you log lands here, newest first, with its photo and its calories. Tap one to fix a typo or delete it."
+              actionLabel="Log your first meal"
+              actionIcon="log"
+              onAction={() => router.navigate('/log')}
+            />
+          ) : null
+        }
+        ListFooterComponent={
+          // The end of the diary is a designed state too. Silence after the
+          // last row reads the same as a list that failed to load more.
+          logs.isFetchingNextPage ? (
+            <Loading label="Reading further back" fill={false} />
+          ) : items.length > 0 && !logs.hasNextPage ? (
+            <Text
+              style={[
+                type.caption,
+                { color: colors.muted, textAlign: 'center', paddingTop: spacing.lg },
+              ]}
+            >
+              That is every meal you have logged.
+            </Text>
+          ) : null
+        }
+        /* A full step between days, against hairlines inside one, so a day
+           reads as a group before a single word of it is read.
 
-        {/* A full step between days, against hairlines inside one, so a day
-            reads as a group before a single word of it is read.
-
-            Section 4 says a section heading should be `title`, and these are
-            the group's own quieter label instead. The reason: a date is not a
-            headline, it is the coordinate the meals under it share, and at 21pt
-            it would outweigh every dish name on the screen. The grouping is
-            already carried by the surface and the space around it, so the
-            heading only has to name the day and say what it came to. This is
-            also the treatment every other grouped list in the app uses, which
-            is worth more here than one screen being louder. */}
-        <View style={{ gap: spacing.xl }}>
-          {days.map((day) => (
-            <ListGroup key={day.key} title={`${day.heading} · ${formatNumber(day.total)} kcal`}>
-              {day.meals.map((log, index) => (
-                <MealRow
-                  key={log.id}
-                  log={log}
-                  last={index === day.meals.length - 1}
-                  onOpen={openMeal}
-                  onRepeat={askToRepeat}
-                  sending={repeat.isPending && repeat.variables === log.id}
-                  confirmed={confirmed === log.id}
-                  error={
-                    repeat.isError && repeat.variables === log.id
-                      ? describeError(repeat.error)
-                      : null
-                  }
-                />
-              ))}
-            </ListGroup>
-          ))}
-        </View>
-      </View>
+           Section 4 says a section heading should be `title`, and these are
+           the group's own quieter label instead. The reason: a date is not a
+           headline, it is the coordinate the meals under it share, and at 21pt
+           it would outweigh every dish name on the screen. The grouping is
+           already carried by the surface and the space around it, so the
+           heading only has to name the day and say what it came to. */
+        renderItem={({ item: day }) => (
+          <ListGroup title={`${day.heading} · ${formatNumber(day.total)} kcal`}>
+            {day.meals.map((log, index) => (
+              <MealRow
+                key={log.id}
+                log={log}
+                last={index === day.meals.length - 1}
+                onOpen={openMeal}
+                onRepeat={askToRepeat}
+                sending={repeat.isPending && repeat.variables === log.id}
+                confirmed={confirmed === log.id}
+                error={
+                  repeat.isError && repeat.variables === log.id
+                    ? describeError(repeat.error)
+                    : null
+                }
+              />
+            ))}
+          </ListGroup>
+        )}
+        ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
+      />
 
       {/* At screen level rather than inside the row, which is what every other
           confirmation in this app does. A dialog mounted per row would be a

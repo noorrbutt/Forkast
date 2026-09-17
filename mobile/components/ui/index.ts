@@ -7,7 +7,7 @@ export { ErrorState } from './ErrorState';
 export { Frosted } from './Frosted';
 export { Icon, type IconName } from './Icon';
 export { Loading } from './Loading';
-export { Screen } from './Screen';
+export { Screen, useScreenInsets } from './Screen';
 export { ControlLabel } from './ControlLabel';
 export { Avatar, initialsOf } from './Avatar';
 export { Dialog } from './Dialog';

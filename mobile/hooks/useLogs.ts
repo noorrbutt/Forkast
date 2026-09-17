@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import { api } from '../lib/api';
 import { useAuth } from './useAuth';
@@ -12,6 +17,43 @@ export function useLogs(limit = 20, offset = 0) {
     queryFn: async () => {
       const response = await api.get<LogPage>('/logs', { params: { limit, offset } });
       return response.data;
+    },
+  });
+}
+
+/** How many meals one page of the diary asks for. */
+export const DIARY_PAGE = 30;
+
+/**
+ * The diary, a page at a time.
+ *
+ * It used to ask for a flat hundred and render every one of them. Two things
+ * were wrong with that. A hundred is a cap, not a page: the header counted the
+ * real total, so an account with three hundred meals read "312 logged" above a
+ * list that stopped at the hundredth with nothing on screen saying so and no
+ * way to reach the rest. And a hundred rows all mounted at once is a hundred
+ * photo requests, on a screen whose whole job is to be scrolled.
+ *
+ * The page key deliberately stays under ['logs'], so every mutation that
+ * already invalidates that key keeps working without knowing this exists.
+ */
+export function useInfiniteLogs(limit = DIARY_PAGE) {
+  const { signedIn } = useAuth();
+  return useInfiniteQuery({
+    queryKey: ['logs', 'infinite', limit],
+    enabled: signedIn,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      const response = await api.get<LogPage>('/logs', {
+        params: { limit, offset: pageParam },
+      });
+      return response.data;
+    },
+    // Counted from what has actually arrived rather than from the page number,
+    // so a short page cannot leave an offset pointing past the end.
+    getNextPageParam: (last, pages) => {
+      const loaded = pages.reduce((sum, page) => sum + page.items.length, 0);
+      return loaded < last.total ? loaded : undefined;
     },
   });
 }

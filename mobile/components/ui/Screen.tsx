@@ -1,4 +1,4 @@
-import { useState, type ReactElement, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { Pressable, ScrollView, StatusBar, Text, View, type RefreshControlProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -32,6 +32,23 @@ type ScreenProps = {
    */
   bleedTop?: boolean;
 };
+
+/**
+ * The padding a screen would have applied, handed to a child that scrolls itself.
+ *
+ * A list screen cannot take Screen's padding on a wrapper: padding on the
+ * outside stops the content scrolling under the frosted header, which is the
+ * whole visual idea of that header. So `scroll={false}` leaves the box bare and
+ * publishes the numbers here instead, for the list to put in its own content
+ * container.
+ */
+type ScreenInsets = { top: number; bottom: number };
+
+const ScreenInsetContext = createContext<ScreenInsets>({ top: 0, bottom: 0 });
+
+export function useScreenInsets(): ScreenInsets {
+  return useContext(ScreenInsetContext);
+}
 
 export function Screen({
   children,
@@ -74,22 +91,20 @@ export function Screen({
       {children}
     </ScrollView>
   ) : (
-    <View
-      style={{
-        flex: 1,
-        paddingTop: topPad,
-        paddingHorizontal: padH,
-        paddingBottom: bottomInset ?? 0,
-      }}
-    >
-      {children}
-    </View>
+    // Bare on purpose. The child is a list that scrolls itself, and padding out
+    // here would stop its content passing under the header.
+    <View style={{ flex: 1 }}>{children}</View>
+  );
+
+  const insetValue = useMemo(
+    () => ({ top: topPad, bottom: insets.bottom }),
+    [topPad, insets.bottom],
   );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-      {body}
+      <ScreenInsetContext.Provider value={insetValue}>{body}</ScreenInsetContext.Provider>
 
       {hasHeader ? (
         <Frosted

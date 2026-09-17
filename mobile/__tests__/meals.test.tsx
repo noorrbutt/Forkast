@@ -190,6 +190,65 @@ describe('the diary', () => {
     expect(queryByText('NI')).toBeNull();
   });
 
+  /**
+   * The diary is paged, and it says when there is no more of it.
+   *
+   * It used to ask for a flat hundred and render every one. The header counted
+   * the real total, so an account with more than that read "312 logged" over a
+   * list that stopped at the hundredth, with nothing saying so and no way to
+   * reach the rest.
+   */
+  it('asks for a page rather than a flat hundred', async () => {
+    const { getByText } = render(<HistoryScreen />, { wrapper });
+
+    await waitFor(() => expect(getByText('Haleem')).toBeTruthy());
+
+    const call = mockedApi.get.mock.calls.find(([url]: [string]) => url === '/logs');
+    expect(call?.[1]?.params).toEqual({ limit: 30, offset: 0 });
+  });
+
+  it('says so once the whole diary has been read', async () => {
+    const { getByText } = render(<HistoryScreen />, { wrapper });
+
+    // Three of three arrived, so there is no next page and the end is stated
+    // rather than left as silence after the last row.
+    await waitFor(() => expect(getByText('That is every meal you have logged.')).toBeTruthy());
+  });
+
+  it('fetches the next page when there is more than one', async () => {
+    const FIRST = Array.from({ length: 30 }, (_, index) =>
+      meal(`log-${index}`, `Meal ${index}`),
+    );
+    mockedApi.get.mockImplementation(async (url: string, config?: { params?: { offset: number } }) => {
+      if (url === '/logs') {
+        const offset = config?.params?.offset ?? 0;
+        return offset === 0
+          ? { data: { items: FIRST, total: 31 } }
+          : { data: { items: [HALEEM], total: 31 } };
+      }
+      return { data: null };
+    });
+
+    const { getByTestId, getByText, queryByText } = render(<HistoryScreen />, { wrapper });
+
+    await waitFor(() => expect(getByText('Meal 0')).toBeTruthy());
+    // Nothing claims the diary is finished while a page is still outstanding.
+    expect(queryByText('That is every meal you have logged.')).toBeNull();
+
+    // Driven directly: a list in the test renderer has no height, so it never
+    // works out that it has been scrolled to the end on its own.
+    fireEvent(getByTestId('diary'), 'endReached');
+
+    await waitFor(() =>
+      expect(
+        mockedApi.get.mock.calls.some(
+          ([url, config]: [string, { params?: { offset: number } }]) =>
+            url === '/logs' && config?.params?.offset === 30,
+        ),
+      ).toBe(true),
+    );
+  });
+
   it('still opens the meal when the row is tapped', async () => {
     const { getByText } = render(<HistoryScreen />, { wrapper });
 
