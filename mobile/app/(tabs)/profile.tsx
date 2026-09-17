@@ -1,8 +1,8 @@
 import Constants from 'expo-constants';
-
 import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
+import { DeleteAccount } from '../../components/DeleteAccount';
 import {
   Button,
   Card,
@@ -299,6 +299,8 @@ export default function ProfileScreen() {
         align="center"
         onPress={() => void signOut()}
       />
+
+      <DeleteAccount />
 
       <Text style={[type.labelSoft, { color: colors.muted, textAlign: 'center' }]}>
         Forkast {appVersion}

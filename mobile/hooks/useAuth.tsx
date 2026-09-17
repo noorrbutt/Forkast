@@ -186,3 +186,23 @@ export function useMe() {
     },
   });
 }
+
+/**
+ * Close the account for good.
+ *
+ * The local sign out runs whatever the server said, because once the account is
+ * gone the tokens on this device are worthless, and leaving them in the
+ * keystore would park the user in the tabs with every request failing. That is
+ * the exact trap this app already fell into once.
+ */
+export function useDeleteAccount() {
+  const { signOut } = useAuth();
+  return useMutation({
+    mutationFn: async (password: string) => {
+      await api.delete('/me', { data: { password } });
+    },
+    onSuccess: () => {
+      void signOut();
+    },
+  });
+}
