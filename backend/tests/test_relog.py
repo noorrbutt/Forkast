@@ -239,3 +239,64 @@ async def test_one_user_cannot_repeat_another_users_log(client: AsyncClient) -> 
     # And nothing was written into either account on the way to that answer.
     assert (await client.get(LOGS, headers=stranger_headers)).json()["total"] == 0
     assert (await client.get(LOGS, headers=owner_headers)).json()["total"] == 1
+
+
+async def test_a_repeat_carries_the_photo_over(auth_client: AsyncClient) -> None:
+    """A repeat that loses the picture is a repeat of the text only.
+
+    The diary would then show yesterday's biryani with a photo and today's
+    identical one without, which reads as the upload having failed rather than
+    as the feature working exactly as built.
+    """
+    category = await _a_category(auth_client)
+    original = await _log(auth_client, category, dish_name="nihari")
+
+    # The smallest thing the server's magic byte check accepts as a JPEG.
+    jpeg = bytes.fromhex("ffd8ffe000104a46494600010100000100010000ffd9")
+    upload = await auth_client.put(
+        f"{LOGS}/{original['id']}/photo",
+        files={"file": ("meal.jpg", jpeg, "image/jpeg")},
+    )
+    assert upload.status_code == 200, upload.text
+
+    repeated = await _repeat(auth_client, original["id"])
+
+    assert repeated["has_photo"] is True
+    copied = await auth_client.get(f"{LOGS}/{repeated['id']}/photo")
+    assert copied.status_code == 200, copied.text
+    assert copied.content == jpeg
+
+
+async def test_a_repeat_of_a_meal_with_no_photo_has_none(auth_client: AsyncClient) -> None:
+    category = await _a_category(auth_client)
+    original = await _log(auth_client, category, dish_name="daal")
+
+    repeated = await _repeat(auth_client, original["id"])
+
+    assert repeated["has_photo"] is False
+    missing = await auth_client.get(f"{LOGS}/{repeated['id']}/photo")
+    assert missing.status_code == 404
+
+
+async def test_deleting_one_copy_leaves_the_other_picture_alone(
+    auth_client: AsyncClient,
+) -> None:
+    """The reason the row is copied rather than shared.
+
+    Each meal owns its own photo row, so removing one meal cannot take the
+    picture off another that happens to have come from it.
+    """
+    category = await _a_category(auth_client)
+    original = await _log(auth_client, category, dish_name="karahi")
+    jpeg = bytes.fromhex("ffd8ffe000104a46494600010100000100010000ffd9")
+    await auth_client.put(
+        f"{LOGS}/{original['id']}/photo",
+        files={"file": ("meal.jpg", jpeg, "image/jpeg")},
+    )
+
+    repeated = await _repeat(auth_client, original["id"])
+    assert (await auth_client.delete(f"{LOGS}/{original['id']}")).status_code == 204
+
+    still_there = await auth_client.get(f"{LOGS}/{repeated['id']}/photo")
+    assert still_there.status_code == 200
+    assert still_there.content == jpeg

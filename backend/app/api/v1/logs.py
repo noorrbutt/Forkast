@@ -366,6 +366,37 @@ async def repeat_log(log_id: uuid.UUID, session: SessionDep, user: CurrentUser) 
     # point of a repeat: same meal, this moment.
     session.add(repeated)
     await session.flush()
+
+    """Carry the picture over too.
+
+    A repeat that loses the photo is a repeat of the text only, and the diary
+    then shows yesterday's biryani with a picture and today's identical one
+    without, which reads as the photo having failed to upload.
+
+    Copied rather than shared, and the schema leaves no choice: food_log_photos
+    has a unique index on food_log_id, so a row belongs to exactly one meal.
+    Sharing would mean inverting the ownership and then deciding what happens
+    when one of the two meals is deleted, which is a lot of machinery to avoid
+    duplicating a file the server already caps at 1000 KB.
+
+    Selected explicitly rather than through original.photo, because that
+    relationship is lazy="raise_on_sql" and _load_log does not eager load it, so
+    touching the attribute raises instead of quietly issuing a query.
+    """
+    photo = await session.scalar(
+        select(FoodLogPhoto).where(FoodLogPhoto.food_log_id == original.id)
+    )
+    if photo is not None:
+        session.add(
+            FoodLogPhoto(
+                food_log_id=repeated.id,
+                content_type=photo.content_type,
+                byte_size=photo.byte_size,
+                data=photo.data,
+            )
+        )
+        await session.flush()
+
     created = await _load_log(session, user.id, repeated.id)
     await session.commit()
     return created
