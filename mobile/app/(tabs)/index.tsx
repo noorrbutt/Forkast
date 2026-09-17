@@ -244,8 +244,17 @@ function TodayHero({
         </Text>
       </View>
 
+      {/* Centred, because everything above it in this block is: the ring, the
+          status line and the caption all sit on the column's centre line, and a
+          left aligned button under them broke that axis at the one point the
+          eye is already travelling down it. */}
       {reading.target === null ? (
-        <Button label="Set a daily target" variant="secondary" onPress={onSetTarget} />
+        <Button
+          label="Set a daily target"
+          variant="secondary"
+          align="center"
+          onPress={onSetTarget}
+        />
       ) : null}
 
       <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
