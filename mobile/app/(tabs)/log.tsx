@@ -137,13 +137,12 @@ const ANY_CUISINE = 'any';
  * share the leftover space and finish flush with the right hand edge instead of
  * trailing off wherever the labels happened to end.
  */
-const FORM_WIDTH = 420;
 
 /** Where the photo has got to, given it can only be sent once the log exists. */
 type PhotoStatus = 'none' | 'uploading' | 'attached' | 'failed';
 
 export default function LogScreen() {
-  const { colors, spacing, type } = useTheme();
+  const { colors, layout, spacing, type } = useTheme();
   const router = useRouter();
 
   const [query, setQuery] = useState('');
@@ -335,7 +334,7 @@ export default function LogScreen() {
   /** The centred, capped column every screen state lays itself out in. */
   const column = {
     width: '100%' as const,
-    maxWidth: FORM_WIDTH,
+    maxWidth: layout.formWidth,
     alignSelf: 'center' as const,
     gap: spacing.xl,
   };

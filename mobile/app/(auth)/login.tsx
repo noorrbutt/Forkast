@@ -40,11 +40,9 @@ import { describeError } from '../../lib/api';
  * above, so the column has one axis rather than two competing ones.
  */
 
-/** Capped so the form never runs the full width of a tablet or a browser. */
-const COLUMN_WIDTH = 420;
 
 export default function LoginScreen() {
-  const { colors, spacing, type } = useTheme();
+  const { colors, layout, spacing, type } = useTheme();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -83,7 +81,7 @@ export default function LoginScreen() {
       <View
         style={{
           width: '100%',
-          maxWidth: COLUMN_WIDTH,
+          maxWidth: layout.formWidth,
           alignSelf: 'center',
           gap: spacing.xl,
           paddingTop: spacing.sm,

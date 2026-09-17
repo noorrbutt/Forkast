@@ -65,8 +65,6 @@ import { useTheme } from '../../theme';
 const MIN_TARGET = 0;
 const MAX_TARGET = 10_000;
 
-/** Capped so the settings never run the full width of a tablet or a browser. */
-const CONTENT_MAX = 560;
 
 /**
  * The picture, at 72 rather than the component's default 88.
@@ -516,7 +514,7 @@ function RemindersSection() {
 }
 
 export default function ProfileScreen() {
-  const { colors, spacing, type } = useTheme();
+  const { colors, layout, spacing, type } = useTheme();
   const { signOut } = useAuth();
   const me = useMe();
 
@@ -530,7 +528,7 @@ export default function ProfileScreen() {
       <View
         style={{
           width: '100%',
-          maxWidth: CONTENT_MAX,
+          maxWidth: layout.contentWidth,
           alignSelf: 'center',
           // 24 between groups against 8 between a group's title and its rows,
           // so the grouping says something.

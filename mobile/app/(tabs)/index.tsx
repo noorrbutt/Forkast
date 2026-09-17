@@ -83,8 +83,6 @@ import { useTheme } from '../../theme';
 /** The ring at its full size, clamped on a narrow phone so it never overhangs. */
 const RING_SIZE = 240;
 
-/** One content column, capped so a tablet does not stretch it into a banner. */
-const CONTENT_MAX = 560;
 
 /**
  * Everything the hero says, worked out in one place.
@@ -490,7 +488,7 @@ function TrendCard({ trend }: { trend: ReturnType<typeof useTrend> }) {
 export default function DashboardScreen() {
   // Burned is asked for, never parked on the screen as a form.
   const [burnOpen, setBurnOpen] = useState(false);
-  const { colors, spacing, type } = useTheme();
+  const { colors, layout, spacing, type } = useTheme();
   const router = useRouter();
   const dashboard = useDashboard();
   // Held here rather than inside the card so a pull to refresh reloads both.
@@ -513,7 +511,7 @@ export default function DashboardScreen() {
         />
       }
     >
-      <View style={{ width: '100%', maxWidth: CONTENT_MAX, alignSelf: 'center' }}>
+      <View style={{ width: '100%', maxWidth: layout.contentWidth, alignSelf: 'center' }}>
         {dashboard.isLoading ? <Loading label="Reading your day" /> : null}
 
         {dashboard.isError && !data ? (

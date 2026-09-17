@@ -92,8 +92,6 @@ import { useTheme } from '../../theme';
  *    it is the secondary half of the screen.
  */
 
-/** One content column, capped so a tablet does not stretch it into a banner. */
-const CONTENT_MAX = 560;
 
 const FUN_LEVELS = [1, 2, 3, 4, 5];
 
@@ -117,7 +115,7 @@ function loggedAt(value: string): string {
 }
 
 export default function MealScreen() {
-  const { colors, radius, spacing, type } = useTheme();
+  const { colors, layout, radius, spacing, type } = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
@@ -351,7 +349,7 @@ export default function MealScreen() {
   return (
     <Screen title="Meal" onBack={() => router.back()}>
       <View
-        style={{ width: '100%', maxWidth: CONTENT_MAX, alignSelf: 'center', gap: spacing.xl }}
+        style={{ width: '100%', maxWidth: layout.contentWidth, alignSelf: 'center', gap: spacing.xl }}
       >
         {hasPhoto ? (
           <View style={{ gap: spacing.lg }}>

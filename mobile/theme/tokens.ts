@@ -239,6 +239,22 @@ export const layout = {
   tabBarInset: 18,
   scrollBottomInset: 120,
   hairline: 1,
+  /**
+   * How wide a column of content is allowed to get.
+   *
+   * The guide requires the content column to be capped and centred, because a
+   * form running the full width of a tablet or a browser is not a design. These
+   * two numbers used to be declared in nine separate screen files, each with its
+   * own near identical comment, and three screens had simply forgotten to do it
+   * at all: there was nothing to inherit, so every screen had to remember.
+   *
+   * `content` is the reading measure: a dashboard, a diary, a settings list.
+   * `form` is narrower, because a column of short controls looks abandoned in a
+   * wide one and a label sitting 500pt from its field is harder to read, not
+   * easier.
+   */
+  contentWidth: 560,
+  formWidth: 420,
 } as const;
 
 /**

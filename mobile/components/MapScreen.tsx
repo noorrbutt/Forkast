@@ -150,7 +150,7 @@ function regionFor(pins: Pin[]) {
  * map lives behind this component.
  */
 export function MapScreen() {
-  const { colors, radius, spacing, type } = useTheme();
+  const { colors, layout, radius, spacing, type } = useTheme();
   const restaurants = useVisitedRestaurants();
   const logs = useLogs(100, 0);
 
@@ -195,7 +195,16 @@ export function MapScreen() {
   }
 
   return (
-    <View style={{ gap: spacing.lg }}>
+    // One capped, centred column, like every other screen. Without it the
+    // area cards stretched the full width of a tablet or a browser.
+    <View
+      style={{
+        width: '100%',
+        maxWidth: layout.contentWidth,
+        alignSelf: 'center',
+        gap: spacing.lg,
+      }}
+    >
       {showMap ? (
         <View
           style={{

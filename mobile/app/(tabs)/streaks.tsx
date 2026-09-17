@@ -40,7 +40,7 @@ function supportiveCopy(current: number, longest: number): string {
  * reading of a real run and the line under it does the encouraging.
  */
 export default function StreaksScreen() {
-  const { colors, spacing, type } = useTheme();
+  const { colors, layout, spacing, type } = useTheme();
   const router = useRouter();
   const streaks = useStreaks();
   const data = streaks.data;
@@ -51,10 +51,18 @@ export default function StreaksScreen() {
   // is a different thing from a run that has just been broken.
   const started = Boolean(data && (current > 0 || longest > 0 || data.last_junk_date));
 
-  // The scroll already puts lg between its children, so xxl on each side of the
-  // hero lands its surrounding space on xxxl, which nothing else on the screen
-  // is allowed to have.
+  // The column below already puts lg between its children, so xxl on each side
+  // of the hero lands its surrounding space on xxxl, which nothing else on the
+  // screen is allowed to have.
   const heroSpace = { paddingTop: spacing.xxl, paddingBottom: spacing.xxl };
+
+  /** One capped, centred column, carrying the gap the scroll used to apply. */
+  const column = {
+    width: '100%' as const,
+    maxWidth: layout.contentWidth,
+    alignSelf: 'center' as const,
+    gap: spacing.lg,
+  };
 
   return (
     <Screen
@@ -67,90 +75,92 @@ export default function StreaksScreen() {
         />
       }
     >
-      {/* isPending rather than isLoading, because the query is disabled until
-          the stored token has been read back from the keystore and a disabled
-          query is not "loading". Reading it that way left the first paint of a
-          cold start blank rather than showing a state anyone designed. */}
-      {streaks.isPending ? <Loading label="Counting your days" /> : null}
+      <View style={column}>
+        {/* isPending rather than isLoading, because the query is disabled until
+            the stored token has been read back from the keystore and a disabled
+            query is not "loading". Reading it that way left the first paint of a
+            cold start blank rather than showing a state anyone designed. */}
+        {streaks.isPending ? <Loading label="Counting your days" /> : null}
 
-      {streaks.isError && !data ? (
-        <ErrorState
-          title="Streaks unavailable"
-          message={describeError(streaks.error)}
-          onRetry={() => void streaks.refetch()}
-        />
-      ) : null}
+        {streaks.isError && !data ? (
+          <ErrorState
+            title="Streaks unavailable"
+            message={describeError(streaks.error)}
+            onRetry={() => void streaks.refetch()}
+          />
+        ) : null}
 
-      {data && !started ? (
-        <>
-          <View style={heroSpace}>
-            <Hero
-              value="Day one"
-              caption="A streak counts the days in a row where nothing you log is junk."
-            />
-          </View>
-
-          <Text style={[type.caption, { color: colors.muted }]}>
-            Nothing is on the board yet, so nothing has been broken either.
-          </Text>
-
-          <Button label="Log a meal" icon="log" size="lg" full onPress={() => router.navigate('/log')} />
-        </>
-      ) : null}
-
-      {data && started ? (
-        <>
-          <View style={heroSpace}>
-            <Hero
-              value={String(current)}
-              caption={current === 1 ? 'day without junk' : 'days without junk'}
-              /**
-               * Sage while the run is live, ink once it is broken.
-               *
-               * It used to be saffron, which is wrong twice over: saffron is the
-               * one action colour and a figure wearing it looks tappable, and
-               * the palette's own note on sage names "a live streak" as the
-               * example of what it is for. The same fact was being drawn in two
-               * colours depending on which file you were in.
-               *
-               * Zero stays ink, so it reads as a reading rather than as a thing
-               * to celebrate. The number still carries the meaning on its own.
-               */
-              color={current > 0 ? colors.success : colors.text}
-            />
-          </View>
-
-          {/* The record, which is reference rather than the answer, so it sits
-              two full steps of the scale below the figure above it. The two
-              values share a right edge so they read as one column. */}
-          <Card>
-            <View style={{ gap: spacing.lg }}>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.lg }}>
-                <Text style={[type.body, { color: colors.muted, flex: 1 }]}>Longest run</Text>
-                <Text style={[type.displaySm, { color: colors.text }]}>{longest}</Text>
-              </View>
-
-              <View style={{ height: 1, backgroundColor: colors.border }} />
-
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.lg }}>
-                <Text style={[type.body, { color: colors.muted, flex: 1 }]}>Last slip</Text>
-                <Text style={[type.subtitle, { color: colors.text }]}>
-                  {data.last_junk_date ? formatDate(data.last_junk_date) : 'None yet'}
-                </Text>
-              </View>
+        {data && !started ? (
+          <>
+            <View style={heroSpace}>
+              <Hero
+                value="Day one"
+                caption="A streak counts the days in a row where nothing you log is junk."
+              />
             </View>
-          </Card>
 
-          <View style={{ gap: spacing.sm }}>
-            <Text style={[type.body, { color: colors.text }]}>{supportiveCopy(current, longest)}</Text>
-            {data.message ? (
-              <Text style={[type.caption, { color: colors.muted }]}>{data.message}</Text>
-            ) : null}
-          </View>
+            <Text style={[type.caption, { color: colors.muted }]}>
+              Nothing is on the board yet, so nothing has been broken either.
+            </Text>
 
-          <Button label="Log a meal" icon="log" size="lg" full onPress={() => router.navigate('/log')} />
-        </>
-      ) : null}
+            <Button label="Log a meal" icon="log" size="lg" full onPress={() => router.navigate('/log')} />
+          </>
+        ) : null}
+
+        {data && started ? (
+          <>
+            <View style={heroSpace}>
+              <Hero
+                value={String(current)}
+                caption={current === 1 ? 'day without junk' : 'days without junk'}
+                /**
+                 * Sage while the run is live, ink once it is broken.
+                 *
+                 * It used to be saffron, which is wrong twice over: saffron is the
+                 * one action colour and a figure wearing it looks tappable, and
+                 * the palette's own note on sage names "a live streak" as the
+                 * example of what it is for. The same fact was being drawn in two
+                 * colours depending on which file you were in.
+                 *
+                 * Zero stays ink, so it reads as a reading rather than as a thing
+                 * to celebrate. The number still carries the meaning on its own.
+                 */
+                color={current > 0 ? colors.success : colors.text}
+              />
+            </View>
+
+            {/* The record, which is reference rather than the answer, so it sits
+                two full steps of the scale below the figure above it. The two
+                values share a right edge so they read as one column. */}
+            <Card>
+              <View style={{ gap: spacing.lg }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.lg }}>
+                  <Text style={[type.body, { color: colors.muted, flex: 1 }]}>Longest run</Text>
+                  <Text style={[type.displaySm, { color: colors.text }]}>{longest}</Text>
+                </View>
+
+                <View style={{ height: layout.hairline, backgroundColor: colors.border }} />
+
+                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.lg }}>
+                  <Text style={[type.body, { color: colors.muted, flex: 1 }]}>Last slip</Text>
+                  <Text style={[type.subtitle, { color: colors.text }]}>
+                    {data.last_junk_date ? formatDate(data.last_junk_date) : 'None yet'}
+                  </Text>
+                </View>
+              </View>
+            </Card>
+
+            <View style={{ gap: spacing.sm }}>
+              <Text style={[type.body, { color: colors.text }]}>{supportiveCopy(current, longest)}</Text>
+              {data.message ? (
+                <Text style={[type.caption, { color: colors.muted }]}>{data.message}</Text>
+              ) : null}
+            </View>
+
+            <Button label="Log a meal" icon="log" size="lg" full onPress={() => router.navigate('/log')} />
+          </>
+        ) : null}
+      </View>
     </Screen>
   );
 }

@@ -96,8 +96,6 @@ const THUMB = 64;
  */
 const CALORIES = 64;
 
-/** One content column, capped so a tablet does not stretch it into a banner. */
-const CONTENT_MAX = 560;
 
 type DiaryDay = {
   key: string;
@@ -339,7 +337,7 @@ function MealRowBase({ log, last, onOpen, onRepeat, sending, confirmed, error }:
 const MealRow = memo(MealRowBase);
 
 export default function HistoryScreen() {
-  const { colors, spacing } = useTheme();
+  const { colors, layout, spacing } = useTheme();
   const router = useRouter();
   const logs = useLogs(100, 0);
   const repeat = useRepeatLog();
@@ -424,7 +422,7 @@ export default function HistoryScreen() {
         />
       }
     >
-      <View style={{ width: '100%', maxWidth: CONTENT_MAX, alignSelf: 'center' }}>
+      <View style={{ width: '100%', maxWidth: layout.contentWidth, alignSelf: 'center' }}>
         {logs.isLoading ? <Loading label="Reading your diary" /> : null}
 
         {logs.isError && !logs.data ? (

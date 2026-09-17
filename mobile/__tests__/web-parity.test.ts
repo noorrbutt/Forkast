@@ -305,3 +305,48 @@ describe('an authenticated image on Android', () => {
     expect(source).toMatch(/source\?: ImageSourcePropType/);
   });
 });
+
+/**
+ * A form running the full width of a tablet or a browser is not a design.
+ *
+ * This is here rather than in a design test because the browser is where it
+ * actually bites: on a phone the cap never binds, so the three screens that had
+ * forgotten it looked correct on every device anyone tested them on, and only
+ * stretched once the same code ran in a window 1,400pt wide.
+ *
+ * The widths live in `layout` so a screen inherits one rather than remembering
+ * to declare it. They were nine separate constants before, which is exactly how
+ * three screens ended up without one.
+ */
+describe('the content column', () => {
+  const SCREENS = [
+    'app/(auth)/login.tsx',
+    'app/(auth)/register.tsx',
+    'app/(auth)/welcome.tsx',
+    'app/(tabs)/history.tsx',
+    'app/(tabs)/index.tsx',
+    'app/(tabs)/log.tsx',
+    'app/(tabs)/plan.tsx',
+    'app/(tabs)/profile.tsx',
+    'app/(tabs)/streaks.tsx',
+    'app/logs/[id].tsx',
+    'app/setup.tsx',
+    'components/MapScreen.tsx',
+  ];
+
+  it.each(SCREENS)('is capped and centred on %s', (screen) => {
+    const source = code(screen);
+
+    expect(source).toMatch(/maxWidth:/);
+    expect(source).toMatch(/alignSelf: 'center'/);
+  });
+
+  it('takes the width from a token rather than a number per screen', () => {
+    // Welcome is the one exception and says why in a comment: centred text
+    // wants a shorter measure than the forms use, or the lines come out
+    // lopsided.
+    for (const screen of SCREENS.filter((s) => !s.includes('welcome'))) {
+      expect(code(screen)).toMatch(/maxWidth: layout\.(content|form)Width/);
+    }
+  });
+});

@@ -73,7 +73,7 @@ function GoalPicker({
  * puts the one action that answers it directly underneath.
  */
 export default function PlanRoute() {
-  const { colors, radius, spacing, type } = useTheme();
+  const { colors, layout, radius, spacing, type } = useTheme();
   const me = useMe();
   const plans = usePlans();
   const generate = useGeneratePlan();
@@ -96,8 +96,9 @@ export default function PlanRoute() {
   const perDay =
     dayTotals.length > 0 ? Math.round(dayTotals.reduce((a, b) => a + b, 0) / dayTotals.length) : 0;
 
-  // The scroll already puts lg between its children, so xxl on each side of the
-  // hero lands its surrounding space on xxxl, which nothing else may have.
+  // The column below already puts lg between its children, so xxl on each side
+  // of the hero lands its surrounding space on xxxl, which nothing else may
+  // have.
   const heroSpace = { paddingTop: spacing.xxl, paddingBottom: spacing.xxl };
 
   const hasPlan = Boolean(plan && generated);
@@ -107,161 +108,180 @@ export default function PlanRoute() {
   // a frame before the request had even been sent.
   const looking = plans.isPending && !hasPlan;
 
+  /**
+   * One capped, centred column.
+   *
+   * The gap matches what Screen's scroll container was applying before this
+   * wrapper existed, so the rhythm between blocks is unchanged and the hero's
+   * xxl padding still lands on xxxl of surrounding space.
+   */
+  const column = {
+    width: '100%' as const,
+    maxWidth: layout.contentWidth,
+    alignSelf: 'center' as const,
+    gap: spacing.lg,
+  };
+
   return (
     <Screen title="AI meal plan">
-      {looking ? <Loading label="Looking for past plans" /> : null}
+      <View style={column}>
+        {looking ? <Loading label="Looking for past plans" /> : null}
 
-      {!hasPlan && !looking ? (
-        <>
-          {/* Whether the last plan could be fetched or not, the action that
-              makes a new one stays on the screen underneath. A failure to read
-              the history is not a reason to take away the only thing this
-              screen is for. */}
-          {plans.isError ? (
-            <ErrorState
-              title="Plans unavailable"
-              message={describeError(plans.error)}
-              onRetry={() => void plans.refetch()}
-            />
-          ) : (
-            <View style={{ gap: spacing.md, paddingTop: spacing.lg, paddingBottom: spacing.xl }}>
-              <Text style={[type.display, { color: colors.text }]}>What should I eat?</Text>
-              <Text style={[type.body, { color: colors.muted }]}>
-                Forkast reads what you have been logging and writes three days of breakfast, lunch
-                and dinner around your goal.
-              </Text>
-            </View>
-          )}
+        {!hasPlan && !looking ? (
+          <>
+            {/* Whether the last plan could be fetched or not, the action that
+                makes a new one stays on the screen underneath. A failure to read
+                the history is not a reason to take away the only thing this
+                screen is for. */}
+            {plans.isError ? (
+              <ErrorState
+                title="Plans unavailable"
+                message={describeError(plans.error)}
+                onRetry={() => void plans.refetch()}
+              />
+            ) : (
+              <View style={{ gap: spacing.md, paddingTop: spacing.lg, paddingBottom: spacing.xl }}>
+                <Text style={[type.display, { color: colors.text }]}>What should I eat?</Text>
+                <Text style={[type.body, { color: colors.muted }]}>
+                  Forkast reads what you have been logging and writes three days of breakfast, lunch
+                  and dinner around your goal.
+                </Text>
+              </View>
+            )}
 
-          <GoalPicker goal={goal} onPick={setPicked} blurb disabled={generate.isPending} />
+            <GoalPicker goal={goal} onPick={setPicked} blurb disabled={generate.isPending} />
 
-          <Button
-            label="Generate a plan"
-            size="lg"
-            full
-            loading={generate.isPending}
-            onPress={() => generate.mutate(goal)}
-          />
-
-          {generate.isError ? (
-            <Text style={[type.caption, { color: colors.danger }]}>
-              {describeError(generate.error)}
-            </Text>
-          ) : null}
-        </>
-      ) : null}
-
-      {plan && generated ? (
-        <>
-          {/* Above the plan and deliberately quiet. The same words on the
-              button as the empty screen uses, because it is the same action. */}
-          <View style={{ gap: spacing.lg }}>
-            <GoalPicker goal={goal} onPick={setPicked} disabled={generate.isPending} />
             <Button
               label="Generate a plan"
-              variant="secondary"
-              align="start"
+              size="lg"
+              full
               loading={generate.isPending}
               onPress={() => generate.mutate(goal)}
             />
+
             {generate.isError ? (
               <Text style={[type.caption, { color: colors.danger }]}>
                 {describeError(generate.error)}
               </Text>
             ) : null}
-          </View>
+          </>
+        ) : null}
 
-          {perDay > 0 ? (
-            <View style={heroSpace}>
-              <Hero
-                value={formatNumber(perDay)}
-                caption={`kcal a day, across ${days.length} ${days.length === 1 ? 'day' : 'days'}`}
-              />
+        {plan && generated ? (
+          <>
+            {perDay > 0 ? (
+              <View style={heroSpace}>
+                <Hero
+                  value={formatNumber(perDay)}
+                  caption={`kcal a day, across ${days.length} ${days.length === 1 ? 'day' : 'days'}`}
+                />
+              </View>
+            ) : null}
+
+            <View style={{ gap: spacing.sm }}>
+              <Text style={[perDay > 0 ? type.body : type.title, { color: colors.text }]}>
+                {generated.summary || 'Three days shaped around your goal.'}
+              </Text>
+              <Text style={[type.caption, { color: colors.muted }]}>
+                {GOAL_LABELS[plan.goal] ?? titleCase(String(plan.goal))} plan
+                {plan.created_at ? `, made ${formatDate(plan.created_at)}` : ''}.
+              </Text>
             </View>
-          ) : null}
 
-          <View style={{ gap: spacing.sm }}>
-            <Text style={[perDay > 0 ? type.body : type.title, { color: colors.text }]}>
-              {generated.summary || 'Three days shaped around your goal.'}
-            </Text>
-            <Text style={[type.caption, { color: colors.muted }]}>
-              {GOAL_LABELS[plan.goal] ?? titleCase(String(plan.goal))} plan
-              {plan.created_at ? `, made ${formatDate(plan.created_at)}` : ''}.
-            </Text>
-          </View>
-
-          <Card>
-            <View style={{ gap: spacing.xl }}>
-              {days.map((day, dayIndex) => (
-                <View key={`${day.day}-${dayIndex}`} style={{ gap: spacing.lg }}>
-                  {dayIndex > 0 ? (
-                    <View style={{ height: 1, backgroundColor: colors.border }} />
-                  ) : null}
-
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.md }}>
-                    <Text style={[type.title, { color: colors.text, flex: 1 }]}>{day.day}</Text>
-                    {/* The unit sits once at the top of the column the meal
-                        numbers align into, the way a table does it, rather than
-                        being repeated on all nine rows. */}
-                    <Text style={[type.caption, { color: colors.muted }]}>
-                      {formatNumber(dayTotals[dayIndex])} kcal
-                    </Text>
-                  </View>
-
-                  <View style={{ gap: spacing.lg }}>
-                    {(day.meals ?? []).map((meal, mealIndex) => (
-                      <View
-                        key={`${meal.slot}-${mealIndex}`}
-                        style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.lg }}
-                      >
-                        <View style={{ flex: 1, gap: spacing.xs }}>
-                          <Text style={[type.caption, { color: colors.muted }]}>
-                            {titleCase(meal.slot)}
-                          </Text>
-                          <Text style={[type.body, { color: colors.text }]}>{meal.suggestion}</Text>
-                        </View>
-                        <Text
-                          style={[type.subtitle, { color: colors.muted }]}
-                          // The column carries the unit visually. A screen
-                          // reader has no column, so it gets the unit said.
-                          accessibilityLabel={`${formatNumber(meal.approx_calories)} kcal`}
-                        >
-                          {formatNumber(meal.approx_calories)}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              ))}
-            </View>
-          </Card>
-
-          {nudges.length > 0 ? (
             <Card>
-              <View style={{ gap: spacing.md }}>
-                <Text style={[type.title, { color: colors.text }]}>Worth knowing</Text>
-                {nudges.map((nudge, index) => (
-                  <View
-                    key={`${index}-${nudge.slice(0, 12)}`}
-                    style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' }}
-                  >
-                    <View
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: radius.pill,
-                        backgroundColor: colors.accent,
-                        marginTop: spacing.sm,
-                      }}
-                    />
-                    <Text style={[type.body, { color: colors.text, flex: 1 }]}>{nudge}</Text>
+              <View style={{ gap: spacing.xl }}>
+                {days.map((day, dayIndex) => (
+                  <View key={`${day.day}-${dayIndex}`} style={{ gap: spacing.lg }}>
+                    {dayIndex > 0 ? (
+                      <View style={{ height: layout.hairline, backgroundColor: colors.border }} />
+                    ) : null}
+
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.md }}>
+                      <Text style={[type.title, { color: colors.text, flex: 1 }]}>{day.day}</Text>
+                      {/* The unit sits once at the top of the column the meal
+                          numbers align into, the way a table does it, rather than
+                          being repeated on all nine rows. */}
+                      <Text style={[type.caption, { color: colors.muted }]}>
+                        {formatNumber(dayTotals[dayIndex])} kcal
+                      </Text>
+                    </View>
+
+                    <View style={{ gap: spacing.lg }}>
+                      {(day.meals ?? []).map((meal, mealIndex) => (
+                        <View
+                          key={`${meal.slot}-${mealIndex}`}
+                          style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.lg }}
+                        >
+                          <View style={{ flex: 1, gap: spacing.xs }}>
+                            <Text style={[type.caption, { color: colors.muted }]}>
+                              {titleCase(meal.slot)}
+                            </Text>
+                            <Text style={[type.body, { color: colors.text }]}>{meal.suggestion}</Text>
+                          </View>
+                          <Text
+                            style={[type.subtitle, { color: colors.muted }]}
+                            // The column carries the unit visually. A screen
+                            // reader has no column, so it gets the unit said.
+                            accessibilityLabel={`${formatNumber(meal.approx_calories)} kcal`}
+                          >
+                            {formatNumber(meal.approx_calories)}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
                   </View>
                 ))}
               </View>
             </Card>
-          ) : null}
-        </>
-      ) : null}
+
+            {nudges.length > 0 ? (
+              <Card>
+                <View style={{ gap: spacing.md }}>
+                  <Text style={[type.title, { color: colors.text }]}>Worth knowing</Text>
+                  {nudges.map((nudge, index) => (
+                    <View
+                      key={`${index}-${nudge.slice(0, 12)}`}
+                      style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' }}
+                    >
+                      <View
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: radius.pill,
+                          backgroundColor: colors.accent,
+                          marginTop: spacing.sm,
+                        }}
+                      />
+                      <Text style={[type.body, { color: colors.text, flex: 1 }]}>{nudge}</Text>
+                    </View>
+                  ))}
+                </View>
+              </Card>
+            ) : null}
+            {/* Below the plan, not above it. Section 6 asks for the dominant
+                object in the top third, and a chip row with a button under it
+                was taking that slot from the figure. Making another plan is also
+                a decision taken after reading this one, so it belongs at the end
+                of the reading rather than in front of it. The words on the button
+                match the empty screen's, because it is the same action. */}
+            <View style={{ gap: spacing.lg, paddingTop: spacing.xl }}>
+              <GoalPicker goal={goal} onPick={setPicked} disabled={generate.isPending} />
+              <Button
+                label="Generate a plan"
+                variant="secondary"
+                align="start"
+                loading={generate.isPending}
+                onPress={() => generate.mutate(goal)}
+              />
+              {generate.isError ? (
+                <Text style={[type.caption, { color: colors.danger }]}>
+                  {describeError(generate.error)}
+                </Text>
+              ) : null}
+            </View>
+          </>
+        ) : null}
+      </View>
     </Screen>
   );
 }

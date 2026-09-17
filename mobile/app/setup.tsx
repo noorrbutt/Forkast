@@ -16,15 +16,6 @@ const MAX_TARGET = 10_000;
 /** The goal this screen opens on, and therefore the target it opens with. */
 const FIRST_GOAL: Goal = 'maintain';
 
-/**
- * The form measure, the same one the log form uses.
- *
- * A form is a column of short controls, so on a tablet, a foldable or the web
- * build it has to stop somewhere. This screen previously had no cap at all and
- * ran a three chip row and a five digit number field across the full width of
- * whatever it was opened on.
- */
-const COLUMN_WIDTH = 420;
 
 /** What the device thinks it is, which is almost always what the user wants. */
 function deviceTimezone(): string | null {
@@ -112,7 +103,7 @@ function deviceTimezone(): string | null {
  *    16 between questions in a group, 24 between groups.
  */
 export default function SetupScreen() {
-  const { colors, spacing, type } = useTheme();
+  const { colors, layout, spacing, type } = useTheme();
   const { completeSetup } = useAuth();
   const updateProfile = useUpdateProfile();
 
@@ -193,7 +184,7 @@ export default function SetupScreen() {
       <View
         style={{
           width: '100%',
-          maxWidth: COLUMN_WIDTH,
+          maxWidth: layout.formWidth,
           alignSelf: 'center',
           gap: spacing.xl,
           paddingTop: spacing.lg,
