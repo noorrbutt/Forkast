@@ -57,52 +57,115 @@ export type Palette = {
  * eyeballed. Change a value and that test tells you what it broke.
  */
 const SAFFRON = '#F5A524';
-const SAFFRON_DEEP = '#B45309';
+const SAFFRON_DEEP = '#9A4D08';
 
 export const palettes: Record<ThemeName, Palette> = {
   dark: {
-    bg: '#0E0E10',
-    surface: '#18181B',
-    surfaceAlt: '#202024',
-    border: '#26262B',
-    outline: '#8B8B93',
+    // The greys are a solved ramp, not a taste. Every step clears a measured
+    // floor against the one below it, which is what stops a card, a chip and
+    // the page reading as one flat sheet. The previous ramp sat every surface
+    // within 1.09:1 of the background, so nothing lifted off anything and the
+    // whole app looked monochrome.
+    bg: '#08080B',
+    surface: '#28282E',
+    surfaceAlt: '#38383E',
+    border: '#535359',
+    outline: '#818187',
     text: '#FAFAF7',
-    muted: '#8B8B93',
+    muted: '#B4B4BE',
     accent: SAFFRON,
     accentFill: SAFFRON,
-    accentSoft: 'rgba(245, 165, 36, 0.16)',
+    accentSoft: 'rgba(245, 165, 36, 0.18)',
     accentInk: '#0E0E10',
-    disabledFill: '#26262B',
-    disabledInk: '#9A9AA2',
-    success: '#4ADE80',
-    successSoft: 'rgba(74, 222, 128, 0.16)',
-    danger: '#F87171',
-    dangerSoft: 'rgba(248, 113, 113, 0.16)',
-    blurFallback: 'rgba(14, 14, 16, 0.72)',
+    disabledFill: '#3A3A42',
+    disabledInk: '#B8B8C2',
+    success: '#5CE08C',
+    successSoft: 'rgba(92, 224, 140, 0.16)',
+    danger: '#FF8F8F',
+    dangerSoft: 'rgba(255, 143, 143, 0.16)',
+    blurFallback: 'rgba(8, 8, 11, 0.72)',
     blurTint: 'dark',
-    scrim: 'rgba(0, 0, 0, 0.6)',
+    scrim: 'rgba(0, 0, 0, 0.66)',
   },
   light: {
-    bg: '#FAFAF7',
+    bg: '#F2F1EB',
     surface: '#FFFFFF',
-    surfaceAlt: '#F2F2EF',
-    border: '#E8E8E4',
-    outline: '#6E6E76',
-    text: '#0E0E10',
-    muted: '#6E6E76',
+    surfaceAlt: '#E6E5E1',
+    border: '#BDBCB8',
+    outline: '#84837F',
+    text: '#14140F',
+    muted: '#5A5A62',
     accent: SAFFRON_DEEP,
     accentFill: SAFFRON_DEEP,
-    accentSoft: 'rgba(180, 83, 9, 0.12)',
+    accentSoft: 'rgba(154, 77, 8, 0.12)',
     accentInk: '#FFFFFF',
-    disabledFill: '#E4E4E0',
+    disabledFill: '#DCDBD6',
     disabledInk: '#55555C',
-    success: '#15803D',
-    successSoft: 'rgba(21, 128, 61, 0.14)',
-    danger: '#B91C1C',
-    dangerSoft: 'rgba(185, 28, 28, 0.12)',
-    blurFallback: 'rgba(250, 250, 247, 0.72)',
+    success: '#146B33',
+    successSoft: 'rgba(20, 107, 51, 0.14)',
+    danger: '#A81F1A',
+    dangerSoft: 'rgba(168, 31, 26, 0.12)',
+    blurFallback: 'rgba(242, 241, 235, 0.72)',
     blurTint: 'light',
-    scrim: 'rgba(14, 14, 16, 0.35)',
+    scrim: 'rgba(20, 20, 15, 0.42)',
+  },
+};
+
+/**
+ * A colour per cuisine, so a cuisine is recognisable before its name is read.
+ *
+ * Generated rather than picked: hues are spaced 36 degrees apart so they are
+ * told apart by hue and not by brightness, and each one's lightness was walked
+ * until it cleared 4.5:1 against the card it sits on in its own theme. Several
+ * pairs are near identical in luminance, which is fine and deliberate; what
+ * must not happen is two cuisines that are the same hue.
+ *
+ * Used as ink and as a soft tint, never as a large fill, so no screen ever
+ * carries ten saturated blocks at once.
+ */
+export const cuisineColors: Record<ThemeName, Record<string, string>> = {
+  dark: {
+    desi: '#D79256',
+    american: '#E38793',
+    italian: '#7ED345',
+    chinese: '#D187E3',
+    middle_eastern: '#45D3CA',
+    japanese: '#E283B3',
+    korean: '#A598E7',
+    thai: '#B7D345',
+    mexican: '#DF8F77',
+    continental: '#6AA7DC',
+  },
+  light: {
+    desi: '#98551B',
+    american: '#C32238',
+    italian: '#397114',
+    chinese: '#A322C3',
+    middle_eastern: '#14716B',
+    japanese: '#BF2270',
+    korean: '#3D22C3',
+    thai: '#5B6C13',
+    mexican: '#B2421F',
+    continental: '#1E68A9',
+  },
+};
+
+/**
+ * Elevation, which does the job luminance cannot on a light theme.
+ *
+ * A white card on a near white page tops out around 1.08:1, and the only way to
+ * push that higher is to dirty the page until it looks grey. So on light the
+ * card is lifted with a shadow, and on dark it is lifted with the grey ramp
+ * above, where shadows are close to invisible anyway.
+ */
+export const elevation: Record<ThemeName, object> = {
+  dark: {},
+  light: {
+    shadowColor: '#14140F',
+    shadowOpacity: 0.07,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
 };
 

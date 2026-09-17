@@ -15,7 +15,7 @@
  * rule the secondary button was failing.
  */
 
-import { palettes, type Palette, type ThemeName } from '../theme/tokens';
+import { cuisineColors, palettes, type Palette, type ThemeName } from '../theme/tokens';
 
 /** WCAG 2.1 relative luminance. */
 function luminance(hex: string): number {
@@ -68,6 +68,18 @@ const CASES: Case[] = [
   { what: 'disabled button fill against the page', fg: 'disabledFill', bg: 'bg', min: 1.1 },
   { what: 'disabled button label on its fill', fg: 'disabledInk', bg: 'disabledFill', min: TEXT },
 
+  // Controls sit on cards, not on the page, and that is the pairing the old
+  // version of this file never checked. A chip fill at 1.09:1 against the card
+  // under it has no visible edge, so a row of them reads as one grey blob, and
+  // every assertion here passed while that was on screen.
+  { what: 'raised fill against the card under it', fg: 'surfaceAlt', bg: 'surface', min: 1.2 },
+  { what: 'a card against the page', fg: 'surface', bg: 'bg', min: 1.05 },
+  { what: 'control outline against a raised fill', fg: 'outline', bg: 'surfaceAlt', min: SHAPE },
+  { what: 'body text on a raised fill', fg: 'text', bg: 'surfaceAlt', min: TEXT },
+  { what: 'muted text on a raised fill', fg: 'muted', bg: 'surfaceAlt', min: TEXT },
+  { what: 'accent fill against a card', fg: 'accentFill', bg: 'surface', min: SHAPE },
+  { what: 'accent text on a raised fill', fg: 'accent', bg: 'surfaceAlt', min: TEXT },
+
   // Destructive and positive text.
   { what: 'danger text on the page', fg: 'danger', bg: 'bg', min: TEXT },
   { what: 'danger text on a card', fg: 'danger', bg: 'surface', min: TEXT },
@@ -109,5 +121,54 @@ describe('the regression this file was written for', () => {
     for (const theme of THEMES) {
       expect(ratio(palettes[theme].accent, palettes[theme].bg)).toBeGreaterThanOrEqual(TEXT);
     }
+  });
+});
+
+
+describe('cuisine colours', () => {
+  it.each(THEMES)('%s: every cuisine is readable on a card', (theme) => {
+    const palette = palettes[theme];
+    for (const [cuisine, color] of Object.entries(cuisineColors[theme])) {
+      const got = ratio(color, palette.surface);
+      expect({ cuisine, ok: got >= TEXT }).toEqual({ cuisine, ok: true });
+    }
+  });
+
+  it.each(THEMES)('%s: every cuisine is readable on the page too', (theme) => {
+    const palette = palettes[theme];
+    for (const [cuisine, color] of Object.entries(cuisineColors[theme])) {
+      const got = ratio(color, palette.bg);
+      expect({ cuisine, ok: got >= TEXT }).toEqual({ cuisine, ok: true });
+    }
+  });
+
+  it('gives both themes the same set of cuisines', () => {
+    expect(Object.keys(cuisineColors.dark).sort()).toEqual(Object.keys(cuisineColors.light).sort());
+  });
+
+  it('never gives two cuisines the same colour', () => {
+    for (const theme of THEMES) {
+      const values = Object.values(cuisineColors[theme]);
+      expect(new Set(values).size).toBe(values.length);
+    }
+  });
+});
+
+describe('the flatness this palette was rebuilt to fix', () => {
+  it('separates every surface from the one beneath it', () => {
+    // Before: bg, surface, surfaceAlt and border sat within 1.09:1 of each
+    // other, so a card, a chip and the page were the same sheet of paper and
+    // the app read as monochrome however much accent was sprinkled on it.
+    for (const theme of THEMES) {
+      const p = palettes[theme];
+      expect(ratio(p.surfaceAlt, p.surface)).toBeGreaterThan(ratio(p.surface, p.surface) + 0.15);
+      expect(ratio(p.border, p.surface)).toBeGreaterThanOrEqual(1.8);
+    }
+  });
+
+  it('keeps a control edge visible on dark, where shadows cannot help', () => {
+    // Light themes can lift a card with a shadow. Dark themes cannot, so the
+    // grey ramp has to do the whole job there.
+    expect(ratio(palettes.dark.surface, palettes.dark.bg)).toBeGreaterThanOrEqual(1.3);
   });
 });
