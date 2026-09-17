@@ -550,11 +550,28 @@ export default function MealScreen() {
                 Optional. A picture turns a list of dishes into something worth looking back at.
               </Text>
             )}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
+            {/* The second copy of this row. See the note in MealPhoto: this
+                screen does not use that component, it reimplements the control,
+                so the same three buttons overflowed the same 342pt here and the
+                fix has to be applied in both places or the screen the user
+                named first stays broken.
+
+                The variant also differs from MealPhoto's, which makes the
+                primary button on the log form secondary here. That is correct
+                on this screen: the meal already exists, so adding a photo is
+                not the main action. */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: spacing.md,
+              }}
+            >
               <Button
                 label={hasPhoto ? 'Retake' : 'Take a photo'}
                 variant="secondary"
-                icon="meal"
+                compact
                 onPress={() => void attachPhoto(true)}
                 disabled={photoBusy}
                 loading={preparing || upload.isPending}
@@ -562,6 +579,7 @@ export default function MealScreen() {
               <Button
                 label="Choose"
                 variant="secondary"
+                compact
                 onPress={() => void attachPhoto(false)}
                 disabled={photoBusy}
               />
@@ -569,6 +587,7 @@ export default function MealScreen() {
                 <Button
                   label="Remove"
                   variant="ghost"
+                  compact
                   onPress={() => setConfirmingPhotoRemoval(true)}
                   disabled={photoBusy}
                   loading={removePhoto.isPending}

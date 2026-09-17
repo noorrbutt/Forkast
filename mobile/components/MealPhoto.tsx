@@ -12,7 +12,7 @@ import { describeError } from '../lib/api';
 import { haptics } from '../lib/haptics';
 import { useTheme } from '../theme';
 import type { Uuid } from '../lib/types';
-import { Button, Dialog, Icon, SectionLabel } from './ui';
+import { Button, Dialog, SectionLabel } from './ui';
 
 /** A meal that exists, so a picked photo goes to the server there and then. */
 type AttachedProps = {
@@ -143,10 +143,7 @@ export function MealPhoto(props: AttachedProps | HeldProps) {
 
   return (
     <View style={{ gap: spacing.lg }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-        <Icon name="meal" size={18} />
-        <SectionLabel>Photo</SectionLabel>
-      </View>
+      <SectionLabel>Photo</SectionLabel>
 
       {thumbnail && attached ? (
         <Pressable
@@ -189,11 +186,29 @@ export function MealPhoto(props: AttachedProps | HeldProps) {
         </Text>
       )}
 
-      <View style={{ flexDirection: 'row', gap: spacing.md, flexWrap: 'wrap' }}>
+      {/* Three buttons on one line, which they were not.
+          With a photo attached the row asked for 360pt of button inside the
+          342pt a 390pt phone actually has, so "Remove" dropped to a second line
+          and left-aligned under "Retake". It overflowed by 18pt, which is why
+          it looked like a near miss rather than a break, and why it does not
+          reproduce on a Pro Max or in a browser where the column is wider.
+
+          `compact` takes each button from 24pt of horizontal padding to 16,
+          which is 48pt back across the three, and dropping the icon returns
+          another 25. That is 287pt against 342, so it now holds through the
+          largest non-accessibility text size rather than failing at the first
+          step up.
+
+          flexWrap stays. Above that size three labels cannot share a line on
+          any phone at any padding, and the guide's rule is to wrap rather than
+          truncate. */}
+      <View
+        style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, flexWrap: 'wrap' }}
+      >
         <Button
           label={thumbnail ? 'Retake' : 'Take a photo'}
-          icon="meal"
           variant={thumbnail ? 'secondary' : 'primary'}
+          compact
           onPress={() => void attach(true)}
           disabled={busy}
           loading={preparing || upload.isPending}
@@ -201,6 +216,7 @@ export function MealPhoto(props: AttachedProps | HeldProps) {
         <Button
           label="Choose"
           variant="secondary"
+          compact
           onPress={() => void attach(false)}
           disabled={busy}
         />
@@ -208,6 +224,7 @@ export function MealPhoto(props: AttachedProps | HeldProps) {
           <Button
             label="Remove"
             variant="ghost"
+            compact
             onPress={drop}
             disabled={busy}
             loading={remove.isPending}

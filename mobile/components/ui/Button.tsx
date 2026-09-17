@@ -25,6 +25,18 @@ type ButtonProps = {
   align?: ButtonAlign;
   /** Rendered before the label, from the shared icon vocabulary. */
   icon?: IconName;
+  /**
+   * Tighter horizontal padding, for a row that has to hold three buttons.
+   *
+   * 16 rather than 24 a side, which is the value Chip already uses for the same
+   * idea. Horizontal only: the vertical padding is what keeps a button over the
+   * 48pt minimum target, and Button has no minHeight to catch it if that were
+   * reduced.
+   *
+   * Intended for `size="md"`. Combining it with `size="lg"` is untested and
+   * there is no caller for it.
+   */
+  compact?: boolean;
   accessibilityHint?: string;
   style?: StyleProp<ViewStyle>;
 };
@@ -39,6 +51,7 @@ export function Button({
   full = false,
   align,
   icon,
+  compact = false,
   accessibilityHint,
   style,
 }: ButtonProps) {
@@ -103,6 +116,9 @@ export function Button({
   const showBorder = borderColor !== null;
 
   const verticalPad = size === 'lg' ? spacing.lg + 2 : spacing.md + 1;
+  // Horizontal only. See the `compact` docblock: touching verticalPad here
+  // would quietly take the control under the minimum tap target.
+  const horizontalPad = compact ? spacing.lg : spacing.xl;
   const alignSelf = align ?? (full ? 'stretch' : 'start');
 
   return (
@@ -130,7 +146,7 @@ export function Button({
           borderWidth: 1.5,
           borderColor: showBorder ? borderColor : 'transparent',
           paddingVertical: verticalPad,
-          paddingHorizontal: spacing.xl,
+          paddingHorizontal: horizontalPad,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
