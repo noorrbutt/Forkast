@@ -4,6 +4,10 @@
  * Every test here is about friction in the right places: it should be findable,
  * and it should be hard to do by accident, because nothing about it can be
  * undone afterwards.
+ *
+ * The confirmation moved from an inline expansion plus an operating system
+ * alert into one dialog on the page, so these cases follow it there rather than
+ * being thrown away. What they assert has not changed.
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -56,21 +60,16 @@ function wrapper({ children }: { children: ReactNode }) {
   );
 }
 
-/** Accept the confirmation dialog, as a user tapping the destructive option. */
-function acceptTheAlert() {
-  jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
-    buttons?.find((b) => b.style === 'destructive')?.onPress?.();
-  });
-}
-
 beforeEach(() => {
   jest.clearAllMocks();
   mockedApi.delete.mockResolvedValue({ data: undefined });
   mockedApi.post.mockResolvedValue({ data: undefined });
+  // Spied rather than left alone, so a stray operating system alert would show
+  // up in these assertions instead of quietly doing nothing in the runner.
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 
-it('stays collapsed until asked for', () => {
+it('keeps the password field behind the dialog', () => {
   const { getByText, queryByPlaceholderText } = render(<DeleteAccount />, { wrapper });
 
   expect(getByText('Delete my account')).toBeTruthy();
@@ -78,7 +77,7 @@ it('stays collapsed until asked for', () => {
   expect(queryByPlaceholderText('Your password')).toBeNull();
 });
 
-it('asks for the password once opened', () => {
+it('asks for the password once the dialog is open', () => {
   const { getByText, getByPlaceholderText } = render(<DeleteAccount />, { wrapper });
 
   fireEvent.press(getByText('Delete my account'));
@@ -95,29 +94,38 @@ it('says what survives, since that is not obvious', () => {
   expect(getByText(/Restaurants you added stay/)).toBeTruthy();
 });
 
+it('asks on the page rather than handing the question to the operating system', () => {
+  const { getByText } = render(<DeleteAccount />, { wrapper });
+
+  fireEvent.press(getByText('Delete my account'));
+
+  // An Alert cannot hold a password field, looks nothing like the app, and on
+  // web is a browser alert box.
+  expect(Alert.alert).not.toHaveBeenCalled();
+  expect(getByText('Delete your account?')).toBeTruthy();
+});
+
 it('will not delete without a password', () => {
   const { getByText } = render(<DeleteAccount />, { wrapper });
   fireEvent.press(getByText('Delete my account'));
 
   fireEvent.press(getByText('Delete for good'));
 
-  expect(Alert.alert).not.toHaveBeenCalled();
   expect(mockedApi.delete).not.toHaveBeenCalled();
 });
 
-it('confirms before doing anything, even with a password typed', () => {
+it('does nothing on the way in, even with a password typed', () => {
   const { getByText, getByPlaceholderText } = render(<DeleteAccount />, { wrapper });
+
   fireEvent.press(getByText('Delete my account'));
   fireEvent.changeText(getByPlaceholderText('Your password'), 'password123');
 
-  fireEvent.press(getByText('Delete for good'));
-
-  expect(Alert.alert).toHaveBeenCalled();
+  // Opening the dialog and filling it in is not consent. Only the destructive
+  // action inside it is.
   expect(mockedApi.delete).not.toHaveBeenCalled();
 });
 
-it('deletes once the confirmation is accepted', async () => {
-  acceptTheAlert();
+it('deletes once the destructive action is taken', async () => {
   const { getByText, getByPlaceholderText } = render(<DeleteAccount />, { wrapper });
   fireEvent.press(getByText('Delete my account'));
   fireEvent.changeText(getByPlaceholderText('Your password'), 'password123');
@@ -130,7 +138,6 @@ it('deletes once the confirmation is accepted', async () => {
 });
 
 it('signs out afterwards, so no dead token is left behind', async () => {
-  acceptTheAlert();
   const { getByText, getByPlaceholderText } = render(<DeleteAccount />, { wrapper });
   fireEvent.press(getByText('Delete my account'));
   fireEvent.changeText(getByPlaceholderText('Your password'), 'password123');
@@ -143,7 +150,6 @@ it('signs out afterwards, so no dead token is left behind', async () => {
 });
 
 it('surfaces a wrong password rather than swallowing it', async () => {
-  acceptTheAlert();
   mockedApi.delete.mockRejectedValue(
     Object.assign(new Error('failed'), {
       isAxiosError: true,
@@ -166,7 +172,18 @@ it('can be backed out of', () => {
   const { getByText, queryByPlaceholderText } = render(<DeleteAccount />, { wrapper });
   fireEvent.press(getByText('Delete my account'));
 
-  fireEvent.press(getByText('Cancel'));
+  fireEvent.press(getByText('Keep my account'));
 
   expect(queryByPlaceholderText('Your password')).toBeNull();
+});
+
+it('forgets the typed password when it is backed out of', () => {
+  const { getByText, getByPlaceholderText } = render(<DeleteAccount />, { wrapper });
+  fireEvent.press(getByText('Delete my account'));
+  fireEvent.changeText(getByPlaceholderText('Your password'), 'password123');
+
+  fireEvent.press(getByText('Keep my account'));
+  fireEvent.press(getByText('Delete my account'));
+
+  expect(getByPlaceholderText('Your password').props.value).toBe('');
 });

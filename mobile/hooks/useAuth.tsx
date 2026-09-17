@@ -187,6 +187,31 @@ export function useMe() {
   });
 }
 
+/** What the password endpoint takes, named as the server names it. */
+export type PasswordChange = {
+  current_password: string;
+  new_password: string;
+};
+
+/**
+ * Swap one password for another.
+ *
+ * No sign out and no token juggling afterwards. The tokens on this device were
+ * issued to a session that is still the same session, so ending it would punish
+ * someone for doing the responsible thing, and the caller is standing on the
+ * Profile tab rather than at a login screen.
+ *
+ * A 403 means the current password was wrong, which is the only failure worth
+ * telling apart, and the dialog that calls this is what says so.
+ */
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: async (change: PasswordChange) => {
+      await api.put('/me/password', change);
+    },
+  });
+}
+
 /**
  * Close the account for good.
  *

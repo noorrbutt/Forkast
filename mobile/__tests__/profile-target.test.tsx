@@ -8,6 +8,10 @@
  *
  * The server refuses anything outside 800 to 10,000 with a 422, so the
  * interesting cases here are the ones that should never reach it at all.
+ *
+ * The screen is now a column of settings rows rather than a column of cards, so
+ * the field lives in the dialog its row opens. Every case below still asserts
+ * the same thing; it just opens the row first.
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -90,6 +94,14 @@ function signedInWith(target: number | null) {
 }
 
 const FIELD = 'e.g. 2200';
+const ROW = 'Daily calorie target';
+
+/** Wait for the screen to sign in, then open the row the field lives behind. */
+async function openTarget(screen: ReturnType<typeof render>) {
+  const row = await waitFor(() => screen.getByText(ROW));
+  fireEvent.press(row);
+  return screen.getByPlaceholderText(FIELD);
+}
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -104,34 +116,42 @@ describe('with no target set', () => {
     await waitFor(() => expect(getByText(/what is left of the day/)).toBeTruthy());
   });
 
-  it('starts empty and keeps the button inert', async () => {
-    const { getByText, getByPlaceholderText } = render(<ProfileScreen />, { wrapper });
-    const input = await waitFor(() => getByPlaceholderText(FIELD));
+  it('shows that there is nothing set without being opened', async () => {
+    const { getByText } = render(<ProfileScreen />, { wrapper });
+
+    // The row carries its own value, which is the whole point of a settings
+    // row: the screen answers the question before anything is tapped.
+    await waitFor(() => expect(getByText('Not set')).toBeTruthy());
+  });
+
+  it('starts empty and keeps the action inert', async () => {
+    const screen = render(<ProfileScreen />, { wrapper });
+    const input = await openTarget(screen);
 
     expect(input.props.value).toBe('');
 
-    fireEvent.press(getByText('Set target'));
+    fireEvent.press(screen.getByText('Set target'));
 
     expect(mockedApi.patch).not.toHaveBeenCalled();
   });
 
   it('sends a valid target', async () => {
-    const { getByText, getByPlaceholderText } = render(<ProfileScreen />, { wrapper });
-    const input = await waitFor(() => getByPlaceholderText(FIELD));
+    const screen = render(<ProfileScreen />, { wrapper });
+    const input = await openTarget(screen);
 
     fireEvent.changeText(input, '2200');
-    fireEvent.press(getByText('Set target'));
+    fireEvent.press(screen.getByText('Set target'));
 
     await waitFor(() =>
       expect(mockedApi.patch).toHaveBeenCalledWith('/me', { daily_calorie_target: 2200 }),
     );
   });
 
-  it('offers no clear button when there is nothing to clear', async () => {
-    const { queryByText, getByPlaceholderText } = render(<ProfileScreen />, { wrapper });
-    await waitFor(() => expect(getByPlaceholderText(FIELD)).toBeTruthy());
+  it('offers no clear action when there is nothing to clear', async () => {
+    const screen = render(<ProfileScreen />, { wrapper });
+    await openTarget(screen);
 
-    expect(queryByText('Clear target')).toBeNull();
+    expect(screen.queryByText('Clear target')).toBeNull();
   });
 });
 
@@ -139,8 +159,8 @@ describe('what never reaches the server', () => {
   beforeEach(() => signedInWith(null));
 
   it('strips anything that is not a digit as it is typed', async () => {
-    const { getByPlaceholderText } = render(<ProfileScreen />, { wrapper });
-    const input = await waitFor(() => getByPlaceholderText(FIELD));
+    const screen = render(<ProfileScreen />, { wrapper });
+    const input = await openTarget(screen);
 
     fireEvent.changeText(input, '2,2 0a0.');
 
@@ -148,53 +168,60 @@ describe('what never reaches the server', () => {
   });
 
   it('refuses a number below the floor and names the range', async () => {
-    const { getByText, getByPlaceholderText } = render(<ProfileScreen />, { wrapper });
-    const input = await waitFor(() => getByPlaceholderText(FIELD));
+    const screen = render(<ProfileScreen />, { wrapper });
+    const input = await openTarget(screen);
 
     fireEvent.changeText(input, '500');
-    fireEvent.press(getByText('Set target'));
+    fireEvent.press(screen.getByText('Set target'));
 
     expect(mockedApi.patch).not.toHaveBeenCalled();
     // Saying the range beats a 422 read back from the server as a red line.
-    expect(getByText(/between 800 and 10,000/)).toBeTruthy();
+    expect(screen.getByText(/between 800 and 10,000/)).toBeTruthy();
   });
 
   it('refuses a number above the ceiling', async () => {
-    const { getByText, getByPlaceholderText } = render(<ProfileScreen />, { wrapper });
-    const input = await waitFor(() => getByPlaceholderText(FIELD));
+    const screen = render(<ProfileScreen />, { wrapper });
+    const input = await openTarget(screen);
 
     fireEvent.changeText(input, '99999');
-    fireEvent.press(getByText('Set target'));
+    fireEvent.press(screen.getByText('Set target'));
 
     expect(mockedApi.patch).not.toHaveBeenCalled();
-    expect(getByText(/between 800 and 10,000/)).toBeTruthy();
+    expect(screen.getByText(/between 800 and 10,000/)).toBeTruthy();
   });
 });
 
 describe('with a target already stored', () => {
   beforeEach(() => signedInWith(2000));
 
-  it('prefills with what the server sent', async () => {
-    const { getByPlaceholderText } = render(<ProfileScreen />, { wrapper });
+  it('shows the stored number on the row itself', async () => {
+    const { getByText } = render(<ProfileScreen />, { wrapper });
 
-    await waitFor(() => expect(getByPlaceholderText(FIELD).props.value).toBe('2000'));
+    await waitFor(() => expect(getByText('2,000')).toBeTruthy());
+  });
+
+  it('prefills with what the server sent', async () => {
+    const screen = render(<ProfileScreen />, { wrapper });
+    const input = await openTarget(screen);
+
+    await waitFor(() => expect(input.props.value).toBe('2000'));
   });
 
   it('will not resend an unchanged value', async () => {
-    const { getByText } = render(<ProfileScreen />, { wrapper });
-    await waitFor(() => expect(getByText('Update target')).toBeTruthy());
+    const screen = render(<ProfileScreen />, { wrapper });
+    await openTarget(screen);
 
-    fireEvent.press(getByText('Update target'));
+    fireEvent.press(screen.getByText('Update target'));
 
     expect(mockedApi.patch).not.toHaveBeenCalled();
   });
 
   it('sends a changed value', async () => {
-    const { getByText, getByPlaceholderText } = render(<ProfileScreen />, { wrapper });
-    await waitFor(() => expect(getByText('Update target')).toBeTruthy());
+    const screen = render(<ProfileScreen />, { wrapper });
+    const input = await openTarget(screen);
 
-    fireEvent.changeText(getByPlaceholderText(FIELD), '2400');
-    fireEvent.press(getByText('Update target'));
+    fireEvent.changeText(input, '2400');
+    fireEvent.press(screen.getByText('Update target'));
 
     await waitFor(() =>
       expect(mockedApi.patch).toHaveBeenCalledWith('/me', { daily_calorie_target: 2400 }),
@@ -202,8 +229,8 @@ describe('with a target already stored', () => {
   });
 
   it('does not overwrite what is being typed when the query settles', async () => {
-    const { getByPlaceholderText } = render(<ProfileScreen />, { wrapper });
-    const input = await waitFor(() => getByPlaceholderText(FIELD));
+    const screen = render(<ProfileScreen />, { wrapper });
+    const input = await openTarget(screen);
 
     fireEvent.changeText(input, '1800');
 
@@ -212,10 +239,10 @@ describe('with a target already stored', () => {
   });
 
   it('clears the target with an action of its own, sending null', async () => {
-    const { getByText } = render(<ProfileScreen />, { wrapper });
-    await waitFor(() => expect(getByText('Clear target')).toBeTruthy());
+    const screen = render(<ProfileScreen />, { wrapper });
+    await openTarget(screen);
 
-    fireEvent.press(getByText('Clear target'));
+    fireEvent.press(screen.getByText('Clear target'));
 
     await waitFor(() =>
       expect(mockedApi.patch).toHaveBeenCalledWith('/me', { daily_calorie_target: null }),
@@ -223,11 +250,14 @@ describe('with a target already stored', () => {
   });
 
   it('empties the field once the target is gone', async () => {
-    const { getByText, getByPlaceholderText } = render(<ProfileScreen />, { wrapper });
-    await waitFor(() => expect(getByPlaceholderText(FIELD).props.value).toBe('2000'));
+    const screen = render(<ProfileScreen />, { wrapper });
+    const input = await openTarget(screen);
+    await waitFor(() => expect(input.props.value).toBe('2000'));
 
-    fireEvent.press(getByText('Clear target'));
+    fireEvent.press(screen.getByText('Clear target'));
 
-    await waitFor(() => expect(getByPlaceholderText(FIELD).props.value).toBe(''));
+    await waitFor(() => expect(screen.getByText('Not set')).toBeTruthy());
+    const reopened = await openTarget(screen);
+    expect(reopened.props.value).toBe('');
   });
 });
