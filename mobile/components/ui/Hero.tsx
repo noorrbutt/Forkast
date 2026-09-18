@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Text, View, useWindowDimensions } from 'react-native';
 
 import { useTheme } from '../../theme';
@@ -24,14 +25,38 @@ type HeroProps = {
  * system text size raised would do exactly the same thing, so the component
  * measures what it was given and shrinks itself instead.
  */
+/**
+ * Width of one glyph at the base size, as a fraction of em.
+ *
+ * Measured rather than guessed: Figtree's tabular figures have an advance of
+ * exactly 0.5em, checked in a browser with the font loaded. It was 0.55, which
+ * was a reasonable guess at a light grotesque and is now simply wrong, and
+ * wrong in the safe direction, so the hero stepped down about 10 percent
+ * earlier than it needed to.
+ *
+ * Letters are wider than figures, so this is deliberately not the narrowest
+ * value: a hero is usually a number, and the one headline hero in the app
+ * ("Forkast.") has to fit too.
+ */
+const GLYPH_EM = 0.5;
+
 export function Hero({ value, caption, color, align = 'left' }: HeroProps) {
   const { colors, spacing, type } = useTheme();
   const { width, fontScale } = useWindowDimensions();
 
-  // A rough width per glyph at the base size. Lining figures in a light
-  // grotesque run near 0.55em, and the gutters take 48 of the screen.
-  const available = width - spacing.xl * 2;
-  const estimated = value.length * type.hero.fontSize * 0.55 * fontScale;
+  /**
+   * The width this hero actually has, not the width of the screen.
+   *
+   * The screen was the wrong question. On welcome the hero sits in a 300pt
+   * column with 24 of padding a side, so the real box is 252 while the screen
+   * based guess said 342: the component believed it had a third more room than
+   * it did, on the one screen whose hero is a word rather than a number, which
+   * is exactly where truncation is least acceptable. The window is only the
+   * starting guess now, replaced by the measured box on first layout.
+   */
+  const [box, setBox] = useState<number | null>(null);
+  const available = box ?? width - spacing.xl * 2;
+  const estimated = value.length * type.hero.fontSize * GLYPH_EM * fontScale;
 
   // Two steps, never smaller. Below this the hero stops being a hero and the
   // screen should be composed differently instead.
@@ -43,7 +68,14 @@ export function Hero({ value, caption, color, align = 'left' }: HeroProps) {
         : 44;
 
   return (
-    <View style={{ gap: spacing.xs, alignItems: align === 'center' ? 'center' : 'flex-start' }}>
+    <View
+      onLayout={(event) => {
+        const measured = event.nativeEvent.layout.width;
+        // Only on a real change, or this sets state on every layout pass.
+        if (measured > 0 && measured !== box) setBox(measured);
+      }}
+      style={{ gap: spacing.xs, alignItems: align === 'center' ? 'center' : 'flex-start' }}
+    >
       <Text
         accessibilityRole="header"
         style={[
