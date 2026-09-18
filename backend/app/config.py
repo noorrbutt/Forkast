@@ -6,7 +6,7 @@ import enum
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -62,6 +62,14 @@ class Settings(BaseSettings):
     # when something trustworthy is actually rewriting it.
     trust_proxy_headers: bool = Field(default=False, alias="TRUST_PROXY_HEADERS")
 
+    # How many proxies actually sit in front of this app. X-Forwarded-For is
+    # read this many hops in from the right, because proxies append and only the
+    # rightmost entries were written by something we control. One is correct for
+    # a single nginx or a single load balancer; behind Cloudflare in front of a
+    # load balancer it is two. Setting it too high walks left into
+    # caller-supplied text, so it is bounded rather than free.
+    trusted_proxy_hops: int = Field(default=1, ge=1, le=8, alias="TRUSTED_PROXY_HOPS")
+
     # Largest request body the API will read, in bytes. The log and plan
     # payloads are a few hundred bytes; a megabyte is already absurd for them.
     # Without a cap, an unauthenticated caller can make the server buffer as
@@ -87,6 +95,62 @@ class Settings(BaseSettings):
     # Plans are the only route that costs real money once Groq is behind it.
     plan_rate_limit: int = Field(default=20, alias="PLAN_RATE_LIMIT")
     plan_rate_window_seconds: int = Field(default=3600, alias="PLAN_RATE_WINDOW_SECONDS")
+
+    @model_validator(mode="after")
+    def _refuse_an_unsafe_configuration(self) -> Settings:
+        """Fail at import rather than at the first request.
+
+        Every check here describes a deployment that looks like it works. The
+        app boots, serves traffic, and is wrong in a way nobody sees until it is
+        attacked, so the only useful place to catch it is before it can accept a
+        single connection.
+        """
+        secret = self.jwt_secret.get_secret_value()
+        if not secret or secret.strip() != secret or len(secret) < 32:
+            raise ValueError(
+                "JWT_SECRET must be at least 32 characters with no surrounding "
+                "whitespace. Generate one with: openssl rand -hex 32"
+            )
+        # The placeholder ships in .env.example, so copying the file and filling
+        # in only the database URLs leaves every token in the system signed with
+        # a value that is public knowledge.
+        if "CHANGEME" in secret.upper():
+            raise ValueError(
+                "JWT_SECRET is still the placeholder from .env.example. Anyone "
+                "holding that file can mint a token for any account. Generate "
+                "one with: openssl rand -hex 32"
+            )
+
+        # HS256 is what create_access_token signs with. Accepting "none" or an
+        # RS/ES name here would mean the verifier accepts it too, and `none` is
+        # the classic way to turn signature checking off entirely.
+        if self.jwt_algorithm not in {"HS256", "HS384", "HS512"}:
+            raise ValueError(
+                f"JWT_ALGORITHM must be one of HS256, HS384, HS512, got {self.jwt_algorithm!r}"
+            )
+
+        if self.ai_provider is AIProvider.groq and not (
+            self.groq_api_key and self.groq_api_key.get_secret_value().strip()
+        ):
+            raise ValueError(
+                "AI_PROVIDER=groq needs GROQ_API_KEY. Set it, or use "
+                "AI_PROVIDER=fake for the deterministic local estimator."
+            )
+
+        if self.environment is Environment.production:
+            if "*" in self.cors_origin_list:
+                raise ValueError(
+                    "CORS_ORIGINS must name real origins in production, not '*'. "
+                    "A wildcard lets any site on the internet call this API with "
+                    "a token it has phished."
+                )
+            if self.database_url.startswith("postgresql+asyncpg://postgres:postgres@"):
+                raise ValueError(
+                    "DATABASE_URL still carries the default postgres:postgres "
+                    "credentials. Change them before running in production."
+                )
+
+        return self
 
     @property
     def docs_enabled(self) -> bool:
