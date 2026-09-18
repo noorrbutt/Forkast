@@ -7,7 +7,6 @@ import { CalorieBars } from '../../components/CalorieBars';
 import {
   Button,
   Card,
-  Empty,
   ErrorState,
   Hero,
   HeroWash,
@@ -535,17 +534,36 @@ export default function DashboardScreen() {
 
         {/* Nothing logged anywhere is an invitation, not a ring reading zero.
             No hero here on purpose: there is no focal value yet. */}
+        {/* The first minute of a new account, and it used to be a dashed box.
+            That box was the only thing a stranger saw on the screen this app is
+            built around: the wash, the ring and the 64pt figure, which are the
+            whole visual identity, did not appear until a meal existed. So the
+            one state every user passes through showed none of the design.
+
+            The wash and one sentence, which is what this needed, and nothing
+            larger. `title` rather than `display`: an empty screen has no focal
+            value, so nothing on it earns a size that competes with the figure
+            this screen exists to show, and dashboard.test.tsx pins that as a
+            rule rather than a preference. The words are unchanged. */}
         {data && !hasAnything ? (
-          <View style={{ paddingTop: spacing.xxl, paddingBottom: spacing.xxl }}>
-            <Empty
-              icon="chart"
-              title="Nothing to count yet"
-              message="Log one meal and this page starts answering how your day is going."
-              actionLabel="Log your first meal"
-              actionIcon="log"
-              onAction={() => router.navigate('/log')}
+          <>
+            <HeroWash pullUp={false}>
+              <View style={{ gap: spacing.md, paddingBottom: spacing.xl }}>
+                <Text style={[type.title, { color: colors.text }]}>Nothing to count yet</Text>
+                <Text style={[type.body, { color: colors.muted }]}>
+                  Log one meal and this page starts answering how your day is going.
+                </Text>
+              </View>
+            </HeroWash>
+
+            <Button
+              label="Log your first meal"
+              icon="log"
+              size="lg"
+              full
+              onPress={() => router.navigate('/log')}
             />
-          </View>
+          </>
         ) : null}
 
         {data && hasAnything ? (
