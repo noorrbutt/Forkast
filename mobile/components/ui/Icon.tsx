@@ -37,7 +37,6 @@ const GLYPHS = {
   map: 'map',
   history: { outline: 'time-outline', filled: 'time' },
   meal: 'restaurant',
-  chart: 'stats-chart',
   forward: 'chevron-forward',
   check: 'checkmark',
   close: 'close',
