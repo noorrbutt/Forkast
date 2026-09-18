@@ -29,7 +29,13 @@ email-validator==2.3.0
 # PyJWT + pwdlib, not python-jose + passlib: passlib's last release was
 # 2020-10-08, and python-jose pulls `ecdsa` which carries the unpatched
 # CVE-2024-23342 Minerva timing attack.
-pyjwt==2.14.0
+#
+# The [crypto] extra pulls `cryptography`, and it is not optional here: our own
+# access tokens are HS256 and need nothing, but Google signs its ID tokens with
+# RS256 and PyJWT refuses every RS algorithm without it. Without the extra,
+# "Continue with Google" fails at verification time with an algorithm error
+# rather than at startup, which is the worst place to find out.
+pyjwt[crypto]==2.14.0
 pwdlib[argon2]==0.3.1
 python-multipart==0.0.32
 

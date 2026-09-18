@@ -56,6 +56,22 @@ class Settings(BaseSettings):
 
     cors_origins: str = Field(default="*", alias="CORS_ORIGINS")
 
+    # Every OAuth client id that may appear in the `aud` claim of a Google ID
+    # token this API will accept, comma separated. There is one per platform --
+    # iOS, Android and Web all get their own from the Google Cloud console --
+    # and the token the phone sends carries whichever one asked for it, so all
+    # of them have to be listed or sign in works on two platforms and not the
+    # third.
+    #
+    # NOT a secret, and deliberately not a SecretStr. An OAuth client id for a
+    # native app is public by design: it ships inside the bundle, anyone can
+    # read it out, and Google's own docs say so. What makes it safe is that the
+    # `aud` check below refuses a token minted for anybody else's client.
+    #
+    # Empty by default, which turns "Continue with Google" off rather than
+    # leaving it half on. See google_enabled.
+    google_client_ids: str = Field(default="", alias="GOOGLE_CLIENT_IDS")
+
     # Whether X-Forwarded-For may be believed when identifying a caller. Off by
     # default: with no proxy in front, any caller can set the header and hand
     # themselves a fresh rate-limit identity on every request. Turn it on only
@@ -161,6 +177,23 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def google_client_id_list(self) -> list[str]:
+        return [c.strip() for c in self.google_client_ids.split(",") if c.strip()]
+
+    @property
+    def google_enabled(self) -> bool:
+        """Whether this deployment can accept a Google ID token at all.
+
+        With no client ids configured there is no audience to check a token
+        against, and a token whose audience nobody checks is a token anyone can
+        mint for their own client and present here as somebody else. So the
+        route answers 503 rather than verifying a signature and waving the
+        claims through, and the app hides the button rather than offering one
+        that cannot work.
+        """
+        return bool(self.google_client_id_list)
 
     @property
     def sync_database_url(self) -> str:
