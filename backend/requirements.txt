@@ -10,7 +10,7 @@ uvicorn[standard]==0.53.0
 # PIN EXACTLY. sqlalchemy 2.0.54 was published 2026-09-15 with only cp311/cp312
 # wheels + an sdist -- no cp314 wheel and no pure-python fallback. Unpinned, a
 # fresh install on Python 3.14 silently falls back to compiling the sdist.
-sqlalchemy[asyncio]==2.0.53
+sqlalchemy[asyncio]==2.0.54
 alembic==1.20.0
 
 # asyncpg, NOT psycopg3-async: psycopg is documented as incompatible with
