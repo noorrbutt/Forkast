@@ -1,4 +1,5 @@
-import { Text, View } from 'react-native';
+import { AccessibilityInfo, Text, View } from 'react-native';
+import { useEffect } from 'react';
 
 import { useTheme } from '../../theme';
 import { Button } from './Button';
@@ -18,8 +19,25 @@ export function ErrorState({
 }: ErrorStateProps) {
   const { colors, radius, spacing, type } = useTheme();
 
+  // Say it out loud, once, when it appears.
+  //
+  // A failure that only exists as text somewhere on the screen is a failure a
+  // screen reader user does not know about: focus does not move here, so
+  // nothing reads it until they happen to swipe onto it, and by then they have
+  // been waiting on a request that already failed. announceForAccessibility is
+  // what interrupts with it on both platforms. accessibilityLiveRegion below
+  // covers the Android case where this re-renders with a different message
+  // while it is already on screen.
+  useEffect(() => {
+    AccessibilityInfo.announceForAccessibility(`${title}. ${message}`);
+  }, [title, message]);
+
   return (
     <View
+      accessible
+      accessibilityRole="alert"
+      accessibilityLiveRegion="assertive"
+      accessibilityLabel={`${title}. ${message}`}
       style={{
         gap: spacing.sm,
         padding: spacing.xl,
