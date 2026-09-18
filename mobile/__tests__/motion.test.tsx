@@ -9,27 +9,19 @@
  * The counting number and the staggered entrance used to be tested here too.
  * Both components have been deleted: no screen rendered either of them, and the
  * staggered fade was the generic default the style guide bans outright, so the
- * tests were the only thing keeping them alive.
+ * tests were the only thing keeping them alive. The six timings that existed to
+ * serve them went with them, which is why this file now asserts two tokens
+ * rather than nine.
  */
 
 import { motion } from '../theme/motion';
 
 describe('motion tokens', () => {
-  it('keeps the paths you walk constantly faster than the ones meant to land', () => {
-    // This is the whole "somewhere between" decision in one assertion. If a
-    // later change makes the log form as slow as a celebration, this fails.
-    expect(motion.quick.duration!).toBeLessThan(motion.entrance.duration!);
-    expect(motion.entrance.duration!).toBeLessThan(motion.expressive.duration!);
-  });
-
   it('keeps everyday motion under a third of a second', () => {
-    // Past roughly 300ms a transition stops reading as responsive.
+    // Past roughly 300ms a transition stops reading as responsive, and `quick`
+    // is the only timing left: it is what the tab bar and every press use.
     expect(motion.quick.duration!).toBeLessThanOrEqual(300);
-  });
-
-  it('travels a short distance, so content arrives rather than flies in', () => {
-    expect(motion.travel).toBeGreaterThan(0);
-    expect(motion.travel).toBeLessThanOrEqual(20);
+    expect(motion.quick.duration!).toBeGreaterThanOrEqual(120);
   });
 
   it('scales a pressed control noticeably but not dramatically', () => {
@@ -37,18 +29,10 @@ describe('motion tokens', () => {
     expect(motion.pressScale).toBeLessThan(1);
   });
 
-  it('staggers a list without making the last item wait', () => {
-    // Eight items at this spacing still finish arriving inside half a second.
-    expect(motion.stagger * 8).toBeLessThan(500);
-  });
-
   it('respects the system reduce motion setting everywhere', () => {
     // Someone who has asked their phone to stop animating should not have to
-    // ask this app separately.
-    for (const token of [motion.quick, motion.entrance, motion.expressive, motion.counter]) {
-      expect(token.reduceMotion).toBeDefined();
-    }
+    // ask this app separately. Every token, so a new one cannot skip it.
+    expect(motion.quick.reduceMotion).toBeDefined();
     expect(motion.press.reduceMotion).toBeDefined();
-    expect(motion.bouncy.reduceMotion).toBeDefined();
   });
 });

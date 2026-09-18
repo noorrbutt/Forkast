@@ -252,7 +252,6 @@ export const elevation: Record<ThemeName, object> = {
 export const radius = {
   card: 28,
   input: 20,
-  sheet: 20,
   tile: 24,
   pill: 999,
 } as const;

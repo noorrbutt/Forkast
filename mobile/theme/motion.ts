@@ -9,6 +9,12 @@
  * Every screen reads from here rather than hardcoding a duration, for the same
  * reason colours live in tokens.ts: changing the feel of the app should be one
  * file, not forty.
+ *
+ * Only what the app actually renders. This was a vocabulary of nine and six of
+ * them had no caller: `entrance`, `travel` and `stagger` existed for a staggered
+ * fade on mount, which section 11 bans by name and which was deleted along with
+ * the component that did it, and `expressive`, `counter` and `bouncy` were never
+ * reached at all. A motion language nothing speaks is not a language.
  */
 
 import { Easing, ReduceMotion, type WithSpringConfig, type WithTimingConfig } from 'react-native-reanimated';
@@ -16,27 +22,6 @@ import { Easing, ReduceMotion, type WithSpringConfig, type WithTimingConfig } fr
 /** Paths you walk constantly. Fast enough to never be in the way. */
 export const quick: WithTimingConfig = {
   duration: 220,
-  easing: Easing.out(Easing.cubic),
-  reduceMotion: ReduceMotion.System,
-};
-
-/** Content arriving: a touch longer, still brisk. */
-export const entrance: WithTimingConfig = {
-  duration: 320,
-  easing: Easing.out(Easing.cubic),
-  reduceMotion: ReduceMotion.System,
-};
-
-/** Moments that are supposed to land. */
-export const expressive: WithTimingConfig = {
-  duration: 620,
-  easing: Easing.out(Easing.cubic),
-  reduceMotion: ReduceMotion.System,
-};
-
-/** A number counting up. Long enough to read, short enough not to stall. */
-export const counter: WithTimingConfig = {
-  duration: 700,
   easing: Easing.out(Easing.cubic),
   reduceMotion: ReduceMotion.System,
 };
@@ -49,25 +34,9 @@ export const press: WithSpringConfig = {
   reduceMotion: ReduceMotion.System,
 };
 
-/** Something arriving that deserves a little bounce. */
-export const bouncy: WithSpringConfig = {
-  damping: 12,
-  stiffness: 180,
-  mass: 0.8,
-  reduceMotion: ReduceMotion.System,
-};
-
 export const motion = {
   quick,
-  entrance,
-  expressive,
-  counter,
   press,
-  bouncy,
-  /** How far content travels as it fades in. Small on purpose. */
-  travel: 14,
-  /** Gap between successive items in a staggered group. */
-  stagger: 55,
   /** How far a pressable scales down when held. */
   pressScale: 0.965,
 } as const;
