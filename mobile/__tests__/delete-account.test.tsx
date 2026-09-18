@@ -16,6 +16,8 @@ import type { ReactNode } from 'react';
 import { Alert } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+
 import { DeleteAccount } from '../components/DeleteAccount';
 import { AuthProvider } from '../hooks/useAuth';
 import { api, clearTokens } from '../lib/api';
@@ -37,7 +39,22 @@ jest.mock('../lib/api', () => {
   };
 });
 
+/**
+ * A build that was given a Google client id, so the passwordless branch below
+ * can draw its button at all.
+ *
+ * Mocked rather than set through process.env: googleConfig reads the variable
+ * once at module load and Expo inlines it at build time, so there is no moment
+ * during a test run at which setting it would still be read.
+ */
+jest.mock('../lib/googleConfig', () => ({
+  GOOGLE_WEB_CLIENT_ID: 'forkast-web.apps.googleusercontent.com',
+  GOOGLE_IOS_CLIENT_ID: '',
+  googleConfigured: true,
+}));
+
 const mockedApi = api as unknown as { delete: jest.Mock; post: jest.Mock };
+const mockedSignIn = GoogleSignin.signIn as jest.Mock;
 const mockedClear = clearTokens as jest.Mock;
 
 const METRICS = {
@@ -70,7 +87,7 @@ beforeEach(() => {
 });
 
 it('keeps the password field behind the dialog', () => {
-  const { getByText, queryByPlaceholderText } = render(<DeleteAccount />, { wrapper });
+  const { getByText, queryByPlaceholderText } = render(<DeleteAccount hasPassword />, { wrapper });
 
   expect(getByText('Delete my account')).toBeTruthy();
   // No password field sitting on the Profile tab waiting to be filled in.
@@ -78,7 +95,7 @@ it('keeps the password field behind the dialog', () => {
 });
 
 it('asks for the password once the dialog is open', () => {
-  const { getByText, getByPlaceholderText } = render(<DeleteAccount />, { wrapper });
+  const { getByText, getByPlaceholderText } = render(<DeleteAccount hasPassword />, { wrapper });
 
   fireEvent.press(getByText('Delete my account'));
 
@@ -87,7 +104,7 @@ it('asks for the password once the dialog is open', () => {
 });
 
 it('says what survives, since that is not obvious', () => {
-  const { getByText } = render(<DeleteAccount />, { wrapper });
+  const { getByText } = render(<DeleteAccount hasPassword />, { wrapper });
 
   fireEvent.press(getByText('Delete my account'));
 
@@ -95,7 +112,7 @@ it('says what survives, since that is not obvious', () => {
 });
 
 it('asks on the page rather than handing the question to the operating system', () => {
-  const { getByText } = render(<DeleteAccount />, { wrapper });
+  const { getByText } = render(<DeleteAccount hasPassword />, { wrapper });
 
   fireEvent.press(getByText('Delete my account'));
 
@@ -110,7 +127,7 @@ it('asks on the page rather than handing the question to the operating system', 
 // thing it invites. Typing the password is still the confirmation: an empty
 // press deletes nothing and says so.
 it('will not delete without a password, and says what is missing', () => {
-  const { getByText, queryByText } = render(<DeleteAccount />, { wrapper });
+  const { getByText, queryByText } = render(<DeleteAccount hasPassword />, { wrapper });
   fireEvent.press(getByText('Delete my account'));
 
   expect(queryByText('Type your password to confirm.')).toBeNull();
@@ -122,7 +139,7 @@ it('will not delete without a password, and says what is missing', () => {
 });
 
 it('does nothing on the way in, even with a password typed', () => {
-  const { getByText, getByPlaceholderText } = render(<DeleteAccount />, { wrapper });
+  const { getByText, getByPlaceholderText } = render(<DeleteAccount hasPassword />, { wrapper });
 
   fireEvent.press(getByText('Delete my account'));
   fireEvent.changeText(getByPlaceholderText('Your password'), 'password123');
@@ -133,7 +150,7 @@ it('does nothing on the way in, even with a password typed', () => {
 });
 
 it('deletes once the destructive action is taken', async () => {
-  const { getByText, getByPlaceholderText } = render(<DeleteAccount />, { wrapper });
+  const { getByText, getByPlaceholderText } = render(<DeleteAccount hasPassword />, { wrapper });
   fireEvent.press(getByText('Delete my account'));
   fireEvent.changeText(getByPlaceholderText('Your password'), 'password123');
 
@@ -145,7 +162,7 @@ it('deletes once the destructive action is taken', async () => {
 });
 
 it('signs out afterwards, so no dead token is left behind', async () => {
-  const { getByText, getByPlaceholderText } = render(<DeleteAccount />, { wrapper });
+  const { getByText, getByPlaceholderText } = render(<DeleteAccount hasPassword />, { wrapper });
   fireEvent.press(getByText('Delete my account'));
   fireEvent.changeText(getByPlaceholderText('Your password'), 'password123');
 
@@ -165,7 +182,7 @@ it('surfaces a wrong password rather than swallowing it', async () => {
       toJSON: () => ({}),
     }),
   );
-  const { getByText, getByPlaceholderText } = render(<DeleteAccount />, { wrapper });
+  const { getByText, getByPlaceholderText } = render(<DeleteAccount hasPassword />, { wrapper });
   fireEvent.press(getByText('Delete my account'));
   fireEvent.changeText(getByPlaceholderText('Your password'), 'wrong');
 
@@ -176,7 +193,7 @@ it('surfaces a wrong password rather than swallowing it', async () => {
 });
 
 it('can be backed out of', () => {
-  const { getByText, queryByPlaceholderText } = render(<DeleteAccount />, { wrapper });
+  const { getByText, queryByPlaceholderText } = render(<DeleteAccount hasPassword />, { wrapper });
   fireEvent.press(getByText('Delete my account'));
 
   fireEvent.press(getByText('Keep my account'));
@@ -185,7 +202,7 @@ it('can be backed out of', () => {
 });
 
 it('forgets the typed password when it is backed out of', () => {
-  const { getByText, getByPlaceholderText } = render(<DeleteAccount />, { wrapper });
+  const { getByText, getByPlaceholderText } = render(<DeleteAccount hasPassword />, { wrapper });
   fireEvent.press(getByText('Delete my account'));
   fireEvent.changeText(getByPlaceholderText('Your password'), 'password123');
 
@@ -193,4 +210,89 @@ it('forgets the typed password when it is backed out of', () => {
   fireEvent.press(getByText('Delete my account'));
 
   expect(getByPlaceholderText('Your password').props.value).toBe('');
+});
+
+/**
+ * An account created through "Continue with Google".
+ *
+ * It has no password and cannot be given one, so asking for a password would
+ * leave it with no way out at all, which is the single outcome this dialog
+ * exists to prevent. It is sent back through Google instead, and that press is
+ * both the confirmation and the deletion.
+ */
+describe('an account with no password', () => {
+  beforeEach(() => {
+    mockedSignIn.mockResolvedValue({
+      type: 'success',
+      data: { idToken: 'google-id-token' },
+    });
+  });
+
+  it('asks for Google instead of a password', () => {
+    const { getByText, getByRole, queryByPlaceholderText } = render(
+      <DeleteAccount hasPassword={false} />,
+      { wrapper },
+    );
+    fireEvent.press(getByText('Delete my account'));
+
+    expect(queryByPlaceholderText('Your password')).toBeNull();
+    expect(getByRole('button', { name: 'Continue with Google' })).toBeTruthy();
+  });
+
+  it('offers no second button that would do nothing', () => {
+    // The Google button IS the destructive action here, so a "Delete for good"
+    // beside it would be a step that only works after the real one.
+    const { getByText, queryByText } = render(<DeleteAccount hasPassword={false} />, { wrapper });
+    fireEvent.press(getByText('Delete my account'));
+
+    expect(queryByText('Delete for good')).toBeNull();
+    expect(getByText('Keep my account')).toBeTruthy();
+  });
+
+  it('deletes with the token Google returned', async () => {
+    const { getByText, getByRole } = render(<DeleteAccount hasPassword={false} />, { wrapper });
+    fireEvent.press(getByText('Delete my account'));
+
+    fireEvent.press(getByRole('button', { name: 'Continue with Google' }));
+
+    await waitFor(() =>
+      expect(mockedApi.delete).toHaveBeenCalledWith('/me', {
+        data: { id_token: 'google-id-token' },
+      }),
+    );
+  });
+
+  it('deletes nothing when the user backs out of Google', async () => {
+    // Backing out of Google's prompt is how somebody changes their mind about
+    // deleting their account, and it has to leave the dialog exactly as it was.
+    mockedSignIn.mockResolvedValue({ type: 'cancelled' });
+    const { getByText, getByRole } = render(<DeleteAccount hasPassword={false} />, { wrapper });
+    fireEvent.press(getByText('Delete my account'));
+
+    fireEvent.press(getByRole('button', { name: 'Continue with Google' }));
+
+    await waitFor(() => expect(mockedApi.delete).not.toHaveBeenCalled());
+    expect(getByRole('button', { name: 'Continue with Google' })).toBeTruthy();
+  });
+
+  it('says so when the server refuses the token', async () => {
+    mockedApi.delete.mockRejectedValue(
+      Object.assign(new Error('failed'), {
+        isAxiosError: true,
+        response: {
+          status: 403,
+          data: { detail: 'That is a different Google account, so nothing was deleted.' },
+        },
+        config: {},
+        toJSON: () => ({}),
+      }),
+    );
+    const { getByText, getByRole } = render(<DeleteAccount hasPassword={false} />, { wrapper });
+    fireEvent.press(getByText('Delete my account'));
+
+    fireEvent.press(getByRole('button', { name: 'Continue with Google' }));
+
+    await waitFor(() => expect(getByText(/different Google account/)).toBeTruthy());
+    expect(mockedClear).not.toHaveBeenCalled();
+  });
 });

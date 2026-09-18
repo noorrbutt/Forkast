@@ -12,7 +12,7 @@ import { useUpdateProfile } from '../../hooks/useProfile';
 import { useReminders } from '../../hooks/useReminders';
 import { REMINDERS_AVAILABLE } from '../../lib/notifications';
 import { describeError } from '../../lib/api';
-import { GOAL_BLURBS, GOAL_LABELS, formatDate, formatNumber } from '../../lib/format';
+import { GOAL_BLURBS, GOAL_LABELS, formatDate, formatNumber, fullName } from '../../lib/format';
 import { haptics } from '../../lib/haptics';
 import { GOALS, type Goal } from '../../lib/types';
 import { useTheme } from '../../theme';
@@ -92,10 +92,13 @@ function deviceTimezone(): string | null {
  * and undo the whole point of it being first.
  */
 function Identity({
+  name,
   email,
   joined,
   picture,
 }: {
+  /** The account holder's name, or null on an account that has never had one. */
+  name: string | null;
   email: string;
   joined: string;
   picture: boolean;
@@ -110,12 +113,21 @@ function Identity({
         paddingBottom: spacing.sm,
       }}
     >
-      <ProfileAvatar name={email} hasPicture={picture} size={AVATAR_SIZE} />
+      {/* The name, when there is one, so the initials behind a missing picture
+          are the person's rather than the first two letters of their address.
+          "sa" for somebody called Sara Khan was what this drew before. */}
+      <ProfileAvatar name={name ?? email} hasPicture={picture} size={AVATAR_SIZE} />
       <View style={{ flex: 1, gap: spacing.xs }}>
         {/* Wraps. It used to be one line with a tail truncation, so a long
             address became "verylongaddress@exa..." and the account you were
             looking at was the one thing the screen would not tell you. */}
-        <Text style={[type.title, { color: colors.text }]}>{email}</Text>
+        <Text style={[type.title, { color: colors.text }]}>{name ?? email}</Text>
+        {/* Only when the line above is not already the address. Accounts made
+            before sign up asked for a name have nothing else to show here, and
+            printing the same address twice is not more information. */}
+        {name ? (
+          <Text style={[type.caption, { color: colors.muted }]}>{email}</Text>
+        ) : null}
         <Text style={[type.caption, { color: colors.muted }]}>
           Member since {joined || 'today'}
         </Text>
@@ -562,6 +574,7 @@ export default function ProfileScreen() {
         {user ? (
           <>
             <Identity
+              name={fullName(user)}
               email={user.email}
               joined={formatDate(user.created_at)}
               picture={hasAvatar(user)}
@@ -579,11 +592,17 @@ export default function ProfileScreen() {
                 floating under the page as a lone pill, which is what made it and
                 the delete trigger read as two orphans that had missed the grid. */}
             <ListGroup title="Account">
-              <ChangePassword />
+              {/* Only for an account that has a password. One created through
+                  Google has none and cannot be given one here: there is no
+                  current password to prove, and no email infrastructure in this
+                  project to prove it another way. Offering a row that can only
+                  ever answer "this account has no password to change" is worse
+                  than not offering it. */}
+              {user.has_password ? <ChangePassword /> : null}
               <ListRow label="Sign out" onPress={() => void signOut()} last />
             </ListGroup>
 
-            <DeleteAccount />
+            <DeleteAccount hasPassword={user.has_password} />
           </>
         ) : null}
 

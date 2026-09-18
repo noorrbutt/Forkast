@@ -1,4 +1,24 @@
-import type { FriendScale, Goal, ServingSize } from './types';
+import type { FriendScale, Goal, ServingSize, User } from './types';
+
+/**
+ * The account holder's name as one string, or null if there is no name to give.
+ *
+ * Null rather than a fallback to the email address, because the two callers
+ * want different fallbacks: the profile header prints the address in the name's
+ * place, and the avatar derives initials from it. Baking one of those in here
+ * would force the other to undo it.
+ *
+ * Either half can be missing on its own. An account made through Google gets
+ * whichever name claims that token carried, and a Google account with no family
+ * name set is an ordinary thing rather than an error, so "Sara" is a perfectly
+ * good answer and " Khan" is not.
+ */
+export function fullName(user: Pick<User, 'first_name' | 'last_name'>): string | null {
+  const parts = [user.first_name, user.last_name].filter(
+    (part): part is string => typeof part === 'string' && part.trim().length > 0,
+  );
+  return parts.length > 0 ? parts.join(' ') : null;
+}
 
 export function titleCase(slug: string): string {
   return slug
