@@ -362,7 +362,7 @@ function TrendCard({ trend }: { trend: ReturnType<typeof useTrend> }) {
   if (trend.isLoading) {
     return (
       <Card>
-        <Loading label="Comparing your months" fill={false} />
+        <Loading label="Comparing your months" />
       </Card>
     );
   }

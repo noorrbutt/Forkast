@@ -388,7 +388,7 @@ export default function LogScreen() {
             Your dashboard and your streak have already moved.
           </Text>
 
-          {photoStatus === 'uploading' ? <Loading label="Attaching your photo" fill={false} /> : null}
+          {photoStatus === 'uploading' ? <Loading label="Attaching your photo" /> : null}
 
           {photoStatus === 'attached' ? (
             <Text style={[type.caption, { color: colors.muted }]}>Your photo went up with it.</Text>
@@ -479,7 +479,7 @@ export default function LogScreen() {
             autoCorrect={false}
           />
 
-          {search.isFetching ? <Loading label="Searching" fill={false} /> : null}
+          {search.isFetching ? <Loading label="Searching" /> : null}
 
           {noMatches ? (
             <View style={{ gap: spacing.md, alignItems: 'flex-start' }}>
