@@ -1,0 +1,37 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    # Every pin in requirements.txt has a comment explaining what it is holding
+    # back and why, so a bulk version bump needs reading rather than merging.
+    # Grouping the patch-level ones keeps that reading to a minimum.
+    groups:
+      backend-patches:
+        update-types: [patch]
+
+  - package-ecosystem: npm
+    directory: /mobile
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      # Expo pins these to the versions its SDK was built against. Bumping one
+      # independently is how a native build starts failing for reasons that have
+      # nothing to do with the change. They move when the SDK moves.
+      - dependency-name: expo
+      - dependency-name: expo-*
+      - dependency-name: react-native
+      - dependency-name: react-native-*
+      - dependency-name: react
+      - dependency-name: react-dom
+    groups:
+      mobile-patches:
+        update-types: [patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
