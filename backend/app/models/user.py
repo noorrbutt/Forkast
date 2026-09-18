@@ -35,7 +35,23 @@ class User(Base):
         server_default=text("uuidv7()"),
     )
     email: Mapped[str] = mapped_column(String(320), nullable=False)
-    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    # Nullable since 0011. An account that only ever signed in with Google has
+    # no password and never had one, and a placeholder hash would be a lie the
+    # rest of the code could not tell apart from a real one. The check
+    # constraint below is what stops this becoming an account nobody can open.
+    password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Google's `sub`. The stable identifier for a Google account, and the only
+    # one safe to key on: an address can be changed or handed to somebody else
+    # inside a Workspace domain, `sub` cannot.
+    google_sub: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Both nullable, and null is not the empty string. Null means nobody has
+    # ever told us this person's name: every account registered before 0011 is
+    # in that position, and so is one made from a Google token that carried no
+    # name claim. Registration asks for both and refuses blanks, so null here
+    # can only ever be an account that predates the question or a Google token
+    # that did not answer it.
+    first_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
     # Streaks are "days without a junk-flagged log", so the day boundary has to
     # be the user's local one -- an 11:30pm meal must count for that evening.
     timezone: Mapped[str] = mapped_column(
@@ -59,11 +75,44 @@ class User(Base):
         back_populates="user", cascade="all, delete-orphan"
     )
 
+    @property
+    def has_password(self) -> bool:
+        """Whether this account can be opened with a password at all.
+
+        A plain Python property rather than a column_property like has_avatar,
+        because the answer is already in the row that has been loaded: the
+        password lives on users, the picture does not. The client needs it to
+        know which question to ask before deleting the account, since there is
+        no password to ask a Google-only account for.
+        """
+        return self.password_hash is not None
+
     __table_args__ = (
         # Functional unique index rather than citext or a nondeterministic
         # collation: the latter disables B-tree deduplication and breaks
         # pattern matching.
         Index("uq_users_email_lower", func.lower(email), unique=True),
+        # One Forkast account per Google account. Without this, two rows could
+        # both claim the same `sub` and signing in with Google would return
+        # whichever the query happened to reach first.
+        Index(
+            "uq_users_google_sub",
+            google_sub,
+            unique=True,
+            # Partial, so the many accounts with no Google identity are not all
+            # fighting over a single NULL. Postgres already treats NULLs as
+            # distinct in a unique index, so this is about index size rather
+            # than correctness.
+            postgresql_where=google_sub.isnot(None),
+        ),
+        # Every account keeps at least one way in. Making password_hash
+        # nullable opened the door to a row with neither a password nor a
+        # Google identity, which is an account that exists and that nobody,
+        # including its owner, can ever sign in to.
+        CheckConstraint(
+            "password_hash IS NOT NULL OR google_sub IS NOT NULL",
+            name="has_a_way_in",
+        ),
         # The ceiling catches a stray extra digit before it silently makes
         # every day look like a success. There is deliberately no meaningful
         # floor: Forkast knows no height, weight, age or activity level, so it
