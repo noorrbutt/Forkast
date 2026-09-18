@@ -127,9 +127,16 @@ FOOD_CATEGORIES: list[CategorySeed] = [
     CategorySeed("continental", "grilled_seafood", "Grilled Seafood", 380, 650, is_junk=False),
     CategorySeed("continental", "breakfast", "Breakfast", 450, 780, is_junk=False),
     CategorySeed("continental", "dessert", "Dessert", 350, 620, is_junk=True),
-    # Skews to soft drinks and shakes. A black coffee sits under the floor and
-    # gets clamped up to it, which is a rounding error nobody will notice.
-    CategorySeed("continental", "beverage", "Beverage", 170, 300, is_junk=True),
+    # Two drink categories, not one, and the split is about junk rather than
+    # calories. This was a single "Beverage" at 170 to 300 marked junk, with a
+    # note saying a black coffee gets clamped up to the floor and that the
+    # rounding would not be noticed. The rounding was not the problem: the flag
+    # was. A cup of tea logged honestly was junk, and junk ends a streak, so the
+    # app had nowhere to record the most ordinary drink in Karachi without
+    # either lying about it or losing a run. The sugary half keeps the slug, so
+    # every log already filed under it stays where it is and stays junk.
+    CategorySeed("continental", "beverage", "Sweet Drink", 170, 300, is_junk=True),
+    CategorySeed("continental", "tea_coffee", "Tea and Coffee", 90, 160, is_junk=False),
 ]
 
 # Starter map pins for Karachi.
@@ -414,6 +421,20 @@ DISH_NAMES: dict[str, list[str]] = {
         "lemon iced tea",
         "fresh lime soda",
         "creamy oreo shake",
+    ],
+    # Centred on chai with milk and sugar, which is what this category is for
+    # and what most of it will be. A black or green tea sits under the floor and
+    # clamps up to it, overstating by about 80, and that is the same trade the
+    # sweet drinks above already make in the other direction. Widening the range
+    # to cover both honestly would put it at a 9x spread, which the seed data's
+    # own convention caps at 2.5 and test_seed_data.py enforces: a range that
+    # wide stops being an estimate.
+    "tea_coffee": [
+        "doodh patti chai",
+        "black tea",
+        "green tea",
+        "black coffee",
+        "cappuccino",
     ],
 }
 
