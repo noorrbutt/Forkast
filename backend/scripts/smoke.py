@@ -99,7 +99,7 @@ with httpx.Client(timeout=30.0) as http:
     # correct behaviour. It also means the tokens held above are now dead, so
     # the rest of this run needs a fresh sign in. Checking that they really did
     # die is worth doing explicitly rather than leaving implied.
-    r = http.get(f"{API}/auth/me", headers=auth)
+    r = http.get(f"{API}/me", headers=auth)
     check("replaying a spent token kills the whole session", r.status_code == 401, r.text)
 
     r = http.post(f"{API}/auth/login", json={"email": email, "password": "password123"})
@@ -108,8 +108,8 @@ with httpx.Client(timeout=30.0) as http:
     access, rotated = tokens["access_token"], tokens["refresh_token"]
     auth = {"Authorization": f"Bearer {access}"}
 
-    r = http.get(f"{API}/auth/me", headers=auth)
-    check("auth/me returns the user", r.status_code == 200 and r.json()["email"] == email, r.text)
+    r = http.get(f"{API}/me", headers=auth)
+    check("/me returns the user", r.status_code == 200 and r.json()["email"] == email, r.text)
 
     r = http.get(f"{API}/logs")
     check("anonymous access is refused", r.status_code == 401, r.text)
