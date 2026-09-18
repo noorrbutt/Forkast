@@ -145,3 +145,33 @@ describe('the native config, against the palette it copies', () => {
     expect(declared('SAFFRON')).toBe(palettes.dark.accent.toLowerCase());
   });
 });
+
+/**
+ * The browser build had no configuration of its own at all.
+ *
+ * web is a platform this app is bundled and tested for, and app.config.js had
+ * no web key, so the tab wore the Expo default icon and the browser had no
+ * colour to tint its chrome with. assets/favicon.png existed the whole time and
+ * was referenced by nothing.
+ */
+describe('the web build', () => {
+  const config = read('app.config.js');
+
+  it('points the browser at the favicon that was already in assets', () => {
+    expect(config).toMatch(/"favicon":\s*"\.\/assets\/favicon\.png"/);
+  });
+
+  it('gives the browser a colour from the palette rather than a literal', () => {
+    // INK, which native-safety asserts equals palettes.dark.bg above, so this
+    // cannot drift away from the app the way the splash colour did.
+    expect(config).toMatch(/"themeColor":\s*INK/);
+  });
+
+  it('keeps the single page output, which is what supplies the title', () => {
+    // Switching to static rendering is what app/+html.tsx would need, and it
+    // empties the title on every generated page because expo-router writes its
+    // own title tag first. If output ever becomes static, the titles have to be
+    // set per route in the same change.
+    expect(config).not.toMatch(/"output":\s*"static"/);
+  });
+});

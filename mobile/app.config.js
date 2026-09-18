@@ -157,6 +157,27 @@ const config = {
         "predictiveBackGestureEnabled": false,
         "package": "com.forkast.app"
       },
+      // There was no web key at all, so the browser build shipped with the Expo
+      // default tab icon and no colour of its own, on a platform this app is
+      // actually tested and bundled for.
+      "web": {
+        "bundler": "metro",
+        // 64x64, already in assets and referenced by nothing until now.
+        "favicon": "./assets/favicon.png",
+        // The colour a browser tints its own chrome with, on the platforms that
+        // do. One value, not one per scheme: the SPA output writes its own
+        // index.html and there is no supported hook to put a
+        // prefers-color-scheme rule in it. Ink rather than paper, because dark
+        // is what this app falls back to when a device states no preference.
+        //
+        // The white flash before the bundle paints is therefore still there.
+        // Fixing it needs app/+html.tsx, which only applies to static rendering,
+        // and switching this build to static emptied the title on all thirteen
+        // generated pages: expo-router writes its own title tag first and the
+        // browser takes that one. That is a bigger change and a worse trade than
+        // the flash it buys.
+        "themeColor": INK
+      },
       "plugins": [
         "expo-router",
         "expo-status-bar",
