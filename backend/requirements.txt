@@ -46,7 +46,7 @@ pytest==9.1.1
 pytest-asyncio==1.4.0
 # Coverage is measured but not gated. A threshold on a suite this shape would
 # mostly measure how much of the seed data a test happened to touch.
-pytest-cov==7.0.0
+pytest-cov==7.1.0
 
 # Lint and format. Pinned like everything else so CI and a laptop cannot
 # disagree about whether the code is clean.
