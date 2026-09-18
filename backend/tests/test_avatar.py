@@ -35,7 +35,10 @@ def _upload(data: bytes, name: str = "me.png", content_type: str = "image/png") 
 
 
 async def _register(client: AsyncClient, email: str) -> dict:
-    response = await client.post(REGISTER, json={"email": email, "password": "password123"})
+    response = await client.post(
+        REGISTER,
+        json={"first_name": "Test", "last_name": "User", "email": email, "password": "password123"},
+    )
     assert response.status_code == 201, response.text
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 

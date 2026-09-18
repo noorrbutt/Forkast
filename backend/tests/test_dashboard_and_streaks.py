@@ -137,12 +137,24 @@ async def test_best_fun_meals_are_ranked_and_capped(auth_client: AsyncClient) ->
 async def test_one_users_logs_do_not_affect_another_dashboard(client: AsyncClient) -> None:
     first = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "d1@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "d1@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     second = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "d2@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "d2@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     mine = {"Authorization": f"Bearer {first['access_token']}"}

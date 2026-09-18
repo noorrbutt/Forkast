@@ -214,12 +214,24 @@ async def test_repeating_without_a_token_is_rejected(client: AsyncClient) -> Non
 async def test_one_user_cannot_repeat_another_users_log(client: AsyncClient) -> None:
     first = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "r1@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "r1@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     second = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "r2@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "r2@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     owner_headers = {"Authorization": f"Bearer {first['access_token']}"}

@@ -21,7 +21,10 @@ NEW = "a-far-better-password"
 
 
 async def _register(client: AsyncClient, email: str, password: str = OLD) -> dict:
-    response = await client.post(REGISTER, json={"email": email, "password": password})
+    response = await client.post(
+        REGISTER,
+        json={"first_name": "Test", "last_name": "User", "email": email, "password": password},
+    )
     assert response.status_code == 201, response.text
     return response.json()
 

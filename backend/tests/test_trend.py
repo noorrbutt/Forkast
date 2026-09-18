@@ -289,12 +289,24 @@ async def test_changing_timezone_can_move_a_meal_between_the_two_months(
 async def test_one_users_logs_do_not_affect_another_trend(client: AsyncClient) -> None:
     first = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "t1@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "t1@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     second = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "t2@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "t2@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     mine = {"Authorization": f"Bearer {first['access_token']}"}

@@ -55,12 +55,24 @@ async def test_search_matches_a_cuisine_by_origin(auth_client: AsyncClient) -> N
 async def test_search_returns_the_callers_own_dishes_only(client: AsyncClient) -> None:
     first = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "diner@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "diner@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     second = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "other@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "other@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     mine = {"Authorization": f"Bearer {first['access_token']}"}
@@ -237,12 +249,24 @@ async def test_the_restaurant_list_is_shared_by_default(client: AsyncClient) -> 
     is what stops one place being typed in five slightly different ways."""
     mine = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "r1@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "r1@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     theirs = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "r2@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "r2@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
 
@@ -267,12 +291,24 @@ async def test_mine_narrows_the_list_to_places_this_user_has_eaten_at(
     other people had been adding."""
     mine = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "m1@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "m1@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     theirs = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "m2@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "m2@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     categories = (

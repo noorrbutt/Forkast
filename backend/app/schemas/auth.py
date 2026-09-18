@@ -4,14 +4,51 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from typing import Annotated
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.models.enums import Goal
 
 
+def _required_name(value: str) -> str:
+    """Trim a name and refuse one that was only whitespace.
+
+    min_length on its own passes a field holding a single space, which would
+    store a name that is not a name and render as a blank line wherever the
+    account is shown.
+    """
+    trimmed = value.strip()
+    if not trimmed:
+        raise ValueError("cannot be blank")
+    return trimmed
+
+
+RequiredName = Annotated[
+    str,
+    # Matched to users.first_name / users.last_name, which are String(80). The
+    # validator runs after the length check, so a name of 80 spaces is refused
+    # by the check above rather than stored as an empty string.
+    Field(min_length=1, max_length=80),
+    AfterValidator(_required_name),
+]
+
+
 class RegisterRequest(BaseModel):
+    # Asked for, and required, since the sign up screen started asking. Existing
+    # accounts have neither and the column is nullable for them; there is no
+    # route by which a new account can arrive without both.
+    first_name: RequiredName
+    last_name: RequiredName
     email: EmailStr
     # Argon2 has no practical upper length limit (unlike bcrypt, which raises
     # above 72 bytes), so the cap here is purely to reject nonsense payloads.
@@ -21,6 +58,18 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=256)
+
+
+class GoogleAuthRequest(BaseModel):
+    """What "Continue with Google" posts: the ID token, and nothing else.
+
+    Deliberately not the email, the name or the Google id. Every one of those
+    is inside the signed token already, and taking any of them from the request
+    body would mean trusting a value the caller typed next to a signature that
+    does not cover it.
+    """
+
+    id_token: str = Field(min_length=1, max_length=4096)
 
 
 class RefreshRequest(BaseModel):
@@ -38,24 +87,57 @@ class UserOut(BaseModel):
 
     id: uuid.UUID
     email: str
+    # Null for every account made before names were asked for, and for a Google
+    # account whose token carried no name claim. The clients treat null as "no
+    # name" and fall back to the address, which is what they did for everyone
+    # before this existed.
+    first_name: str | None = None
+    last_name: str | None = None
     timezone: str
     goal: Goal
     daily_calorie_target: int | None = None
     # Computed by the database as part of the same SELECT, so reading a profile
     # never loads a byte of image data to answer it.
     has_avatar: bool = False
+    # Whether this account has a password at all. False for one created through
+    # Google and never given one, and the client needs to know because there is
+    # no password to ask such an account for before it deletes itself. The hash
+    # itself is of course never sent.
+    has_password: bool = True
     created_at: dt.datetime
 
 
 class AccountDelete(BaseModel):
-    """Deleting an account asks for the password again.
+    """Deleting an account asks the holder to prove themselves again.
 
     Not because the session is in doubt, but because this is irreversible and a
     phone left unlocked on a table is the realistic threat. It is the same
     reason the action is a separate endpoint rather than a flag on PATCH /me.
+
+    Two ways to prove it, because there are two kinds of account. One with a
+    password answers with the password. One created through Google has no
+    password to be asked for, so it answers with a fresh Google ID token, which
+    means going through Google's own prompt again on the spot. Both are exactly
+    one step, and neither is optional: an account that could be deleted on the
+    session alone would be deletable by whoever picked the phone up.
     """
 
-    password: str
+    password: str | None = None
+    id_token: str | None = None
+
+    @model_validator(mode="after")
+    def _one_proof_or_the_other(self) -> AccountDelete:
+        """Exactly one, never both and never neither.
+
+        Refusing both together is not pedantry: with both present the route
+        would have to pick one to check, and whichever it picked, the other
+        would be a field a caller could send to no effect while believing it
+        was doing the work.
+        """
+        given = [f for f in (self.password, self.id_token) if f]
+        if len(given) != 1:
+            raise ValueError("send either password or id_token, and only one of them")
+        return self
 
 
 class PasswordChange(BaseModel):

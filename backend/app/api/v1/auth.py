@@ -24,11 +24,13 @@ from app.api.deps import RateLimiterDep, SessionDep
 from app.config import get_settings
 from app.models import RefreshToken, User
 from app.schemas.auth import (
+    GoogleAuthRequest,
     LoginRequest,
     RefreshRequest,
     RegisterRequest,
     TokenPair,
 )
+from app.services.google import GoogleAuthError, GoogleIdentity, verify_google_id_token
 from app.services.rate_limit import client_identity
 from app.services.security import (
     create_access_token,
@@ -124,7 +126,12 @@ async def register(
             detail="An account with that email already exists",
         )
 
-    user = User(email=email, password_hash=await hash_password_async(payload.password))
+    user = User(
+        email=email,
+        password_hash=await hash_password_async(payload.password),
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+    )
     session.add(user)
 
     try:
@@ -165,11 +172,158 @@ async def login(
             detail="Incorrect email or password",
         )
 
+    # A Google-only account has no password to compare against, and passing None
+    # to the verifier raises rather than returning False. It still burns the
+    # same time as a real check and still answers with the same words: replying
+    # "this account signs in with Google" would say that the address exists,
+    # which is the thing the shared message is there to hide.
+    if user.password_hash is None:
+        await waste_time_like_a_verify()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+        )
+
     if not await verify_password_async(payload.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
+
+    return await _issue_tokens(session, user)
+
+
+async def _user_for_google_identity(
+    session: SessionDep, identity: GoogleIdentity
+) -> tuple[User, bool]:
+    """Find, link, or create the account this Google identity names.
+
+    Returns the account and whether it had to be created, because the client
+    needs to tell those apart: a brand new account gets the one time setup
+    questions and an existing one must never be sent back through them.
+
+    Three cases, in the order they are tried.
+
+    Known `sub`: this Google account has signed in here before, so it is that
+    account, whatever address the token carries now. Keying on `sub` rather than
+    the address is what makes a Google user who changes their Gmail address keep
+    their meals instead of quietly starting a second account.
+
+    Known address, no `sub` yet: somebody who registered with a password is now
+    pressing "Continue with Google" with the same address. That is the same
+    person, and the alternative -- a second account on the same address -- is
+    refused by the unique index anyway, so the sign in would simply fail
+    forever. The identity is attached to the existing row and both doors now
+    open it. This is only safe because verify_google_id_token refuses a token
+    whose email Google has not verified; without that check this branch would
+    hand somebody else's account to whoever could put their address in a Google
+    profile.
+
+    Neither: a new account, with no password. This is the only way a row with a
+    null password_hash is ever created.
+    """
+    by_sub = await session.scalar(select(User).where(User.google_sub == identity.subject))
+    if by_sub is not None:
+        # Names are filled in if the account never had them, and left alone if
+        # it did. Google is not the authority on what somebody is called here:
+        # overwriting on every sign in would undo a name the user set in
+        # Forkast every time they signed in.
+        if by_sub.first_name is None and identity.first_name:
+            by_sub.first_name = identity.first_name
+        if by_sub.last_name is None and identity.last_name:
+            by_sub.last_name = identity.last_name
+        return by_sub, False
+
+    by_email = await session.scalar(
+        select(User).where(func.lower(User.email) == identity.email.lower())
+    )
+    if by_email is not None:
+        by_email.google_sub = identity.subject
+        if by_email.first_name is None and identity.first_name:
+            by_email.first_name = identity.first_name
+        if by_email.last_name is None and identity.last_name:
+            by_email.last_name = identity.last_name
+        # Not created: this is an account that already existed and has now
+        # gained a second way in, so it has already been through setup.
+        return by_email, False
+
+    user = User(
+        email=identity.email,
+        # No password, and none invented. ck_users_has_a_way_in is satisfied by
+        # the google_sub on the next line.
+        password_hash=None,
+        google_sub=identity.subject,
+        first_name=identity.first_name,
+        last_name=identity.last_name,
+    )
+    session.add(user)
+    return user, True
+
+
+@router.post("/google", response_model=TokenPair)
+async def google(
+    payload: GoogleAuthRequest,
+    session: SessionDep,
+    request: Request,
+    limiter: RateLimiterDep,
+    response: Response,
+) -> TokenPair:
+    """Sign in, or sign up, with a Google ID token the client already holds.
+
+    One route rather than a pair, because the client genuinely cannot know which
+    it is doing: the phone has a token from Google and no way to tell whether
+    this person has a Forkast account. That is also why the button says
+    "Continue with Google" on both screens rather than "Sign up" on one and
+    "Sign in" on the other.
+    """
+    settings = get_settings()
+    if not settings.google_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google sign in is not set up on this server.",
+        )
+
+    # Per peer, and sharing neither the login nor the register bucket. The token
+    # is the subject here and must never become a rate-limit identity, for the
+    # same reason the refresh route keys on the peer alone: an attacker would
+    # get a fresh allowance for every random string they tried.
+    await limiter.hit(
+        "google",
+        client_identity(request),
+        limit=settings.login_peer_rate_limit,
+        window_seconds=settings.login_rate_window_seconds,
+    )
+
+    try:
+        identity = await verify_google_id_token(payload.id_token)
+    except GoogleAuthError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+        ) from exc
+
+    user, created = await _user_for_google_identity(session, identity)
+
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        # Two first sign ins for the same brand new Google account arriving at
+        # once both miss the lookups above and both insert; the unique index on
+        # google_sub catches the loser. Same shape as the race register already
+        # guards, and the honest answer is "try again" rather than a 500.
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="That Google account was being set up already. Try again.",
+        ) from exc
+
+    # 201 when this call made the account, 200 when it found one. Register
+    # already answers 201 and the client reads both the same way, which is what
+    # decides whether the one time setup questions are asked. Set on the
+    # response rather than declared on the route, because the route genuinely
+    # does both and only finds out which partway through.
+    if created:
+        response.status_code = status.HTTP_201_CREATED
 
     return await _issue_tokens(session, user)
 

@@ -61,7 +61,12 @@ async def test_every_session_ends_not_just_this_one(client: AsyncClient) -> None
     registered = (
         await client.post(
             "/api/v1/auth/register",
-            json={"email": "two-devices@forkast.app", "password": "password123"},
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "two-devices@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     second = (
@@ -91,13 +96,23 @@ async def test_a_shared_restaurant_outlives_the_person_who_added_it(
     mine = (
         await client.post(
             "/api/v1/auth/register",
-            json={"email": "adder@forkast.app", "password": "password123"},
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "adder@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     theirs = (
         await client.post(
             "/api/v1/auth/register",
-            json={"email": "diner@forkast.app", "password": "password123"},
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "diner@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     mine_h = {"Authorization": f"Bearer {mine['access_token']}"}

@@ -168,12 +168,24 @@ async def test_deleting_a_day_that_was_never_entered_is_not_an_error(
 async def test_one_users_burn_does_not_reach_another_dashboard(client: AsyncClient) -> None:
     first = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "b1@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "b1@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     second = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "b2@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "b2@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     mine = {"Authorization": f"Bearer {first['access_token']}"}

@@ -177,12 +177,24 @@ async def test_one_persons_photo_is_not_visible_to_another(client: AsyncClient) 
     """The whole point of the feature is that these are pictures of your life."""
     mine = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "p1@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "p1@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     theirs = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "p2@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "p2@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     mine_h = {"Authorization": f"Bearer {mine['access_token']}"}

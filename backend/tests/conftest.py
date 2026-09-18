@@ -270,7 +270,12 @@ async def auth_client(client: AsyncClient, fixture_email: str) -> AsyncClient:
     """
     response = await client.post(
         "/api/v1/auth/register",
-        json={"email": fixture_email, "password": FIXTURE_PASSWORD},
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": fixture_email,
+            "password": FIXTURE_PASSWORD,
+        },
     )
     assert response.status_code == 201, response.text
     tokens = response.json()

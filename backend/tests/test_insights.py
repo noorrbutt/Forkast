@@ -117,12 +117,24 @@ async def test_a_plan_reflects_the_users_actual_logs(auth_client: AsyncClient) -
 async def test_plans_are_private_to_their_owner(client: AsyncClient) -> None:
     first = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "p1@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "p1@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     second = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "p2@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "p2@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
 
@@ -174,13 +186,24 @@ async def test_someone_elses_plan_is_a_404_not_a_403(client: AsyncClient) -> Non
     """No reason to confirm that an id exists."""
     owner = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "owner@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "owner@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     stranger = (
         await client.post(
             "/api/v1/auth/register",
-            json={"email": "stranger@forkast.app", "password": "password123"},
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "stranger@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
 

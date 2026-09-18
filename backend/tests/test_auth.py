@@ -20,7 +20,13 @@ LOGOUT = "/api/v1/auth/logout"
 
 async def test_register_returns_a_usable_token_pair(client: AsyncClient) -> None:
     response = await client.post(
-        REGISTER, json={"email": "new@forkast.app", "password": "password123"}
+        REGISTER,
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "new@forkast.app",
+            "password": "password123",
+        },
     )
 
     assert response.status_code == 201
@@ -34,16 +40,38 @@ async def test_register_returns_a_usable_token_pair(client: AsyncClient) -> None
 async def test_register_rejects_a_duplicate_email_case_insensitively(
     client: AsyncClient,
 ) -> None:
-    await client.post(REGISTER, json={"email": "dupe@forkast.app", "password": "password123"})
+    await client.post(
+        REGISTER,
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "dupe@forkast.app",
+            "password": "password123",
+        },
+    )
     response = await client.post(
-        REGISTER, json={"email": "DUPE@forkast.app", "password": "password123"}
+        REGISTER,
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "DUPE@forkast.app",
+            "password": "password123",
+        },
     )
 
     assert response.status_code == 409
 
 
 async def test_password_is_hashed_not_stored(client: AsyncClient, session: AsyncSession) -> None:
-    await client.post(REGISTER, json={"email": "hash@forkast.app", "password": "password123"})
+    await client.post(
+        REGISTER,
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "hash@forkast.app",
+            "password": "password123",
+        },
+    )
 
     stored = await session.scalar(select(User).where(User.email == "hash@forkast.app"))
     assert stored is not None
@@ -52,7 +80,15 @@ async def test_password_is_hashed_not_stored(client: AsyncClient, session: Async
 
 
 async def test_login_succeeds_with_correct_credentials(client: AsyncClient) -> None:
-    await client.post(REGISTER, json={"email": "login@forkast.app", "password": "password123"})
+    await client.post(
+        REGISTER,
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "login@forkast.app",
+            "password": "password123",
+        },
+    )
 
     response = await client.post(
         LOGIN, json={"email": "login@forkast.app", "password": "password123"}
@@ -73,7 +109,15 @@ async def test_login_gives_the_same_error_for_bad_password_and_unknown_email(
     client: AsyncClient, email: str, password: str
 ) -> None:
     """Otherwise the endpoint tells an attacker which emails are registered."""
-    await client.post(REGISTER, json={"email": "login2@forkast.app", "password": "password123"})
+    await client.post(
+        REGISTER,
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "login2@forkast.app",
+            "password": "password123",
+        },
+    )
 
     response = await client.post(LOGIN, json={"email": email, "password": password})
 
@@ -83,7 +127,15 @@ async def test_login_gives_the_same_error_for_bad_password_and_unknown_email(
 
 async def test_refresh_rotates_the_token_and_kills_the_old_one(client: AsyncClient) -> None:
     registered = (
-        await client.post(REGISTER, json={"email": "rotate@forkast.app", "password": "password123"})
+        await client.post(
+            REGISTER,
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "rotate@forkast.app",
+                "password": "password123",
+            },
+        )
     ).json()
     original_refresh = registered["refresh_token"]
 
@@ -108,7 +160,15 @@ async def test_refresh_tokens_are_stored_only_as_a_hash(
     client: AsyncClient, session: AsyncSession
 ) -> None:
     registered = (
-        await client.post(REGISTER, json={"email": "hashed@forkast.app", "password": "password123"})
+        await client.post(
+            REGISTER,
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "hashed@forkast.app",
+                "password": "password123",
+            },
+        )
     ).json()
     raw = registered["refresh_token"]
 
@@ -121,7 +181,15 @@ async def test_refresh_tokens_are_stored_only_as_a_hash(
 
 async def test_logout_revokes_the_refresh_token(client: AsyncClient) -> None:
     registered = (
-        await client.post(REGISTER, json={"email": "out@forkast.app", "password": "password123"})
+        await client.post(
+            REGISTER,
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "out@forkast.app",
+                "password": "password123",
+            },
+        )
     ).json()
     refresh_token = registered["refresh_token"]
 
@@ -131,7 +199,15 @@ async def test_logout_revokes_the_refresh_token(client: AsyncClient) -> None:
 
 async def test_logout_is_idempotent(client: AsyncClient) -> None:
     registered = (
-        await client.post(REGISTER, json={"email": "out2@forkast.app", "password": "password123"})
+        await client.post(
+            REGISTER,
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "out2@forkast.app",
+                "password": "password123",
+            },
+        )
     ).json()
     token = registered["refresh_token"]
 
@@ -141,7 +217,15 @@ async def test_logout_is_idempotent(client: AsyncClient) -> None:
 
 async def test_me_returns_the_authenticated_user(client: AsyncClient) -> None:
     registered = (
-        await client.post(REGISTER, json={"email": "me@forkast.app", "password": "password123"})
+        await client.post(
+            REGISTER,
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "me@forkast.app",
+                "password": "password123",
+            },
+        )
     ).json()
 
     response = await client.get(
@@ -186,7 +270,13 @@ async def test_register_commits_before_the_response_is_returned(
     see committed rows.
     """
     response = await client.post(
-        REGISTER, json={"email": "durable@forkast.app", "password": "password123"}
+        REGISTER,
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "durable@forkast.app",
+            "password": "password123",
+        },
     )
     assert response.status_code == 201
     raw_refresh = response.json()["refresh_token"]
@@ -205,7 +295,13 @@ async def test_a_token_works_immediately_after_registering(client: AsyncClient) 
     """The end to end shape of the same race, exercised through the API."""
     registered = (
         await client.post(
-            REGISTER, json={"email": "immediate@forkast.app", "password": "password123"}
+            REGISTER,
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "immediate@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
 
@@ -228,7 +324,15 @@ async def test_two_simultaneous_refreshes_of_one_token_yield_exactly_one_new_pai
     Claiming the row with a single conditional UPDATE means only one can win.
     """
     registered = (
-        await client.post(REGISTER, json={"email": "racer@forkast.app", "password": "password123"})
+        await client.post(
+            REGISTER,
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "racer@forkast.app",
+                "password": "password123",
+            },
+        )
     ).json()
     token = registered["refresh_token"]
 
@@ -249,7 +353,15 @@ async def test_login_does_not_answer_faster_for_an_unknown_email(client: AsyncCl
     The bound is deliberately loose. This is checking that the unknown-email path
     still performs a hash at all, not asserting constant time.
     """
-    await client.post(REGISTER, json={"email": "known@forkast.app", "password": "password123"})
+    await client.post(
+        REGISTER,
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "known@forkast.app",
+            "password": "password123",
+        },
+    )
 
     async def time_login(email: str) -> float:
         start = asyncio.get_running_loop().time()
@@ -275,7 +387,15 @@ async def test_replaying_a_spent_refresh_token_kills_the_whole_chain(
     leaked, so every live token for that account goes with it. RFC 9700 4.14.2.
     """
     tokens = (
-        await client.post(REGISTER, json={"email": "reuse@forkast.app", "password": "password123"})
+        await client.post(
+            REGISTER,
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "reuse@forkast.app",
+                "password": "password123",
+            },
+        )
     ).json()
 
     rotated = (await client.post(REFRESH, json={"refresh_token": tokens["refresh_token"]})).json()
@@ -301,11 +421,25 @@ async def test_an_unrelated_account_is_not_logged_out_by_someone_elses_replay(
 ) -> None:
     """Family revocation has to stop at the owner of the replayed token."""
     victim = (
-        await client.post(REGISTER, json={"email": "victim@forkast.app", "password": "password123"})
+        await client.post(
+            REGISTER,
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "victim@forkast.app",
+                "password": "password123",
+            },
+        )
     ).json()
     bystander = (
         await client.post(
-            REGISTER, json={"email": "bystander@forkast.app", "password": "password123"}
+            REGISTER,
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "bystander@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
 

@@ -49,6 +49,7 @@ from app.services.ai.base import AIService
 from app.services.ai.deps import get_ai_service
 from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import PlanContext, PlanLogSummary, PlanRequest
+from app.services.google import GoogleAuthError, verify_google_id_token
 from app.services.insights import build_dashboard, compute_streaks
 from app.services.rate_limit import account_identity
 from app.services.security import (
@@ -125,12 +126,44 @@ async def delete_me(
     )
 
     # Irreversible, so prove it is the account holder and not someone holding an
-    # unlocked phone. The comparison is the same constant time one login uses.
-    if not await verify_password_async(payload.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="That password does not match, so nothing was deleted.",
-        )
+    # unlocked phone. Which proof depends on what the account has: a password if
+    # it has one, and otherwise a fresh Google ID token, because an account
+    # created through Google has no password and asking for one would either
+    # make it undeletable or make the session alone enough. AccountDelete has
+    # already refused a body carrying both or neither.
+    if payload.password is not None:
+        if user.password_hash is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "This account signs in with Google and has no password, so "
+                    "confirm with Google instead. Nothing was deleted."
+                ),
+            )
+        # The same constant time comparison login uses.
+        if not await verify_password_async(payload.password, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="That password does not match, so nothing was deleted.",
+            )
+    else:
+        # A token is only proof if it names this very account. Verifying the
+        # signature and stopping there would let anybody with any Google account
+        # delete whichever Forkast account their phone happened to be signed in
+        # to, which is the opposite of what this check is for.
+        assert payload.id_token is not None  # noqa: S101 - guaranteed by AccountDelete
+        try:
+            identity = await verify_google_id_token(payload.id_token)
+        except GoogleAuthError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"{exc} Nothing was deleted.",
+            ) from exc
+        if identity.subject != user.google_sub:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="That is a different Google account, so nothing was deleted.",
+            )
 
     await session.delete(user)
     await session.commit()
@@ -177,6 +210,17 @@ async def change_password(
         limit=settings.login_rate_limit,
         window_seconds=settings.login_rate_window_seconds,
     )
+
+    # An account created through Google has no current password to be asked for,
+    # so there is nothing here to change. It is not offered the row in the app
+    # either; this is the guard for a request that arrives anyway, and it answers
+    # 409 rather than 403 because the request is not wrong about a value, it is
+    # wrong about the account.
+    if user.password_hash is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This account signs in with Google and has no password to change.",
+        )
 
     # The same constant time comparison login uses, and asked for the same
     # reason deletion asks: the session proves the phone, not the person

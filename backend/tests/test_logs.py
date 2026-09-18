@@ -258,13 +258,24 @@ async def test_a_log_can_be_fetched_and_deleted(auth_client: AsyncClient) -> Non
 async def test_one_user_cannot_see_or_touch_another_users_log(client: AsyncClient) -> None:
     first = (
         await client.post(
-            "/api/v1/auth/register", json={"email": "owner@forkast.app", "password": "password123"}
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "owner@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     second = (
         await client.post(
             "/api/v1/auth/register",
-            json={"email": "stranger@forkast.app", "password": "password123"},
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "stranger@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
 

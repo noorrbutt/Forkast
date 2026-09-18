@@ -92,7 +92,15 @@ def burst_size(limit: int) -> int:
 
 async def test_repeated_failed_logins_are_eventually_refused(client: AsyncClient) -> None:
     """A password list used to be limited only by how fast Argon2 runs."""
-    await client.post(REGISTER, json={"email": "brute@forkast.app", "password": "password123"})
+    await client.post(
+        REGISTER,
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "brute@forkast.app",
+            "password": "password123",
+        },
+    )
 
     limit = get_settings().login_rate_limit
     statuses = [
@@ -123,8 +131,24 @@ async def test_a_throttled_response_says_how_long_to_wait(client: AsyncClient) -
 async def test_throttling_one_account_does_not_lock_another(client: AsyncClient) -> None:
     """The limit is keyed on the subject as well as the peer, so one attacker
     cannot lock out every address they happen to know."""
-    await client.post(REGISTER, json={"email": "target@forkast.app", "password": "password123"})
-    await client.post(REGISTER, json={"email": "other@forkast.app", "password": "password123"})
+    await client.post(
+        REGISTER,
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "target@forkast.app",
+            "password": "password123",
+        },
+    )
+    await client.post(
+        REGISTER,
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "other@forkast.app",
+            "password": "password123",
+        },
+    )
 
     # burst_size rather than a few over the limit: if a window boundary split
     # this, the target would never actually be throttled and the test would pass
@@ -148,7 +172,13 @@ async def test_registration_is_throttled_too(client: AsyncClient) -> None:
     statuses = [
         (
             await client.post(
-                REGISTER, json={"email": f"probe{i}@forkast.app", "password": "password123"}
+                REGISTER,
+                json={
+                    "first_name": "Test",
+                    "last_name": "User",
+                    "email": f"probe{i}@forkast.app",
+                    "password": "password123",
+                },
             )
         ).status_code
         for i in range(burst_size(get_settings().register_rate_limit))
@@ -182,7 +212,13 @@ async def test_signing_out_stops_the_access_token_immediately(client: AsyncClien
     working for up to ACCESS_TOKEN_EXPIRE_MINUTES after the user asked to stop."""
     tokens = (
         await client.post(
-            REGISTER, json={"email": "signout@forkast.app", "password": "password123"}
+            REGISTER,
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "signout@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     headers = {"Authorization": f"Bearer {tokens['access_token']}"}
@@ -202,7 +238,13 @@ async def test_an_access_token_survives_its_own_session_rotating(client: AsyncCl
     request in flight beside it is using."""
     tokens = (
         await client.post(
-            REGISTER, json={"email": "rotate-sid@forkast.app", "password": "password123"}
+            REGISTER,
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "rotate-sid@forkast.app",
+                "password": "password123",
+            },
         )
     ).json()
     original = {"Authorization": f"Bearer {tokens['access_token']}"}
@@ -221,7 +263,14 @@ async def test_an_access_token_from_another_session_is_unaffected_by_this_logout
     client: AsyncClient,
 ) -> None:
     """Signing out on one device must not sign the user out everywhere."""
-    creds = {"email": "twodevices@forkast.app", "password": "password123"}
+    # Carries the names because register requires them. LoginRequest ignores
+    # the two extra keys, which is what lets one dict serve both calls.
+    creds = {
+        "first_name": "Test",
+        "last_name": "User",
+        "email": "twodevices@forkast.app",
+        "password": "password123",
+    }
     phone = (await client.post(REGISTER, json=creds)).json()
     laptop = (await client.post(LOGIN, json=creds)).json()
 
