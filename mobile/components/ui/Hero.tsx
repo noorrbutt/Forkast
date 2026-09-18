@@ -58,22 +58,39 @@ export function Hero({ value, caption, color, align = 'left' }: HeroProps) {
   const available = box ?? width - spacing.xl * 2;
   const estimated = value.length * type.hero.fontSize * GLYPH_EM * fontScale;
 
-  // Two steps, never smaller. Below this the hero stops being a hero and the
-  // screen should be composed differently instead.
+  /**
+   * Two steps, never smaller. Below this the hero stops being a hero and the
+   * screen should be composed differently instead.
+   *
+   * Each gate is the ratio the step actually buys, not a round number. It used
+   * to fall to 52 whenever the estimate was inside 1.25 of the box, but 52 only
+   * shrinks the text to 52/64, so an estimate at 1.25 still overflows by about
+   * two percent once it is drawn. The gates are 64/52 and 64/44, which is the
+   * same question asked in the only units that answer it.
+   */
   const fontSize =
     estimated <= available
       ? type.hero.fontSize
-      : estimated <= available * 1.25
+      : estimated <= available * (type.hero.fontSize / 52)
         ? 52
         : 44;
 
   return (
+    /* The measuring box is a full width wrapper of its own, because the block
+       below sizes itself to its widest child. Measuring that told the hero how
+       wide its own text already was rather than how much room it had, so the
+       caption was an input to the figure's font size: a longer caption made the
+       number smaller. That is why the dashboard was not rendering at 64 and
+       welcome was already at 44, both at ordinary text size. */
     <View
+      style={{ width: '100%' }}
       onLayout={(event) => {
         const measured = event.nativeEvent.layout.width;
         // Only on a real change, or this sets state on every layout pass.
         if (measured > 0 && measured !== box) setBox(measured);
       }}
+    >
+    <View
       style={{ gap: spacing.xs, alignItems: align === 'center' ? 'center' : 'flex-start' }}
     >
       <Text
@@ -87,6 +104,11 @@ export function Hero({ value, caption, color, align = 'left' }: HeroProps) {
             // the size or a stepped down hero sits in a box meant for a taller
             // one.
             lineHeight: Math.round(fontSize * 1.09),
+            // Tracking travels with the size for the same reason the line
+            // height does. The token is -2.2 at 64, which is -0.034em, and
+            // holding it at -2.2 through the step down made it -0.042em at 52
+            // and -0.05em at 44, so a shrunk hero was also a tighter one.
+            letterSpacing: type.hero.letterSpacing! * (fontSize / type.hero.fontSize),
             textAlign: align,
           },
         ]}
@@ -100,6 +122,7 @@ export function Hero({ value, caption, color, align = 'left' }: HeroProps) {
       {caption ? (
         <Text style={[type.body, { color: colors.muted, textAlign: align }]}>{caption}</Text>
       ) : null}
+    </View>
     </View>
   );
 }
