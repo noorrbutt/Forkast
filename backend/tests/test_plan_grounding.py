@@ -16,11 +16,11 @@ import pytest
 from httpx import AsyncClient
 
 from app.main import app
+from app.models.enums import Goal
 from app.services.ai.deps import get_ai_service
 from app.services.ai.fake import DeterministicAIService
 from app.services.ai.groq_service import _plan_prompt
 from app.services.ai.schemas import PlanContext, PlanRequest, PlanResult
-from app.models.enums import Goal
 
 LOGS = "/api/v1/logs"
 

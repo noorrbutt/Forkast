@@ -83,9 +83,7 @@ async def test_login_gives_the_same_error_for_bad_password_and_unknown_email(
 
 async def test_refresh_rotates_the_token_and_kills_the_old_one(client: AsyncClient) -> None:
     registered = (
-        await client.post(
-            REGISTER, json={"email": "rotate@forkast.app", "password": "password123"}
-        )
+        await client.post(REGISTER, json={"email": "rotate@forkast.app", "password": "password123"})
     ).json()
     original_refresh = registered["refresh_token"]
 
@@ -161,16 +159,12 @@ async def test_me_returns_the_authenticated_user(client: AsyncClient) -> None:
     "path",
     ["/api/v1/logs", "/api/v1/dashboard", "/api/v1/streaks", "/api/v1/cuisines", "/api/v1/me"],
 )
-async def test_protected_routes_reject_an_anonymous_caller(
-    client: AsyncClient, path: str
-) -> None:
+async def test_protected_routes_reject_an_anonymous_caller(client: AsyncClient, path: str) -> None:
     assert (await client.get(path)).status_code == 401
 
 
 async def test_a_garbage_token_is_rejected(client: AsyncClient) -> None:
-    response = await client.get(
-        "/api/v1/me", headers={"Authorization": "Bearer not-a-real-token"}
-    )
+    response = await client.get("/api/v1/me", headers={"Authorization": "Bearer not-a-real-token"})
     assert response.status_code == 401
 
 
@@ -234,9 +228,7 @@ async def test_two_simultaneous_refreshes_of_one_token_yield_exactly_one_new_pai
     Claiming the row with a single conditional UPDATE means only one can win.
     """
     registered = (
-        await client.post(
-            REGISTER, json={"email": "racer@forkast.app", "password": "password123"}
-        )
+        await client.post(REGISTER, json={"email": "racer@forkast.app", "password": "password123"})
     ).json()
     token = registered["refresh_token"]
 
@@ -246,9 +238,7 @@ async def test_two_simultaneous_refreshes_of_one_token_yield_exactly_one_new_pai
         return_exceptions=True,
     )
 
-    statuses = sorted(
-        r.status_code for r in (first, second) if not isinstance(r, BaseException)
-    )
+    statuses = sorted(r.status_code for r in (first, second) if not isinstance(r, BaseException))
     assert statuses.count(200) == 1, f"expected exactly one winner, got {statuses}"
 
 
@@ -275,7 +265,6 @@ async def test_login_does_not_answer_faster_for_an_unknown_email(client: AsyncCl
     )
 
 
-
 async def test_replaying_a_spent_refresh_token_kills_the_whole_chain(
     client: AsyncClient, session: AsyncSession
 ) -> None:
@@ -286,9 +275,7 @@ async def test_replaying_a_spent_refresh_token_kills_the_whole_chain(
     leaked, so every live token for that account goes with it. RFC 9700 4.14.2.
     """
     tokens = (
-        await client.post(
-            REGISTER, json={"email": "reuse@forkast.app", "password": "password123"}
-        )
+        await client.post(REGISTER, json={"email": "reuse@forkast.app", "password": "password123"})
     ).json()
 
     rotated = (await client.post(REFRESH, json={"refresh_token": tokens["refresh_token"]})).json()
@@ -314,9 +301,7 @@ async def test_an_unrelated_account_is_not_logged_out_by_someone_elses_replay(
 ) -> None:
     """Family revocation has to stop at the owner of the replayed token."""
     victim = (
-        await client.post(
-            REGISTER, json={"email": "victim@forkast.app", "password": "password123"}
-        )
+        await client.post(REGISTER, json={"email": "victim@forkast.app", "password": "password123"})
     ).json()
     bystander = (
         await client.post(

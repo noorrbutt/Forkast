@@ -115,4 +115,3 @@ async def test_the_deterministic_stub_and_the_groq_client_are_interchangeable() 
 
     assert isinstance(stub, AIService)
     assert isinstance(real, AIService)
-

@@ -25,7 +25,7 @@ class Cuisine(Base):
     emoji: Mapped[str | None] = mapped_column(String(8))
     sort_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("0"))
 
-    categories: Mapped[list["FoodCategory"]] = relationship(
+    categories: Mapped[list[FoodCategory]] = relationship(
         back_populates="cuisine", cascade="all, delete-orphan"
     )
 

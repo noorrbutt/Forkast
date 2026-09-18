@@ -73,9 +73,7 @@ async def test_every_session_ends_not_just_this_one(client: AsyncClient) -> None
     first_headers = {"Authorization": f"Bearer {registered['access_token']}"}
 
     assert (
-        await client.request(
-            "DELETE", ME, headers=first_headers, json={"password": "password123"}
-        )
+        await client.request("DELETE", ME, headers=first_headers, json={"password": "password123"})
     ).status_code == 204
 
     refreshed = await client.post(

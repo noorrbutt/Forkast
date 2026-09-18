@@ -12,6 +12,8 @@ from app.models.restaurant import Restaurant
 from app.models.user import MAX_AVATAR_BYTES, RefreshToken, User, UserAvatar
 
 __all__ = [
+    "MAX_AVATAR_BYTES",
+    "MAX_PHOTO_BYTES",
     "AIPlan",
     "Base",
     "BurnLog",
@@ -19,8 +21,6 @@ __all__ = [
     "FoodCategory",
     "FoodLog",
     "FoodLogPhoto",
-    "MAX_AVATAR_BYTES",
-    "MAX_PHOTO_BYTES",
     "FriendScale",
     "Goal",
     "RateLimitCounter",

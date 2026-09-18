@@ -106,9 +106,7 @@ async def test_a_low_target_is_accepted(auth_client: AsyncClient) -> None:
     target is a single field with one validator.
     """
     for value in (1, 200, 500, 799):
-        response = await auth_client.patch(
-            "/api/v1/me", json={"daily_calorie_target": value}
-        )
+        response = await auth_client.patch("/api/v1/me", json={"daily_calorie_target": value})
 
         assert response.status_code == 200, f"{value} was refused: {response.text}"
         assert response.json()["daily_calorie_target"] == value

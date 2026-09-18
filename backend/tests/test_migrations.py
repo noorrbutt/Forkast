@@ -174,4 +174,3 @@ async def test_closed_vocabularies_are_enforced_by_the_database() -> None:
     assert expected <= present, f"missing CHECK constraints: {sorted(expected - present)}"
     assert native_enums == 0, "a native PostgreSQL enum type was created, which breaks downgrades"
     assert rejected, "the database accepted an invalid serving_size"
-

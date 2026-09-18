@@ -27,12 +27,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import BurnLog, FoodCategory, FoodLog, Restaurant, User
 from app.schemas.insights import (
-    TodayOut,
     BurnEquivalents,
     CaloriesByDay,
     DashboardOut,
     FunMeal,
     StreaksOut,
+    TodayOut,
     TopCategory,
     TopRestaurant,
     TrendChange,

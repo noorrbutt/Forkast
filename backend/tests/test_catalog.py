@@ -133,7 +133,9 @@ async def test_restaurant_coordinates_are_optional(auth_client: AsyncClient) -> 
 
 
 async def test_restaurants_can_be_searched_by_name(auth_client: AsyncClient) -> None:
-    await auth_client.post("/api/v1/restaurants", json={"name": "BBQ Tonight", "area": "Boat Basin"})
+    await auth_client.post(
+        "/api/v1/restaurants", json={"name": "BBQ Tonight", "area": "Boat Basin"}
+    )
 
     results = (await auth_client.get("/api/v1/restaurants", params={"q": "bbq"})).json()
 
@@ -161,7 +163,12 @@ async def test_coordinates_are_json_numbers_not_strings(auth_client: AsyncClient
     """
     created = await auth_client.post(
         "/api/v1/restaurants",
-        json={"name": "Coordinate Probe", "area": "Clifton", "latitude": 24.8185, "longitude": 67.0335},
+        json={
+            "name": "Coordinate Probe",
+            "area": "Clifton",
+            "latitude": 24.8185,
+            "longitude": 67.0335,
+        },
     )
 
     body = created.json()
@@ -178,9 +185,7 @@ async def test_both_cuisine_parameter_spellings_filter(auth_client: AsyncClient)
     desi = next(c for c in cuisines if c["slug"] == "desi")
     everything = (await auth_client.get("/api/v1/categories")).json()
 
-    by_id = (
-        await auth_client.get("/api/v1/categories", params={"cuisine_id": desi["id"]})
-    ).json()
+    by_id = (await auth_client.get("/api/v1/categories", params={"cuisine_id": desi["id"]})).json()
     by_plan_spelling = (
         await auth_client.get("/api/v1/categories", params={"cuisine": desi["id"]})
     ).json()
@@ -188,7 +193,6 @@ async def test_both_cuisine_parameter_spellings_filter(auth_client: AsyncClient)
     assert 0 < len(by_id) < len(everything)
     assert len(by_plan_spelling) == len(by_id)
     assert {c["id"] for c in by_plan_spelling} == {c["id"] for c in by_id}
-
 
 
 async def test_a_nul_byte_in_a_search_term_is_a_client_error(auth_client: AsyncClient) -> None:
@@ -203,7 +207,7 @@ async def test_a_nul_byte_in_a_search_term_is_a_client_error(auth_client: AsyncC
 async def test_a_blank_restaurant_query_lists_rather_than_matching_everything(
     auth_client: AsyncClient,
 ) -> None:
-    """"?q=   " used to build an empty LIKE pattern that matched every row
+    """ "?q=   " used to build an empty LIKE pattern that matched every row
     through the slow path instead of just listing."""
     await auth_client.post("/api/v1/restaurants", json={"name": "Kolachi", "area": "Do Darya"})
 
@@ -327,8 +331,6 @@ async def test_mine_returns_a_restaurant_once_however_often_it_was_visited(
             },
         )
 
-    visited = (
-        await auth_client.get("/api/v1/restaurants", params={"mine": True})
-    ).json()
+    visited = (await auth_client.get("/api/v1/restaurants", params={"mine": True})).json()
 
     assert [r["name"] for r in visited] == ["Kolachi"]

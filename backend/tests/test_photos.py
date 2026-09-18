@@ -137,9 +137,7 @@ async def test_an_oversized_photo_is_refused_with_413_not_a_500(
 async def test_an_empty_file_is_refused(auth_client: AsyncClient) -> None:
     log_id = await _log(auth_client)
 
-    assert (
-        await auth_client.put(f"{LOGS}/{log_id}/photo", files=_upload(b""))
-    ).status_code == 422
+    assert (await auth_client.put(f"{LOGS}/{log_id}/photo", files=_upload(b""))).status_code == 422
 
 
 async def test_a_photo_can_be_removed(auth_client: AsyncClient) -> None:
@@ -191,8 +189,7 @@ async def test_one_persons_photo_is_not_visible_to_another(client: AsyncClient) 
     theirs_h = {"Authorization": f"Bearer {theirs['access_token']}"}
 
     categories = {
-        c["slug"]: c
-        for c in (await client.get("/api/v1/categories", headers=mine_h)).json()
+        c["slug"]: c for c in (await client.get("/api/v1/categories", headers=mine_h)).json()
     }
     created = await client.post(
         LOGS,

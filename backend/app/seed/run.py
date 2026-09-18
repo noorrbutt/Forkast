@@ -41,6 +41,7 @@ DAYS_OF_HISTORY = 90
 TARGET_LOGS = 120
 RANDOM_SEED = 20260916
 
+
 async def _clear_demo_data(session: AsyncSession) -> None:
     """Remove the demo user and the seeded restaurants.
 
@@ -92,7 +93,7 @@ async def _generate_logs(
     tz = ZoneInfo(user.timezone)
     now = dt.datetime.now(tz)
 
-    loggable = [c for c in categories if c.slug in DISH_NAMES and DISH_NAMES[c.slug]]
+    loggable = [c for c in categories if DISH_NAMES.get(c.slug)]
 
     # Weight the non junk categories a little higher so the seeded history reads
     # like a normal person's diary rather than a fast food binge.
@@ -187,7 +188,10 @@ def _summarise(user: User, logs: list[FoodLog], categories: list[FoodCategory]) 
 
     today = dt.datetime.now(tz).date()
     calories_by_day = [
-        {"day": today - dt.timedelta(days=offset), "calories": by_day.get(today - dt.timedelta(days=offset), 0)}
+        {
+            "day": today - dt.timedelta(days=offset),
+            "calories": by_day.get(today - dt.timedelta(days=offset), 0),
+        }
         for offset in range(13, -1, -1)
     ]
 
@@ -228,7 +232,11 @@ def _summarise(user: User, logs: list[FoodLog], categories: list[FoodCategory]) 
     if restaurant_counts:
         top_rid, top_rcount = restaurant_counts.most_common(1)[0]
         name = next(
-            (log.restaurant.name for log in logs if log.restaurant_id == top_rid and log.restaurant),
+            (
+                log.restaurant.name
+                for log in logs
+                if log.restaurant_id == top_rid and log.restaurant
+            ),
             "Unknown",
         )
         top_restaurant = {"restaurant_id": top_rid, "name": name, "count": top_rcount}
@@ -294,9 +302,7 @@ async def seed(reset_only: bool = False) -> None:
 
         categories = list(await session.scalars(select(FoodCategory)))
         if not categories:
-            raise SystemExit(
-                "No food categories found. Run `alembic upgrade head` before seeding."
-            )
+            raise SystemExit("No food categories found. Run `alembic upgrade head` before seeding.")
 
         user = User(
             email=DEMO_EMAIL,
@@ -330,7 +336,9 @@ async def seed(reset_only: bool = False) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed Forkast demo data.")
     parser.add_argument(
-        "--reset", action="store_true", help="Remove the demo user and the seeded restaurants, then stop."
+        "--reset",
+        action="store_true",
+        help="Remove the demo user and the seeded restaurants, then stop.",
     )
     args = parser.parse_args()
     asyncio.run(seed(reset_only=args.reset))

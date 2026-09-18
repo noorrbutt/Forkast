@@ -84,9 +84,7 @@ async def test_a_meal_is_saved_even_when_the_estimator_is_down(
     # And the figure it was given is a real one, not a zero or a null standing
     # in for "we could not work it out".
     assert (
-        category["base_calorie_min"]
-        <= body["estimated_calories"]
-        <= category["base_calorie_max"]
+        category["base_calorie_min"] <= body["estimated_calories"] <= category["base_calorie_max"]
     )
 
 

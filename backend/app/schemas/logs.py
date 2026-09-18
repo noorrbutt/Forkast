@@ -45,7 +45,9 @@ class FoodLogCreate(BaseModel):
         if value is None:
             return None
         if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("created_at must include a UTC offset, for example 2026-09-16T20:30:00+05:00")
+            raise ValueError(
+                "created_at must include a UTC offset, for example 2026-09-16T20:30:00+05:00"
+            )
 
         now = dt.datetime.now(dt.UTC)
         if value > now + CLOCK_SKEW:

@@ -104,7 +104,9 @@ async def test_the_burn_appears_against_the_right_day_in_the_chart(
 
 async def test_a_past_day_can_be_filled_in(auth_client: AsyncClient) -> None:
     """The same allowance a forgotten meal gets."""
-    yesterday = (dt.datetime.now(ZoneInfo("Asia/Karachi")).date() - dt.timedelta(days=1)).isoformat()
+    yesterday = (
+        dt.datetime.now(ZoneInfo("Asia/Karachi")).date() - dt.timedelta(days=1)
+    ).isoformat()
 
     response = await auth_client.put(BURN, json={"calories": 250, "day": yesterday})
 
@@ -207,4 +209,3 @@ async def test_a_burn_shows_up_even_with_no_meals_logged(auth_client: AsyncClien
     # The chart still has to be drawable, with the burn against the right day.
     assert len(body["calories_by_day"]) == 14
     assert sum(day["burned"] for day in body["calories_by_day"]) == 450
-

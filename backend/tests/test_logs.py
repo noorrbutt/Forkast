@@ -36,7 +36,9 @@ async def test_creating_a_log_stores_it_and_estimates_calories(auth_client: Asyn
     assert body["friend_scale"] == "squad"
     # A medium serving is a 1.0 multiplier, so the estimate must land inside the
     # category's own range.
-    assert category["base_calorie_min"] <= body["estimated_calories"] <= category["base_calorie_max"]
+    assert (
+        category["base_calorie_min"] <= body["estimated_calories"] <= category["base_calorie_max"]
+    )
     assert body["category"]["slug"] == "biryani"
 
 
@@ -284,7 +286,9 @@ async def test_one_user_cannot_see_or_touch_another_users_log(client: AsyncClien
     ).json()
 
     # 404 rather than 403: there is no reason to confirm the id exists.
-    assert (await client.get(f"{LOGS}/{created['id']}", headers=stranger_headers)).status_code == 404
+    assert (
+        await client.get(f"{LOGS}/{created['id']}", headers=stranger_headers)
+    ).status_code == 404
     assert (
         await client.delete(f"{LOGS}/{created['id']}", headers=stranger_headers)
     ).status_code == 404
@@ -399,12 +403,8 @@ async def test_patching_the_restaurant_returns_the_new_nested_restaurant(
     auth_client: AsyncClient,
 ) -> None:
     category = await _a_category(auth_client)
-    first = (
-        await auth_client.post("/api/v1/restaurants", json={"name": "Nested One"})
-    ).json()
-    second = (
-        await auth_client.post("/api/v1/restaurants", json={"name": "Nested Two"})
-    ).json()
+    first = (await auth_client.post("/api/v1/restaurants", json={"name": "Nested One"})).json()
+    second = (await auth_client.post("/api/v1/restaurants", json={"name": "Nested Two"})).json()
 
     created = (
         await auth_client.post(
@@ -490,7 +490,6 @@ async def test_a_reasonable_backfill_is_accepted(auth_client: AsyncClient) -> No
     assert response.status_code == 201
 
 
-
 @pytest.mark.parametrize(
     "field",
     ["dish_name", "restaurant_name", "area"],
@@ -560,9 +559,7 @@ async def test_surrounding_whitespace_is_trimmed_on_create_and_on_update(
     assert created["area"] == "Clifton"
 
     updated = (
-        await auth_client.patch(
-            f"{LOGS}/{created['id']}", json={"dish_name": "  mutton biryani  "}
-        )
+        await auth_client.patch(f"{LOGS}/{created['id']}", json={"dish_name": "  mutton biryani  "})
     ).json()
     assert updated["dish_name"] == "mutton biryani"
 

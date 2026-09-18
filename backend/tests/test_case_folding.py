@@ -71,9 +71,9 @@ async def test_logging_at_the_same_restaurant_twice_does_not_500(
         assert second.status_code == 201, second.text
 
         # And it is the same restaurant, not a duplicate row.
-        assert (
-            first.json()["restaurant"]["id"] == second.json()["restaurant"]["id"]
-        ), f"{name!r} created a second row instead of reusing the first"
+        assert first.json()["restaurant"]["id"] == second.json()["restaurant"]["id"], (
+            f"{name!r} created a second row instead of reusing the first"
+        )
 
 
 async def test_creating_the_same_restaurant_twice_returns_one_row(

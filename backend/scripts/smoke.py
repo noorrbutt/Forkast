@@ -142,7 +142,9 @@ with httpx.Client(timeout=30.0) as http:
     r = http.post(f"{API}/restaurants", headers=auth, json={"name": cafe, "area": "Clifton"})
     check("restaurant created returns 201", r.status_code == 201, r.text)
     first_id = r.json()["id"]
-    r = http.post(f"{API}/restaurants", headers=auth, json={"name": f"  {cafe.lower()}", "area": "CLIFTON"})
+    r = http.post(
+        f"{API}/restaurants", headers=auth, json={"name": f"  {cafe.lower()}", "area": "CLIFTON"}
+    )
     check("deduped restaurant returns 200, not 201", r.status_code == 200, f"got {r.status_code}")
     check("restaurant dedupes case insensitively", r.json()["id"] == first_id, r.text)
 
@@ -233,9 +235,17 @@ with httpx.Client(timeout=30.0) as http:
         check("demo dish history is searchable", len(r.json()["dishes"]) > 0, r.text)
 
         d = http.get(f"{API}/dashboard", headers=demo_auth).json()
-        check("demo dashboard is computed from the seeded logs", d["logs_count"] >= 100, str(d["logs_count"]))
+        check(
+            "demo dashboard is computed from the seeded logs",
+            d["logs_count"] >= 100,
+            str(d["logs_count"]),
+        )
         check("demo junk ratio is a real fraction", 0 < d["junk_ratio"] < 1, str(d["junk_ratio"]))
-        check("demo calorie chart covers 14 days", len(d["calories_by_day"]) == 14, str(len(d["calories_by_day"])))
+        check(
+            "demo calorie chart covers 14 days",
+            len(d["calories_by_day"]) == 14,
+            str(len(d["calories_by_day"])),
+        )
         check("demo top category resolved", bool(d["top_category"]), str(d["top_category"]))
         s2 = http.get(f"{API}/streaks", headers=demo_auth).json()
         check("demo streak is computed", s2["longest_streak"] > 0, str(s2))

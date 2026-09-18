@@ -1,0 +1,53 @@
+[tool.ruff]
+# Matches the longest lines the codebase already runs to, rather than forcing a
+# reflow of every docstring in the repo to satisfy a number nobody chose.
+line-length = 100
+target-version = "py314"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle
+    "F",      # pyflakes: undefined names, unused imports and variables
+    "I",      # import sorting
+    "B",      # bugbear: mutable defaults, useless expressions, except-pass
+    "UP",     # pyupgrade
+    "ASYNC",  # blocking calls inside async functions
+    "S",      # bandit: the security lints that do not need type inference
+    "T20",    # stray print()
+    "RUF",
+]
+ignore = [
+    # The codebase deliberately explains WHY in long prose comments, and several
+    # of those lines are wider than the code they sit above.
+    "E501",
+    # FastAPI's whole dependency mechanism is function calls in defaults.
+    "B008",
+    # PEP 695 type-parameter syntax. A style preference, not a defect, and
+    # rewriting the one generic helper in the codebase to satisfy it buys
+    # nothing.
+    "UP047",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert, use fixed credentials, and shell out to alembic with
+# sys.executable, all of which bandit is right to flag in application code and
+# wrong to flag here.
+"tests/**" = ["S101", "S105", "S106", "S311", "S603"]
+# The seeder prints its progress on purpose; it is a command, not a library.
+# Its asserts are self-checks over the literal reference data in the same file,
+# which is the one place an assert is the right tool: a wrong constant should
+# stop the seeder, and there is no caller to hand an exception to.
+# DEMO_PASSWORD is deliberately public and documented in the README.
+"app/seed/**" = ["T20", "S101", "S105", "S311"]
+"scripts/**" = ["T20", "S101", "S603"]
+# token_type="bearer" is an OAuth field name, not a credential.
+"app/schemas/auth.py" = ["S105"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+# Without this, the `backend/alembic/` directory makes isort read the installed
+# `alembic` package as local and file its import with app's, which is simply
+# wrong: it is a third-party dependency that happens to share a name with the
+# folder holding the migrations.
+known-third-party = ["alembic"]

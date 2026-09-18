@@ -105,8 +105,16 @@ async def test_a_repeat_carries_over_everything_that_describes_the_meal(
 
     repeated = await _repeat(auth_client, original["id"])
 
-    described = ("dish_name", "category_id", "restaurant_id", "area", "rating",
-                 "fun_scale", "friend_scale", "serving_size")
+    described = (
+        "dish_name",
+        "category_id",
+        "restaurant_id",
+        "area",
+        "rating",
+        "fun_scale",
+        "friend_scale",
+        "serving_size",
+    )
     assert {key: repeated[key] for key in described} == {key: original[key] for key in described}
     # The joined objects have to come back too, or the client has to refetch the
     # row it just created before it can render it.

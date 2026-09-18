@@ -81,7 +81,7 @@ class UserUpdate(BaseModel):
     daily_calorie_target: int | None = Field(default=None, ge=0, le=10_000)
 
     @model_validator(mode="after")
-    def _null_only_where_the_column_is_nullable(self) -> "UserUpdate":
+    def _null_only_where_the_column_is_nullable(self) -> UserUpdate:
         """Refuse an explicit null for a column that cannot hold one.
 
         Every field here is optional, which is what makes a PATCH a PATCH: an

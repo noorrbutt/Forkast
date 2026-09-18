@@ -97,9 +97,7 @@ async def test_repeated_failed_logins_are_eventually_refused(client: AsyncClient
     limit = get_settings().login_rate_limit
     statuses = [
         (
-            await client.post(
-                LOGIN, json={"email": "brute@forkast.app", "password": f"wrong{i}"}
-            )
+            await client.post(LOGIN, json={"email": "brute@forkast.app", "password": f"wrong{i}"})
         ).status_code
         for i in range(burst_size(limit))
     ]
@@ -209,9 +207,7 @@ async def test_an_access_token_survives_its_own_session_rotating(client: AsyncCl
     ).json()
     original = {"Authorization": f"Bearer {tokens['access_token']}"}
 
-    rotated = (
-        await client.post(REFRESH, json={"refresh_token": tokens["refresh_token"]})
-    ).json()
+    rotated = (await client.post(REFRESH, json={"refresh_token": tokens["refresh_token"]})).json()
 
     assert (await client.get("/api/v1/me", headers=original)).status_code == 200
     assert (
@@ -232,9 +228,7 @@ async def test_an_access_token_from_another_session_is_unaffected_by_this_logout
     await client.post(LOGOUT, json={"refresh_token": phone["refresh_token"]})
 
     assert (
-        await client.get(
-            "/api/v1/me", headers={"Authorization": f"Bearer {phone['access_token']}"}
-        )
+        await client.get("/api/v1/me", headers={"Authorization": f"Bearer {phone['access_token']}"})
     ).status_code == 401
     assert (
         await client.get(

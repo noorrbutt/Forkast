@@ -14,18 +14,16 @@ from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
-from app.services.insights import today_for
 from app.api.deps import CurrentUser, SessionDep
 from app.models import BurnLog
 from app.schemas.burn import BurnOut, BurnUpsert
+from app.services.insights import today_for
 
 router = APIRouter(prefix="/burn", tags=["burn"])
 
 # How much history the client shows beside the calorie chart.
 DEFAULT_WINDOW_DAYS = 14
 MAX_WINDOW_DAYS = 90
-
-
 
 
 @router.put("", response_model=BurnOut)

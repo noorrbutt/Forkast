@@ -148,7 +148,9 @@ async def test_one_users_logs_do_not_affect_another_dashboard(client: AsyncClien
     mine = {"Authorization": f"Bearer {first['access_token']}"}
     theirs = {"Authorization": f"Bearer {second['access_token']}"}
 
-    categories = {c["slug"]: c for c in (await client.get("/api/v1/categories", headers=mine)).json()}
+    categories = {
+        c["slug"]: c for c in (await client.get("/api/v1/categories", headers=mine)).json()
+    }
     for _ in range(3):
         await client.post(
             LOGS,
@@ -197,7 +199,10 @@ async def test_a_late_night_meal_counts_for_the_local_day_not_the_utc_one(
 
     await _log(auth_client, categories["biryani"], dish="late biryani", when=late_night)
 
-    chart = {d["day"]: d["calories"] for d in (await auth_client.get(DASHBOARD)).json()["calories_by_day"]}
+    chart = {
+        d["day"]: d["calories"]
+        for d in (await auth_client.get(DASHBOARD)).json()["calories_by_day"]
+    }
 
     assert chart[local_day.isoformat()] > 0, "the 2am meal was filed under the wrong day"
     utc_day = (local_day - dt.timedelta(days=1)).isoformat()

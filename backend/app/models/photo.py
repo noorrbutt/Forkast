@@ -6,7 +6,6 @@ import datetime as dt
 import uuid
 
 from sqlalchemy import (
-    select,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -16,6 +15,7 @@ from sqlalchemy import (
     String,
     Uuid,
     func,
+    select,
     text,
 )
 from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
@@ -66,7 +66,7 @@ class FoodLogPhoto(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    log: Mapped["FoodLog"] = relationship(back_populates="photo")  # noqa: F821
+    log: Mapped[FoodLog] = relationship(back_populates="photo")
 
     __table_args__ = (
         CheckConstraint(
@@ -85,8 +85,5 @@ class FoodLogPhoto(Base):
 # data. Defined here rather than on FoodLog because it needs both classes, and
 # food_log.py must not import this module or the two would cycle.
 FoodLog.has_photo = column_property(
-    select(1)
-    .where(FoodLogPhoto.food_log_id == FoodLog.id)
-    .exists()
-    .label("has_photo")
+    select(1).where(FoodLogPhoto.food_log_id == FoodLog.id).exists().label("has_photo")
 )

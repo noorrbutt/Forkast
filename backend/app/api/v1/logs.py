@@ -8,10 +8,9 @@ one router carrying both and the v1 aggregation stays a single include.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Annotated
-
-import logging
 
 from fastapi import (
     APIRouter,
@@ -25,20 +24,20 @@ from fastapi import (
     status,
 )
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, SessionDep
-from app.db import get_session_factory
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.api.v1.catalog import upsert_restaurant
+from app.db import get_session_factory
 from app.models import MAX_PHOTO_BYTES, FoodCategory, FoodLog, FoodLogPhoto, Restaurant
+from app.models.enums import ServingSize
 from app.schemas.insights import TrendOut
 from app.schemas.logs import FoodLogCreate, FoodLogOut, FoodLogPage, FoodLogUpdate
 from app.services.ai.base import AIService
 from app.services.ai.deps import get_ai_service
 from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import CalorieAdjustRequest
-from app.models.enums import ServingSize
 from app.services.calories import finalise_estimate
 from app.services.insights import build_trend
 
@@ -55,9 +54,7 @@ AIDep = Annotated[AIService, Depends(get_ai_service)]
 # docstring gives: it is a dependency precisely so tests can point it at the
 # test database. Calling it directly from a background task would step past
 # app.dependency_overrides and open a connection to the real one.
-SessionFactoryDep = Annotated[
-    "async_sessionmaker[AsyncSession]", Depends(get_session_factory)
-]
+SessionFactoryDep = Annotated["async_sessionmaker[AsyncSession]", Depends(get_session_factory)]
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +87,7 @@ async def _refine_estimate(
     log_id: uuid.UUID,
     category_id: int,
     ai: AIService,
-    factory: "async_sessionmaker[AsyncSession]",
+    factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Replace a provisional figure with the model's, after the response is out.
 
@@ -116,9 +113,7 @@ async def _refine_estimate(
             if category is None:
                 return
 
-            refined = await _estimate_calories(
-                ai, category, log.dish_name, log.serving_size
-            )
+            refined = await _estimate_calories(ai, category, log.dish_name, log.serving_size)
             if refined != log.estimated_calories:
                 log.estimated_calories = refined
                 await session.commit()
@@ -466,9 +461,7 @@ async def set_photo(
             detail="Photos must be JPEG, PNG or WebP.",
         )
 
-    existing = await session.scalar(
-        select(FoodLogPhoto).where(FoodLogPhoto.food_log_id == log.id)
-    )
+    existing = await session.scalar(select(FoodLogPhoto).where(FoodLogPhoto.food_log_id == log.id))
     if existing is None:
         session.add(
             FoodLogPhoto(

@@ -117,9 +117,7 @@ async def register(
         window_seconds=settings.login_rate_window_seconds,
     )
 
-    existing = await session.scalar(
-        select(User).where(func.lower(User.email) == email.lower())
-    )
+    existing = await session.scalar(select(User).where(func.lower(User.email) == email.lower()))
     if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -176,9 +174,7 @@ async def login(
     return await _issue_tokens(session, user)
 
 
-async def _revoke_family_on_reuse(
-    session: SessionDep, token_hash: str, now: dt.datetime
-) -> None:
+async def _revoke_family_on_reuse(session: SessionDep, token_hash: str, now: dt.datetime) -> None:
     """Kill every live token for the owner of an already-spent refresh token.
 
     Silent by design: the caller still gets the same "invalid or expired"
@@ -291,4 +287,3 @@ async def logout(payload: RefreshRequest, session: SessionDep) -> Response:
     # telling the caller about, and answering differently would say whether the
     # token was real.
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-

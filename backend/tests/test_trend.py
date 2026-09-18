@@ -300,7 +300,9 @@ async def test_one_users_logs_do_not_affect_another_trend(client: AsyncClient) -
     mine = {"Authorization": f"Bearer {first['access_token']}"}
     theirs = {"Authorization": f"Bearer {second['access_token']}"}
 
-    categories = {c["slug"]: c for c in (await client.get("/api/v1/categories", headers=mine)).json()}
+    categories = {
+        c["slug"]: c for c in (await client.get("/api/v1/categories", headers=mine)).json()
+    }
     _, last_start = _month_starts(dt.datetime.now(KARACHI).date())
     for when in (None, _in_last_month(last_start)):
         payload: dict = {
