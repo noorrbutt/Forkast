@@ -104,7 +104,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # Expo SDK 57's floor. Nothing in the repo enforces it at runtime, so
           # CI is where a version below it gets caught.
