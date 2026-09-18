@@ -131,14 +131,15 @@ terminal, and again inside the Expo Go app itself. A QR scan alone will fail.
 
 ```bash
 cd backend
-pytest                      # 151 tests
+pytest                      # the suite, against forkast_test
 alembic check               # models and migrations have not drifted
-python -m scripts.smoke     # 48 checks over real HTTP, needs the server running
+python -m scripts.smoke     # live end to end over real HTTP, needs the server running
 ```
 
 ```bash
 cd mobile
 npx tsc --noEmit
+npx jest                    # includes the contrast and web parity checks
 npx expo-doctor
 ```
 
