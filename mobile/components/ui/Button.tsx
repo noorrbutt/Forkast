@@ -55,7 +55,7 @@ export function Button({
   accessibilityHint,
   style,
 }: ButtonProps) {
-  const { colors, radius, spacing, type } = useTheme();
+  const { fonts, colors, radius, spacing, type } = useTheme();
   const inactive = disabled || loading;
   // Reanimated has to inspect the style object in order to animate it, so an
   // animated component silently drops the ({ pressed }) => style callback form
@@ -168,7 +168,15 @@ export function Button({
       ) : (
         <>
           {icon ? <Icon name={icon} size={size === 'lg' ? 19 : 17} color={ink} /> : null}
-          <Text style={[size === 'lg' ? type.subtitle : type.body, { color: ink, fontWeight: '600' }]}>
+          {/* The cut is named, not asked for with a weight. React Native has no
+              synthetic weights, so `fontWeight: '600'` over a regular family is
+              silently ignored and the label renders regular. */}
+          <Text
+            style={[
+              size === 'lg' ? type.subtitle : type.body,
+              { color: ink, fontFamily: fonts.semibold, fontWeight: '600' },
+            ]}
+          >
             {label}
           </Text>
         </>

@@ -61,7 +61,7 @@ export function Chip({
   showCheck = false,
   style,
 }: ChipProps) {
-  const { colors, radius, spacing, type } = useTheme();
+  const { fonts, colors, radius, spacing, type } = useTheme();
   const { animatedStyle, onPressIn, onPressOut } = usePressScale({ disabled });
   // Reanimated has to inspect the style object in order to animate it, so an
   // animated component silently drops the ({ pressed }) => style callback form
@@ -123,6 +123,7 @@ export function Chip({
           {
             color: selected ? colors.text : colors.muted,
             // Never changes between states, see the note above.
+            fontFamily: fonts.semibold,
             fontWeight: '600',
             textAlign: 'center',
           },

@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 
-import { layout, palettes, radius, spacing, type, type Palette, type ThemeName } from './tokens';
+import { fonts, layout, palettes, radius, spacing, type, type Palette, type ThemeName } from './tokens';
 
 export type Theme = {
   name: ThemeName;
@@ -10,6 +10,7 @@ export type Theme = {
   spacing: typeof spacing;
   layout: typeof layout;
   type: typeof type;
+  fonts: typeof fonts;
   isDark: boolean;
 };
 
@@ -21,6 +22,7 @@ function buildTheme(name: ThemeName): Theme {
     spacing,
     layout,
     type,
+    fonts,
     isDark: name === 'dark',
   };
 }

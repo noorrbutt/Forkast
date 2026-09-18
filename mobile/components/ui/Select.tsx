@@ -53,7 +53,7 @@ export function Select({
   searchThreshold = 8,
   emptyText = 'Nothing matches that.',
 }: SelectProps) {
-  const { colors, radius, spacing, type } = useTheme();
+  const { fonts, colors, radius, spacing, type } = useTheme();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -112,7 +112,12 @@ export function Select({
         <Text
           style={[
             type.body,
-            { flex: 1, color: selected ? colors.text : colors.muted, fontWeight: selected ? '600' : '400' },
+            {
+              flex: 1,
+              color: selected ? colors.text : colors.muted,
+              fontFamily: selected ? fonts.semibold : fonts.regular,
+              fontWeight: selected ? '600' : '400',
+            },
           ]}
           numberOfLines={1}
         >
@@ -256,7 +261,15 @@ export function Select({
                     <Text
                       style={[
                         type.body,
-                        { color: colors.text, fontWeight: active ? '700' : '500' },
+                        {
+                          color: colors.text,
+                          // 600, not 700: only four cuts are loaded and asking
+                          // for one that is not there falls back to regular,
+                          // which would make the chosen row the lightest in the
+                          // list rather than the heaviest.
+                          fontFamily: active ? fonts.semibold : fonts.medium,
+                          fontWeight: active ? '600' : '500',
+                        },
                       ]}
                     >
                       {item.label}

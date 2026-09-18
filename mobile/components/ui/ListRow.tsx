@@ -42,7 +42,7 @@ export function ListRow({
   disabled = false,
   last = false,
 }: ListRowProps) {
-  const { colors, radius, spacing, type } = useTheme();
+  const { fonts, colors, radius, spacing, type } = useTheme();
   const ink = tone === 'danger' ? colors.danger : colors.text;
   const iconTint = tone === 'danger' ? colors.danger : colors.muted;
   const interactive = Boolean(onPress) && !disabled;
@@ -85,7 +85,9 @@ export function ListRow({
       ) : null}
 
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={[type.body, { color: ink, fontWeight: '500' }]}>{label}</Text>
+        <Text style={[type.body, { color: ink, fontFamily: fonts.medium, fontWeight: '500' }]}>
+          {label}
+        </Text>
         {hint ? <Text style={[type.caption, { color: colors.muted }]}>{hint}</Text> : null}
       </View>
 

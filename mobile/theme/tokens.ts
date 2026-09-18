@@ -285,6 +285,39 @@ export const layout = {
  * tiny uppercase letterspaced labels.
  */
   /**
+ * The typeface, named per weight.
+ *
+ * React Native has no synthetic weights: on iOS and Android `fontWeight` only
+ * selects among the cuts actually registered, so a family is named per weight
+ * rather than set once with a numeric weight beside it. Getting this wrong is
+ * silent, and it fails in exactly the direction that matters here, by falling
+ * back to the regular cut.
+ *
+ * That silent fallback is what the app shipped with. With no family at all,
+ * every platform substituted its own: SF on iOS, Roboto or an OEM replacement
+ * on Android, whatever the browser defaults to on web. The whole scale above
+ * `title` is 300, and 300 is precisely where those disagree, because several
+ * OEM Android faces carry no Light cut and quietly render Regular. The most
+ * distinctive decision in this app was the one least likely to survive
+ * somebody else's phone.
+ *
+ * Figtree, for three checkable reasons rather than a preference. It ships a
+ * real 300. It carries the `tnum` feature, without which the tabular figures
+ * the scale asks for below would be a no-op. And the four cuts used here come
+ * to 156KB, which is a launch cost worth paying once.
+ *
+ * `fontWeight` stays on every token beside the family. It is what web reads,
+ * since react-native-web maps the family to CSS and needs the weight to pick
+ * the right @font-face.
+ */
+const FAMILY = {
+  light: 'Figtree_300Light',
+  regular: 'Figtree_400Regular',
+  medium: 'Figtree_500Medium',
+  semibold: 'Figtree_600SemiBold',
+} as const;
+
+  /**
    * Lining, fixed-advance figures on every token that sets a number.
    *
    * The whole type scale above `title` exists to set figures, and all of it was
@@ -318,6 +351,7 @@ export const type = {
    * caller. See DESIGN_STYLE_GUIDE.md section 4.
    */
   hero: {
+    fontFamily: FAMILY.light,
     fontSize: 64,
     fontWeight: '300',
     letterSpacing: -2.2,
@@ -326,6 +360,7 @@ export const type = {
   } satisfies TextStyle,
   /** 48 / 300. A page title, or a secondary numeral on a screen with a hero. */
   display: {
+    fontFamily: FAMILY.light,
     fontSize: 48,
     fontWeight: '300',
     letterSpacing: -1.4,
@@ -334,6 +369,7 @@ export const type = {
   } satisfies TextStyle,
   /** 34 / 300. Secondary numerals, for example streak counts in a pair. */
   displaySm: {
+    fontFamily: FAMILY.light,
     fontSize: 34,
     fontWeight: '300',
     letterSpacing: -0.8,
@@ -342,6 +378,7 @@ export const type = {
   } satisfies TextStyle,
   /** 26 / 300. Numerals inside a stat tile. */
   numeral: {
+    fontFamily: FAMILY.light,
     fontSize: 26,
     fontWeight: '300',
     letterSpacing: -0.4,
@@ -349,23 +386,27 @@ export const type = {
     fontVariant: ['tabular-nums'],
   } satisfies TextStyle,
   title: {
+    fontFamily: FAMILY.semibold,
     fontSize: 21,
     fontWeight: '600',
     letterSpacing: -0.3,
     lineHeight: 27,
   } satisfies TextStyle,
   subtitle: {
+    fontFamily: FAMILY.semibold,
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: -0.1,
     lineHeight: 22,
   } satisfies TextStyle,
   body: {
+    fontFamily: FAMILY.regular,
     fontSize: 15,
     fontWeight: '400',
     lineHeight: 22,
   } satisfies TextStyle,
   caption: {
+    fontFamily: FAMILY.regular,
     fontSize: 13,
     fontWeight: '400',
     lineHeight: 19,
@@ -377,6 +418,7 @@ export const type = {
    * this app is trying to stop wearing.
    */
   label: {
+    fontFamily: FAMILY.semibold,
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 1,
@@ -399,12 +441,23 @@ export const type = {
    * when it is there to be read rather than to decorate.
    */
   labelSoft: {
+    fontFamily: FAMILY.medium,
     fontSize: 12,
     fontWeight: '500',
     letterSpacing: 0,
     lineHeight: 16,
   } satisfies TextStyle,
 } as const;
+
+/**
+ * The cuts, for the few call sites that need a weight the token does not carry.
+ *
+ * A bare `fontWeight` override no longer does anything on iOS or Android now
+ * that the family is named per weight, so a component that wants a bolder label
+ * than its token asks for has to name the cut. Anything not in here is not
+ * loaded and will fall back silently.
+ */
+export const fonts = FAMILY;
 
 export type TypeToken = keyof typeof type;
 
