@@ -1,0 +1,28 @@
+{
+  // This is a monorepo with no package.json at its root, so an editor opened
+  // here has to be told where each half lives. Without this the TypeScript
+  // server looks for node_modules beside this file, finds none, and reports
+  // every import in mobile/ as unresolved.
+  "typescript.tsdk": "mobile/node_modules/typescript/lib",
+  "eslint.workingDirectories": [{ "directory": "mobile", "changeProcessCWD": true }],
+
+  "python.analysis.extraPaths": ["backend"],
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["backend/tests"],
+
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": { "source.organizeImports": "explicit" }
+  },
+
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "mobile/.expo": true
+  }
+}

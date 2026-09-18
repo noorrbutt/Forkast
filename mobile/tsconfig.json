@@ -1,5 +1,6 @@
 {
-  "extends": "expo/tsconfig.base",
+  "//": "Relative rather than the bare 'expo/tsconfig.base'. Node-style resolution of the bare specifier is done relative to whatever the editor treats as the project root, and opening this monorepo at its top level gives an editor a root with no node_modules in it, so the extends fails and every file in the project lights up red. tsc run from mobile/ resolved it either way; the path makes the editor agree.",
+  "extends": "./node_modules/expo/tsconfig.base.json",
   "compilerOptions": {
     "strict": true,
     "paths": {
