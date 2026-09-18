@@ -11,7 +11,7 @@ type ScreenProps = {
   scroll?: boolean;
   /** Title for the frosted header that floats over the content. */
   title?: string;
-  /** Tiny uppercase line above the title. */
+  /** One quiet line above the title, sentence case, at labelSoft. */
   eyebrow?: string;
   headerRight?: ReactNode;
   onBack?: () => void;
@@ -121,9 +121,21 @@ export function Screen({
             borderBottomColor: colors.border,
           }}
         >
+          {/* Capped and centred on the same measure the content uses. The bar
+              itself still spans the window, because a frosted layer that stops
+              short of the edge is a floating rectangle, but what is written on
+              it now starts where the content it titles starts. On a 1400pt
+              browser the title was 396pt left of its own column. */}
           <View
             onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height + insets.top + spacing.sm + spacing.md)}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}
+            style={{
+              width: '100%',
+              maxWidth: layout.contentWidth,
+              alignSelf: 'center',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: spacing.md,
+            }}
           >
             {onBack ? (
               <Pressable

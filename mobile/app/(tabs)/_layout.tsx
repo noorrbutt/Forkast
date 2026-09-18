@@ -116,11 +116,18 @@ export function FloatingTabBar({ state, descriptors, navigation, insets }: Botto
 
   return (
     <View
+      // Capped on the same measure as the content, so the bar does not sit
+      // 24pt from a browser window's edge while the screen it belongs to is
+      // centred hundreds of points away. left and right still pin it so it
+      // keeps its inset on a phone, where the cap never binds.
       style={{
         position: 'absolute',
         left: spacing.lg,
         right: spacing.lg,
         bottom: insets.bottom + spacing.md,
+        maxWidth: layout.contentWidth,
+        alignSelf: 'center',
+        marginHorizontal: 'auto',
       }}
     >
       <Frosted
