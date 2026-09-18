@@ -1,7 +1,11 @@
+// Imported per weight, not from the package root. The root barrel re-exports
+// every cut, so Metro then bundles all fifteen of them, italics included: 600KB
+// of font for the four faces this app renders. These four subpaths ship 156KB.
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -9,6 +13,19 @@ import { CrashView } from '../components/CrashView';
 import { AuthProvider, useAuth } from '../hooks/useAuth';
 import { queryClient } from '../lib/queryClient';
 import { ThemeProvider, useTheme } from '../theme';
+
+/**
+ * Hold the native splash until the app can actually paint itself.
+ *
+ * Called at module scope, before the first render, because the splash hides on
+ * its own at the first frame otherwise. That is what shipped: the splash lifted
+ * straight onto a bare spinner while the stored token was read back, so launch
+ * was three different backgrounds in two seconds.
+ *
+ * Failure is ignored on purpose. If the splash module is unavailable the app
+ * must still start; the cost is a flash, not a broken launch.
+ */
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 function Bootstrapping() {
   const { colors } = useTheme();
@@ -84,12 +101,20 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Pro
 }
 
 export default function RootLayout() {
+  // Hidden once the tree has actually laid out, rather than at the first frame,
+  // so the handover happens against real content.
+  const onReady = useCallback(() => {
+    void SplashScreen.hideAsync().catch(() => undefined);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <SafeAreaProvider>
           <AuthProvider>
-            <RootNavigator />
+            <View style={{ flex: 1 }} onLayout={onReady}>
+              <RootNavigator />
+            </View>
           </AuthProvider>
         </SafeAreaProvider>
       </ThemeProvider>
