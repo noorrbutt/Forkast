@@ -25,6 +25,19 @@ export type TokenPair = {
 export type User = {
   id: Uuid;
   email: string;
+  /**
+   * Null for an account made before sign up asked for a name, and for a Google
+   * account whose token carried no name claim. Null is not the empty string:
+   * the server refuses a blank, so null means nobody has ever said.
+   */
+  first_name: string | null;
+  last_name: string | null;
+  /**
+   * False for an account created through Google that has never had a password.
+   * It decides what the delete dialog asks for, since there is no password to
+   * ask such an account for.
+   */
+  has_password: boolean;
   // Both are NOT NULL with a default on the server, so they always arrive.
   timezone: string;
   goal: Goal;

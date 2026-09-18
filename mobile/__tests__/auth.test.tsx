@@ -10,7 +10,13 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import {
+  act,
+  fireEvent,
+  render,
+  waitFor,
+  type RenderAPI,
+} from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, type TextStyle, type ViewStyle } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -125,6 +131,39 @@ const unreachable = () =>
     config: {},
     toJSON: () => ({}),
   });
+
+/**
+ * Fill the sign up form, overriding whichever field a test is actually about.
+ *
+ * A helper rather than five changeText calls per test, because the form has
+ * five fields now and four of them are noise in any test about the fifth.
+ * Fields are addressed by placeholder, which is what somebody reading the
+ * screen would use to find them.
+ */
+function fillSignUp(
+  screen: RenderAPI,
+  overrides: Partial<{
+    first: string;
+    last: string;
+    email: string;
+    password: string;
+    confirm: string;
+  }> = {},
+) {
+  const values = {
+    first: 'Sara',
+    last: 'Khan',
+    email: 'new@forkast.app',
+    password: 'longenough',
+    confirm: 'longenough',
+    ...overrides,
+  };
+  fireEvent.changeText(screen.getByPlaceholderText('Sara'), values.first);
+  fireEvent.changeText(screen.getByPlaceholderText('Khan'), values.last);
+  fireEvent.changeText(screen.getByPlaceholderText('you@example.com'), values.email);
+  fireEvent.changeText(screen.getByPlaceholderText('At least 8 characters'), values.password);
+  fireEvent.changeText(screen.getByPlaceholderText('Type it once more'), values.confirm);
+}
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -386,31 +425,135 @@ describe('finding the way in', () => {
   });
 
   it('holds registration back until the password is long enough', async () => {
-    const { getByRole, getByPlaceholderText, getByText } = render(<RegisterScreen />, { wrapper });
-    await waitFor(() => expect(getByPlaceholderText('you@example.com')).toBeTruthy());
+    const screen = render(<RegisterScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByPlaceholderText('you@example.com')).toBeTruthy());
 
-    fireEvent.changeText(getByPlaceholderText('you@example.com'), 'new@forkast.app');
-    fireEvent.changeText(getByPlaceholderText('At least 8 characters'), 'short');
-    fireEvent.press(getByRole('button', { name: 'Sign up' }));
+    fillSignUp(screen, { password: 'short', confirm: 'short' });
+    fireEvent.press(screen.getByRole('button', { name: 'Sign up' }));
 
     expect(mockedApi.post).not.toHaveBeenCalled();
-    expect(getByText(/at least 8 characters/i)).toBeTruthy();
+    expect(screen.getByText(/at least 8 characters/i)).toBeTruthy();
   });
 
-  it('registers once the password is long enough', async () => {
-    const { getByRole, getByPlaceholderText } = render(<RegisterScreen />, { wrapper });
-    await waitFor(() => expect(getByPlaceholderText('you@example.com')).toBeTruthy());
+  it('registers once the whole form is filled in', async () => {
+    const screen = render(<RegisterScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByPlaceholderText('you@example.com')).toBeTruthy());
 
-    fireEvent.changeText(getByPlaceholderText('you@example.com'), 'new@forkast.app');
-    fireEvent.changeText(getByPlaceholderText('At least 8 characters'), 'longenough');
-    fireEvent.press(getByRole('button', { name: 'Sign up' }));
+    fillSignUp(screen);
+    fireEvent.press(screen.getByRole('button', { name: 'Sign up' }));
 
     await waitFor(() =>
+      // Trimmed on the way out, for the same reason sign in trims the address:
+      // a phone keyboard appends a space and nobody means it to be part of
+      // their name.
       expect(mockedApi.post).toHaveBeenCalledWith('/auth/register', {
+        first_name: 'Sara',
+        last_name: 'Khan',
         email: 'new@forkast.app',
         password: 'longenough',
       }),
     );
+  });
+
+  it('asks for a first and last name before anything else', async () => {
+    const screen = render(<RegisterScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByPlaceholderText('you@example.com')).toBeTruthy());
+
+    fireEvent.press(screen.getByRole('button', { name: 'Sign up' }));
+    expect(mockedApi.post).not.toHaveBeenCalled();
+    expect(screen.getByText(/Enter your first name/)).toBeTruthy();
+
+    fireEvent.changeText(screen.getByPlaceholderText('Sara'), 'Sara');
+    fireEvent.press(screen.getByRole('button', { name: 'Sign up' }));
+    expect(mockedApi.post).not.toHaveBeenCalled();
+    expect(screen.getByText(/Enter your last name/)).toBeTruthy();
+  });
+
+  it('refuses a name that is only whitespace', async () => {
+    // The server refuses it too, and this is the half that says so without a
+    // round trip. A field holding one space passes a bare "is it empty" check
+    // and stores a name that renders as a blank line.
+    const screen = render(<RegisterScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByPlaceholderText('you@example.com')).toBeTruthy());
+
+    fillSignUp(screen, { first: '   ' });
+    fireEvent.press(screen.getByRole('button', { name: 'Sign up' }));
+
+    expect(mockedApi.post).not.toHaveBeenCalled();
+    expect(screen.getByText(/Enter your first name/)).toBeTruthy();
+  });
+
+  it('will not register two passwords that disagree', async () => {
+    /**
+     * The whole reason the confirmation field exists.
+     *
+     * A mistyped password in a masked field, on an account that does not exist
+     * yet, has nothing to be checked against later and no email to recover
+     * through. The first the user would hear of it is being unable to sign in
+     * to an account they had just made.
+     */
+    const screen = render(<RegisterScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByPlaceholderText('you@example.com')).toBeTruthy());
+
+    fillSignUp(screen, { confirm: 'longenougi' });
+    fireEvent.press(screen.getByRole('button', { name: 'Sign up' }));
+
+    expect(mockedApi.post).not.toHaveBeenCalled();
+    expect(screen.getByText(/passwords are different/)).toBeTruthy();
+  });
+
+  it('says the two disagree while they still do, rather than after a press', async () => {
+    const screen = render(<RegisterScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByPlaceholderText('you@example.com')).toBeTruthy());
+
+    fireEvent.changeText(screen.getByPlaceholderText('At least 8 characters'), 'longenough');
+    fireEvent.changeText(screen.getByPlaceholderText('Type it once more'), 'l');
+
+    expect(screen.getByText(/does not match the password above/)).toBeTruthy();
+
+    // And stops saying it the moment they agree, rather than waiting to be
+    // pressed again.
+    fireEvent.changeText(screen.getByPlaceholderText('Type it once more'), 'longenough');
+    expect(screen.queryByText(/does not match the password above/)).toBeNull();
+  });
+
+  it('hides both passwords until the eye is pressed, one field at a time', async () => {
+    /**
+     * Section 3: the control has to be addressable, and it has to say which
+     * field it belongs to. Two eyes on one screen answering to the same name
+     * would be two controls a screen reader cannot tell apart.
+     */
+    const screen = render(<RegisterScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByPlaceholderText('you@example.com')).toBeTruthy());
+
+    expect(screen.getByPlaceholderText('At least 8 characters').props.secureTextEntry).toBe(true);
+    expect(screen.getByPlaceholderText('Type it once more').props.secureTextEntry).toBe(true);
+
+    const eyes = screen.getAllByRole('button', { name: 'Show password' });
+    expect(eyes).toHaveLength(2);
+    expect(eyes.map((eye) => eye.props.accessibilityHint)).toEqual([
+      'Password field',
+      'Confirm password field',
+    ]);
+
+    fireEvent.press(eyes[0]);
+
+    // Only the one that was pressed. An eye that revealed both would undo the
+    // point of having one per field.
+    expect(screen.getByPlaceholderText('At least 8 characters').props.secureTextEntry).toBe(false);
+    expect(screen.getByPlaceholderText('Type it once more').props.secureTextEntry).toBe(true);
+    // And it now offers the opposite action rather than repeating itself.
+    expect(screen.getByRole('button', { name: 'Hide password' })).toBeTruthy();
+  });
+
+  it('puts no eye on the sign in password', async () => {
+    // Sign in asks someone to reproduce a password they already know, so there
+    // is nothing to check their typing against and a reveal there only offers
+    // the person behind them in the queue a look.
+    const screen = render(<LoginScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByPlaceholderText('Your password')).toBeTruthy());
+
+    expect(screen.queryByRole('button', { name: 'Show password' })).toBeNull();
   });
 });
 

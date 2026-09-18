@@ -15,6 +15,10 @@ import type { TokenPair, User } from '../lib/types';
 
 type Credentials = { email: string; password: string };
 
+/** What the sign up form collects. The server refuses a blank name, so the
+ *  screen trims before it sends rather than letting a space through. */
+type Registration = Credentials & { first_name: string; last_name: string };
+
 type AuthValue = {
   /** False until the stored token pair has been read back from the keystore. */
   ready: boolean;
@@ -31,7 +35,17 @@ type AuthValue = {
   needsSetup: boolean;
   completeSetup: () => void;
   signIn: (creds: Credentials) => Promise<void>;
-  signUp: (creds: Credentials) => Promise<void>;
+  signUp: (registration: Registration) => Promise<void>;
+  /**
+   * Trade a Google ID token for a Forkast session.
+   *
+   * One call for both signing in and signing up, because the phone genuinely
+   * cannot tell which it is doing: it holds a token from Google and has no way
+   * to know whether an account already exists behind that address. The server
+   * decides, and says which it did in the status code: 201 for an account it
+   * created, 200 for one it found.
+   */
+  signInWithGoogle: (idToken: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -134,10 +148,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signUp = useCallback(
-    async (creds: Credentials) => {
-      const response = await api.post<TokenPair>('/auth/register', creds);
+    async (registration: Registration) => {
+      const response = await api.post<TokenPair>('/auth/register', registration);
       await adopt(response.data);
       setNeedsSetup(true);
+    },
+    [adopt],
+  );
+
+  const signInWithGoogle = useCallback(
+    async (idToken: string) => {
+      const response = await api.post<TokenPair>('/auth/google', { id_token: idToken });
+      await adopt(response.data);
+      /**
+       * Setup is asked for only when this Google sign in created the account.
+       *
+       * Getting this wrong in either direction is a real bug, which is why the
+       * server answers it rather than the client guessing. Assume new every
+       * time and a returning user is dropped back on the one time questions,
+       * where "Skip for now" overwrites their real goal with Maintain -- the
+       * exact bug signIn already carries a note about. Assume returning every
+       * time and a brand new Google account never gets asked its timezone, so
+       * its first week of meals lands in the wrong days and cannot be moved.
+       */
+      setNeedsSetup(response.status === 201);
     },
     [adopt],
   );
@@ -167,9 +201,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       completeSetup,
       signIn,
       signUp,
+      signInWithGoogle,
       signOut,
     }),
-    [ready, token, needsSetup, completeSetup, signIn, signUp, signOut],
+    [ready, token, needsSetup, completeSetup, signIn, signUp, signInWithGoogle, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -189,6 +224,19 @@ export function useLogin() {
 export function useRegister() {
   const { signUp } = useAuth();
   return useMutation({ mutationFn: signUp });
+}
+
+/**
+ * The second half of "Continue with Google": the part after Google has
+ * answered.
+ *
+ * Split from the part that talks to Google, which lives in lib/googleAuth and
+ * is a different file per platform, because everything from the ID token
+ * onwards is identical everywhere and there is no reason for two copies of it.
+ */
+export function useGoogleAuth() {
+  const { signInWithGoogle } = useAuth();
+  return useMutation({ mutationFn: signInWithGoogle });
 }
 
 export function useMe() {
@@ -236,11 +284,26 @@ export function useChangePassword() {
  * keystore would park the user in the tabs with every request failing. That is
  * the exact trap this app already fell into once.
  */
+/**
+ * How the account holder proves it is them before the account is destroyed.
+ *
+ * Two shapes because there are two kinds of account. One with a password sends
+ * the password. One created through Google has none, and never had one, so it
+ * sends a fresh Google ID token instead, which means going back through
+ * Google's own prompt on the spot. The server takes exactly one of the two and
+ * refuses a body carrying both.
+ *
+ * Deleting on the session alone was the third option and is not offered: the
+ * threat this guards against is a phone left unlocked on a table, and a session
+ * is precisely what whoever picked it up already has.
+ */
+export type DeleteProof = { password: string } | { id_token: string };
+
 export function useDeleteAccount() {
   const { signOut } = useAuth();
   return useMutation({
-    mutationFn: async (password: string) => {
-      await api.delete('/me', { data: { password } });
+    mutationFn: async (proof: DeleteProof) => {
+      await api.delete('/me', { data: proof });
     },
     onSuccess: () => {
       void signOut();

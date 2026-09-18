@@ -2,9 +2,18 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { Button, Field, FormError, Screen, TextLink } from '../../components/ui';
+import {
+  Button,
+  Field,
+  FormError,
+  GoogleButton,
+  OrRule,
+  Screen,
+  TextLink,
+} from '../../components/ui';
 import { useTheme } from '../../theme';
-import { useLogin } from '../../hooks/useAuth';
+import { useGoogleAuth, useLogin } from '../../hooks/useAuth';
+import { useContinueWithGoogle } from '../../hooks/useContinueWithGoogle';
 import { describeError } from '../../lib/api';
 
 /**
@@ -41,6 +50,22 @@ import { describeError } from '../../lib/api';
  * it was not, which is a different thing: the caption and the button move
  * together now, and they sit on the centre line of the primary button directly
  * above, so the column has one axis rather than two competing ones.
+ *
+ * ---
+ *
+ * On why Google is here as well as on the sign up screen.
+ *
+ * It is not symmetry for its own sake. An account created by pressing
+ * "Continue with Google" has no password and cannot be given one, so a sign in
+ * screen offering only an email and a password would be a locked door for
+ * everybody who took the shortcut on the previous screen. Signing up one way
+ * and being unable to sign in the same way is not a trap anybody walks into
+ * knowingly.
+ *
+ * The words are identical on both screens, and again not for symmetry: the
+ * phone holds a token and genuinely does not know whether an account exists
+ * behind it, so promising "Sign in" here would be a promise it cannot keep for
+ * somebody who has never registered. The server decides, and it is one route.
  */
 
 
@@ -51,6 +76,10 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
   const login = useLogin();
+  const googleAuth = useGoogleAuth();
+  const google = useContinueWithGoogle(googleAuth.mutateAsync);
+
+  const busy = login.isPending || google.busy;
 
   /**
    * The button stays live even with the fields empty, and says what is missing
@@ -62,7 +91,7 @@ export default function LoginScreen() {
    * at all and reasonably concluded there wasn't one.
    */
   const submit = () => {
-    if (login.isPending) return;
+    if (busy) return;
     if (!email.trim()) {
       setProblem('Enter the email you signed up with.');
       return;
@@ -75,7 +104,9 @@ export default function LoginScreen() {
     login.mutate({ email: email.trim(), password });
   };
 
-  const message = problem ?? (login.isError ? describeError(login.error) : null);
+  // One line for the form's complaints, Google's and the server's.
+  const message =
+    problem ?? google.problem ?? (login.isError ? describeError(login.error) : null);
 
   return (
     // No title on the bar. The headline below is the title, and saying it twice
@@ -103,6 +134,7 @@ export default function LoginScreen() {
             value={email}
             onChangeText={(next) => {
               setProblem(null);
+              google.clearProblem();
               setEmail(next);
             }}
             placeholder="you@example.com"
@@ -117,6 +149,7 @@ export default function LoginScreen() {
             value={password}
             onChangeText={(next) => {
               setProblem(null);
+              google.clearProblem();
               setPassword(next);
             }}
             placeholder="Your password"
@@ -130,7 +163,27 @@ export default function LoginScreen() {
 
           {message ? <FormError>{message}</FormError> : null}
 
-          <Button label="Sign in" size="lg" full onPress={submit} loading={login.isPending} />
+          <Button
+            label="Sign in"
+            size="lg"
+            full
+            onPress={submit}
+            loading={login.isPending}
+            disabled={google.busy}
+          />
+
+          {/* Hidden, not disabled, in a build with no Google client id. The
+              sign up screen carries the reasoning. */}
+          {google.ready ? (
+            <>
+              <OrRule />
+              <GoogleButton
+                onPress={() => void google.start()}
+                loading={login.isPending}
+                disabled={login.isPending}
+              />
+            </>
+          ) : null}
         </View>
 
         {/* One sentence, centred under the primary button, with "Sign up"
@@ -144,7 +197,7 @@ export default function LoginScreen() {
           prompt="New to Forkast?"
           label="Sign up"
           onPress={() => router.replace('/register')}
-          disabled={login.isPending}
+          disabled={busy}
           accessibilityHint="Create a new Forkast account"
         />
       </View>
