@@ -336,3 +336,19 @@ describe('the layers a reader is supposed to be able to see', () => {
     }
   });
 });
+
+describe('the edge that proves a control is a control', () => {
+  it('never lets a text input wear the decorative hairline', () => {
+    // Field used colors.border, which is the hairline between two surfaces and
+    // measures about 1.52:1 against the fill it sits on. Chip, one control away
+    // on the same screens, was already using outline at about 3.02:1, so a text
+    // field was the only control in the app failing a rule its neighbour passed.
+    for (const theme of THEMES) {
+      const p = palettes[theme];
+      expect(ratio(p.outline, p.surfaceAlt)).toBeGreaterThanOrEqual(SHAPE);
+      // And the hairline is not good enough for the job, which is why this
+      // fails if anyone swaps it back.
+      expect(ratio(p.border, p.surfaceAlt)).toBeLessThan(SHAPE);
+    }
+  });
+});

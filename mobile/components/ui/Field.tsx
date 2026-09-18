@@ -33,8 +33,14 @@ export function Field({ label, hint, style, onFocus, onBlur, ...rest }: FieldPro
             color: colors.text,
             backgroundColor: colors.surfaceAlt,
             borderRadius: radius.input,
-            borderWidth: 1,
-            borderColor: focused ? colors.accent : colors.border,
+            // `outline`, not `border`. border is the decorative hairline
+            // between surfaces and measures 1.52:1 against this fill, while the
+            // guide asks 3:1 of anything proving it is a control. Chip, one
+            // control away on the same screens, was already using outline at
+            // 3.02:1, so a text field was the only control in the app failing a
+            // rule its neighbour passed. 1.5 matches every other control edge.
+            borderWidth: 1.5,
+            borderColor: focused ? colors.accent : colors.outline,
             paddingHorizontal: spacing.lg,
             paddingVertical: spacing.md + 2,
           },
