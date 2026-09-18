@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 
-import { API_BASE_URL, api, getAccessToken } from '../lib/api';
+import { API_BASE_URL, api, getAccessToken, getTokenGeneration } from '../lib/api';
 import { useAuthedImage } from '../lib/authedImage';
 import { appendFile } from '../lib/upload';
 import type { User } from '../lib/types';
@@ -35,11 +35,25 @@ export function hasAvatar(user: UserWithAvatar | null | undefined): boolean {
  */
 let revision = 0;
 
-export function avatarSource(token: string | null, version: number) {
+export function avatarSource(token: string | null, version: number | string) {
   return {
     uri: `${API_BASE_URL}/me/avatar?v=${version}`,
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   };
+}
+
+/**
+ * The cache key for the avatar of whoever is signed in right now.
+ *
+ * Both halves are load bearing. `revision` changes when this account replaces
+ * its own photo. The session generation changes when a session is torn down,
+ * which is the only moment `/me/avatar` can start meaning a different person:
+ * the URL carries no account id, so without it user B signing in on the device
+ * user A just signed out of is served A's face from cache, at full size, as
+ * their own. The counter only ever goes up, so a stale entry is never reused.
+ */
+function avatarVersion(): string {
+  return `${getTokenGeneration()}.${revision}`;
 }
 
 /**
@@ -49,7 +63,7 @@ export function avatarSource(token: string | null, version: number) {
  * "fall back to initials" and a 404 behind an Image is a blank circle.
  */
 export function useAvatarSource(present: boolean) {
-  return useAuthedImage(present ? avatarSource(getAccessToken(), revision) : undefined);
+  return useAuthedImage(present ? avatarSource(getAccessToken(), avatarVersion()) : undefined);
 }
 
 /**

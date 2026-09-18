@@ -53,6 +53,20 @@ let authFailureHandler: (() => void) | null = null;
  */
 let tokenGeneration = 0;
 
+/**
+ * How many times a session has been torn down on this device.
+ *
+ * Exported because the authenticated image URLs are the same string for every
+ * account -- `/me/avatar` names whoever the bearer token says it is -- and both
+ * React Native's image cache and the browser key on the URL alone. Signing out
+ * and back in as someone else therefore requests a URI the cache already holds
+ * a different person's photo under. Folding this counter into the cache buster
+ * is what makes the account change visible to those caches.
+ */
+export function getTokenGeneration(): number {
+  return tokenGeneration;
+}
+
 /** Registered by AuthProvider so a dead refresh token sends the user to login. */
 export function setAuthFailureHandler(handler: (() => void) | null): void {
   authFailureHandler = handler;
@@ -136,6 +150,30 @@ function refreshOnce(): Promise<TokenPair> {
 
 type RetriableConfig = InternalAxiosRequestConfig & { _forkastRetried?: boolean };
 
+/**
+ * Whether a failed refresh means the session is genuinely over.
+ *
+ * Only the server looking at the token and refusing it does. A timeout, a 429
+ * or a 5xx says the server could not answer right now, which is not the same
+ * thing and must not cost the user their session: behind a proxy with
+ * TRUST_PROXY_HEADERS off every caller shares one refresh allowance, so the
+ * first busy window would sign out everybody at once, and on a train a dropped
+ * connection would do it one user at a time. Both leave a perfectly valid
+ * refresh token in the keystore and delete it anyway.
+ *
+ * performRefresh also throws two plain Errors of its own. "No refresh token
+ * stored" is already a dead session and should land on the login screen. The
+ * sign out that landed mid-flight has torn the session down itself, so treating
+ * it as a rejection here would only repeat work already done.
+ */
+function refreshWasRejected(error: unknown): boolean {
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status;
+    return status === 401 || status === 403 || status === 422;
+  }
+  return error instanceof Error && error.message === 'No refresh token stored';
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -165,9 +203,14 @@ api.interceptors.response.use(
       const pair = await refreshOnce();
       original.headers.set('Authorization', `Bearer ${pair.access_token}`);
       return await api.request(original);
-    } catch {
-      await clearTokens();
-      authFailureHandler?.();
+    } catch (refreshError) {
+      // Only tear the session down when the refresh token itself was refused.
+      // Anything else leaves it in place to be retried on the next request,
+      // because the token is still good and the network is not.
+      if (refreshWasRejected(refreshError)) {
+        await clearTokens();
+        authFailureHandler?.();
+      }
       return Promise.reject(error);
     }
   },
