@@ -36,15 +36,6 @@ export function formatRatio(value: number | null | undefined): string {
   return `${Math.round(Math.min(Math.max(value, 0), 1) * 100)}%`;
 }
 
-export function formatMinutes(value: number | null | undefined): string {
-  if (!value || Number.isNaN(value)) return '0m';
-  const minutes = Math.round(value);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
-}
-
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /** A bare calendar day, with no time and no zone: what the API sends for a date. */

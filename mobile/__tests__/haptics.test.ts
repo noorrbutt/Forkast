@@ -31,13 +31,6 @@ describe('on iOS', () => {
     );
   });
 
-  it('uses warning rather than error for a broken streak', () => {
-    haptics.warning();
-    expect(mocked.notificationAsync).toHaveBeenCalledWith(
-      Haptics.NotificationFeedbackType.Warning,
-    );
-  });
-
   it('uses error when a request fails', () => {
     haptics.error();
     expect(mocked.notificationAsync).toHaveBeenCalledWith(Haptics.NotificationFeedbackType.Error);

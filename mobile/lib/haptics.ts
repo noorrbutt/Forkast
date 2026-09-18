@@ -35,11 +35,6 @@ export function success(): void {
   fire(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
 }
 
-/** A streak broken, a destructive confirm. Softer than an error. */
-export function warning(): void {
-  fire(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning));
-}
-
 /** A request failed, validation rejected the form. */
 export function error(): void {
   fire(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error));
@@ -50,4 +45,4 @@ export function tap(): void {
   fire(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
 }
 
-export const haptics = { selection, success, warning, error, tap };
+export const haptics = { selection, success, error, tap };
