@@ -1,11 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import * as ImageManipulator from 'expo-image-manipulator';
-import * as ImagePicker from 'expo-image-picker';
-import { useCallback, useState } from 'react';
-import { Alert } from 'react-native';
 
 import { API_BASE_URL, api, getAccessToken } from '../lib/api';
 import { useAuthedImage } from '../lib/authedImage';
+import { pickImage, useImagePicker, type PickedImage } from '../lib/pickImage';
 import { appendFile } from '../lib/upload';
 import type { FoodLog, Uuid } from '../lib/types';
 
@@ -62,81 +59,23 @@ const MAX_EDGE = 1280;
 const QUALITY = 0.7;
 
 /** A picked, shrunk file, ready to send whenever there is a log to send it to. */
-export type PickedPhoto = {
-  /** The local file uri the manipulator wrote. */
-  uri: string;
-  mimeType: string;
-};
+export type PickedPhoto = PickedImage;
 
 /**
- * Ask for a photo and hand back one small enough to upload.
+ * Ask for a meal photo and hand back one small enough to upload.
  *
- * This lives here rather than in the component that shows the picture because
- * there are two callers with nothing else in common: the meal screen, which has
- * an id and uploads straight away, and the log form, which has no id yet and
- * holds the file until the meal exists. The resize is what makes an upload
- * succeed at all, so it is the one part that must not be written twice.
- *
- * Returns null when the user says no, either to the permission or to the
- * picker. A failure while resizing throws, and the caller decides what that
- * looks like.
+ * Named rather than inlined at the call sites because there are two callers
+ * with nothing else in common: the meal screen, which has an id and uploads
+ * straight away, and the log form, which has no id yet and holds the file until
+ * the meal exists.
  */
-export async function pickPhoto(fromCamera: boolean): Promise<PickedPhoto | null> {
-  // Permissions are requested at the moment they are needed rather than on
-  // mount, so the prompt arrives with the reason for it visible on screen.
-  const permission = fromCamera
-    ? await ImagePicker.requestCameraPermissionsAsync()
-    : await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    Alert.alert(
-      fromCamera ? 'Camera access is off' : 'Photo access is off',
-      'You can turn it back on in Settings if you change your mind.',
-    );
-    return null;
-  }
-
-  const picked = fromCamera
-    ? await ImagePicker.launchCameraAsync({ quality: 1 })
-    : await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 1,
-      });
-  if (picked.canceled || !picked.assets?.length) return null;
-
-  const asset = picked.assets[0];
-  // Only shrink. Scaling a small photo up would cost bytes and add nothing.
-  const longest = Math.max(asset.width ?? 0, asset.height ?? 0);
-  const actions =
-    longest > MAX_EDGE
-      ? [
-          asset.width >= asset.height
-            ? { resize: { width: MAX_EDGE } }
-            : { resize: { height: MAX_EDGE } },
-        ]
-      : [];
-
-  const result = await ImageManipulator.manipulateAsync(asset.uri, actions, {
-    compress: QUALITY,
-    format: ImageManipulator.SaveFormat.JPEG,
-  });
-
-  return { uri: result.uri, mimeType: 'image/jpeg' };
+export function pickPhoto(fromCamera: boolean): Promise<PickedPhoto | null> {
+  return pickImage(fromCamera, { maxEdge: MAX_EDGE, quality: QUALITY });
 }
 
 /** pickPhoto plus the busy flag every caller would otherwise keep by hand. */
 export function usePhotoPicker() {
-  const [preparing, setPreparing] = useState(false);
-
-  const pick = useCallback(async (fromCamera: boolean) => {
-    setPreparing(true);
-    try {
-      return await pickPhoto(fromCamera);
-    } finally {
-      setPreparing(false);
-    }
-  }, []);
-
-  return { pick, preparing };
+  return useImagePicker(pickPhoto);
 }
 
 type UploadArgs = {

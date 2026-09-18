@@ -1,11 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import * as ImageManipulator from 'expo-image-manipulator';
-import * as ImagePicker from 'expo-image-picker';
-import { useCallback, useState } from 'react';
-import { Alert } from 'react-native';
 
 import { API_BASE_URL, api, getAccessToken, getTokenGeneration } from '../lib/api';
 import { useAuthedImage } from '../lib/authedImage';
+import { pickImage, useImagePicker, type PickedImage } from '../lib/pickImage';
 import { appendFile } from '../lib/upload';
 import type { User } from '../lib/types';
 
@@ -78,77 +75,22 @@ const MAX_EDGE = 512;
 const QUALITY = 0.8;
 
 /** A picked, shrunk file, ready to send. */
-export type PickedAvatar = {
-  uri: string;
-  mimeType: string;
-};
+export type PickedAvatar = PickedImage;
 
 /**
- * Ask for a photo and hand back one small enough to upload.
+ * Ask for a profile picture and hand back one small enough to upload.
  *
- * Deliberately its own copy of the meal photo flow rather than a shared one.
- * The two differ where it matters: an avatar is cropped square by the picker
- * because it is only ever shown in a circle, and it is shrunk much harder
- * because it is never viewed larger than a thumbnail.
- *
- * Returns null when the user says no, either to the permission or to the
- * picker. A failure while resizing throws and the caller decides what that
- * looks like.
+ * Square, because it is only ever shown in a circle, and cropped in the picker
+ * rather than afterwards so the person choosing it decides which part matters.
+ * Shrunk harder than a meal photo for the same reason.
  */
-export async function pickAvatar(fromCamera: boolean): Promise<PickedAvatar | null> {
-  // Asked at the moment it is needed, so the prompt arrives with the reason for
-  // it still on screen.
-  const permission = fromCamera
-    ? await ImagePicker.requestCameraPermissionsAsync()
-    : await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    Alert.alert(
-      fromCamera ? 'Camera access is off' : 'Photo access is off',
-      'You can turn it back on in Settings if you change your mind.',
-    );
-    return null;
-  }
-
-  const options = { quality: 1, allowsEditing: true, aspect: [1, 1] as [number, number] };
-  const picked = fromCamera
-    ? await ImagePicker.launchCameraAsync(options)
-    : await ImagePicker.launchImageLibraryAsync({ ...options, mediaTypes: ['images'] });
-  if (picked.canceled || !picked.assets?.length) return null;
-
-  const asset = picked.assets[0];
-  // Only shrink. Scaling a small photo up would cost bytes and add nothing.
-  const longest = Math.max(asset.width ?? 0, asset.height ?? 0);
-  const actions =
-    longest > MAX_EDGE
-      ? [
-          asset.width >= asset.height
-            ? { resize: { width: MAX_EDGE } }
-            : { resize: { height: MAX_EDGE } },
-        ]
-      : [];
-
-  const result = await ImageManipulator.manipulateAsync(asset.uri, actions, {
-    compress: QUALITY,
-    format: ImageManipulator.SaveFormat.JPEG,
-  });
-
-  return { uri: result.uri, mimeType: 'image/jpeg' };
+export function pickAvatar(fromCamera: boolean): Promise<PickedAvatar | null> {
+  return pickImage(fromCamera, { maxEdge: MAX_EDGE, quality: QUALITY, square: true });
 }
 
 /** pickAvatar plus the busy flag the caller would otherwise keep by hand. */
 export function usePickAvatar() {
-  const [preparing, setPreparing] = useState(false);
-
-  const pick = useCallback(async (fromCamera: boolean) => {
-    setPreparing(true);
-    try {
-      return await pickAvatar(fromCamera);
-    } finally {
-      setPreparing(false);
-    }
-  }, []);
-
-  return { pick, preparing };
+  return useImagePicker(pickAvatar);
 }
 
 /**
