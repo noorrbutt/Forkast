@@ -218,6 +218,8 @@ export type Streaks = {
   current_streak: number;
   longest_streak: number;
   last_junk_date: string | null;
+  /** The dish that ended the run, so the screen can name it rather than only dating it. */
+  last_junk_dish: string | null;
   message: string;
 };
 

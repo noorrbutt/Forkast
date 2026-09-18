@@ -354,10 +354,31 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
             longest_streak = max(longest_streak, run)
         day += dt.timedelta(days=1)
 
+    last_junk_date = max(junk_days) if junk_days else None
+
+    # The dish behind that date, so the screen can name what broke the run
+    # rather than only when it broke. Ordered by the log's own timestamp and
+    # limited to one: a day can hold several junk meals and the last one is the
+    # one that ended the day still broken.
+    last_junk_dish = None
+    if last_junk_date is not None:
+        last_junk_dish = await session.scalar(
+            select(FoodLog.dish_name)
+            .join(FoodCategory, FoodCategory.id == FoodLog.category_id)
+            .where(
+                FoodLog.user_id == user.id,
+                FoodCategory.is_junk.is_(True),
+                _local_day(user) == last_junk_date,
+            )
+            .order_by(FoodLog.created_at.desc())
+            .limit(1)
+        )
+
     return StreaksOut(
         current_streak=current_streak,
         longest_streak=longest_streak,
-        last_junk_date=max(junk_days) if junk_days else None,
+        last_junk_date=last_junk_date,
+        last_junk_dish=last_junk_dish,
         message=_streak_message(current_streak, has_any_logs=True),
     )
 

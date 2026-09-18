@@ -97,6 +97,11 @@ class StreaksOut(BaseModel):
     current_streak: int
     longest_streak: int
     last_junk_date: dt.date | None = None
+    # What actually broke it. The date on its own says a run ended and leaves
+    # the reader to work out which meal did it, which is the one thing they
+    # would want to know and the only part that is actionable. Null whenever
+    # last_junk_date is null, and null if the meal has since been deleted.
+    last_junk_dish: str | None = None
     # Soft recovery wording rather than a punitive tone, per the product brief.
     message: str
 

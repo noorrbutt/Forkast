@@ -141,8 +141,18 @@ export default function StreaksScreen() {
 
                 <View style={{ height: layout.hairline, backgroundColor: colors.border }} />
 
+                {/* The dish under the date. A date on its own says a run ended
+                    and leaves the reader to remember which meal did it, which
+                    is the only part of this row they can act on. */}
                 <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.lg }}>
-                  <Text style={[type.body, { color: colors.muted, flex: 1 }]}>Last slip</Text>
+                  <View style={{ flex: 1, gap: spacing.xs }}>
+                    <Text style={[type.body, { color: colors.muted }]}>Last slip</Text>
+                    {data.last_junk_date && data.last_junk_dish ? (
+                      <Text style={[type.caption, { color: colors.muted }]}>
+                        {data.last_junk_dish}
+                      </Text>
+                    ) : null}
+                  </View>
                   <Text style={[type.subtitle, { color: colors.text }]}>
                     {data.last_junk_date ? formatDate(data.last_junk_date) : 'None yet'}
                   </Text>

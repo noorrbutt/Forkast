@@ -307,6 +307,43 @@ async def test_the_longest_streak_survives_a_later_break(auth_client: AsyncClien
     assert body["current_streak"] == 0
     assert body["longest_streak"] == 19, "the clean days between the two junk days"
     assert body["last_junk_date"] == today.isoformat()
+    # Which meal ended it, not only when. The date alone leaves the reader to
+    # remember, and it is the only part of that row they can act on. It must be
+    # today's junk rather than the one twenty days ago that also broke a run.
+    assert body["last_junk_dish"] == "fries today"
+
+
+async def test_a_clean_account_names_no_dish_as_the_slip(auth_client: AsyncClient) -> None:
+    """No junk means no date and no dish, rather than a dish with no date."""
+    await _set_timezone(auth_client, "Asia/Karachi")
+    categories = await _categories(auth_client)
+    await _log(auth_client, categories["biryani"], dish="only clean food")
+
+    body = (await auth_client.get(STREAKS)).json()
+
+    assert body["last_junk_date"] is None
+    assert body["last_junk_dish"] is None
+
+
+async def test_tea_does_not_break_a_streak(auth_client: AsyncClient) -> None:
+    """The drink split is the point of having two drink categories.
+
+    There was one Beverage category at 170 to 300 and it was junk, so a cup of
+    tea could only be logged as junk, and junk ends a run. Sweet drinks are
+    still junk; tea and coffee are not.
+    """
+    await _set_timezone(auth_client, "Asia/Karachi")
+    categories = await _categories(auth_client)
+
+    await _log(auth_client, categories["tea_coffee"], dish="doodh patti chai")
+    body = (await auth_client.get(STREAKS)).json()
+    assert body["current_streak"] >= 1, "tea is not junk"
+    assert body["last_junk_date"] is None
+
+    await _log(auth_client, categories["beverage"], dish="creamy oreo shake")
+    body = (await auth_client.get(STREAKS)).json()
+    assert body["current_streak"] == 0, "a sweet drink still is junk"
+    assert body["last_junk_dish"] == "creamy oreo shake"
 
 
 async def test_deleting_a_junk_log_restores_the_streak(auth_client: AsyncClient) -> None:
