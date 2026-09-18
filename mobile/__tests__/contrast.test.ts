@@ -304,6 +304,18 @@ describe('the layers a reader is supposed to be able to see', () => {
     }
   });
 
+  it('gives the app mark the same presence in both themes', () => {
+    // It was one opacity for both, over ink that is near-white on dark and
+    // near-black on light, so it measured 1.53:1 on dark and 1.33:1 on light:
+    // weakest on the theme that was already the weaker of the two.
+    const seen = THEMES.map((theme) =>
+      ratio(palettes[theme].markOnWash, heroWash[theme][0]),
+    );
+    for (const value of seen) expect(value).toBeGreaterThanOrEqual(1.45);
+    // And the same presence, not merely both present.
+    expect(Math.abs(seen[0] - seen[1])).toBeLessThan(0.1);
+  });
+
   it('keeps text readable on the wash, which is what caps how far it can go', () => {
     for (const theme of THEMES) {
       const p = palettes[theme];

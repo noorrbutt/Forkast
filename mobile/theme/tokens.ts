@@ -61,6 +61,16 @@ export type Palette = {
    * fills that run over it.
    */
   meterTrack: string;
+  /**
+   * The app mark, as it sits on the hero wash.
+   *
+   * A solid value per theme rather than one opacity for both, which is what it
+   * was. `opacity={0.14}` over ink that is near-white on dark and near-black on
+   * light does not produce the same presence twice: it measured 1.53:1 on dark
+   * and 1.33:1 on light, so the mark was a third weaker on the theme that was
+   * already the weaker of the two. Solid, so this file can assert it.
+   */
+  markOnWash: string;
   /** Solid colour painted behind a BlurView so the layer never reads as a hole. */
   blurFallback: string;
   /** Tint passed to expo-blur. */
@@ -110,6 +120,7 @@ export const palettes: Record<ThemeName, Palette> = {
     danger: '#DF8F77',
     dangerSoft: 'rgba(223, 143, 119, 0.18)',
     meterTrack: '#4A443E',
+    markOnWash: '#483F37',
     // Derived from this theme's own surface rather than hand picked. The old
     // pair composited to 1.004:1 against the page in BOTH themes, so the
     // frosted header and the floating tab bar, which are on every screen in
@@ -137,6 +148,7 @@ export const palettes: Record<ThemeName, Palette> = {
     danger: '#A54427',
     dangerSoft: 'rgba(165, 68, 39, 0.12)',
     meterTrack: '#C7BBA8',
+    markOnWash: '#BDB3A5',
     blurFallback: 'rgba(253, 251, 250, 0.85)',
     blurTint: 'light',
     scrim: 'rgba(20, 20, 15, 0.42)',

@@ -67,7 +67,10 @@ export default function WelcomeScreen() {
   return (
     <Screen scroll bleedTop padded={false} bottomInset={spacing.xxl}>
       <ArchHero>
-        <Mark size={132} color={colors.text} opacity={0.14} />
+        {/* A token, not an opacity. One alpha over ink that is near-white on
+            dark and near-black on light gave the mark two different weights;
+            this is the same presence in both, and measurable. */}
+        <Mark size={132} color={colors.markOnWash} />
       </ArchHero>
 
       <View
