@@ -268,6 +268,10 @@ function MealRowBase({ log, last, onOpen, onRepeat, sending, confirmed, error }:
                 color: colors.text,
                 minWidth: CALORIES,
                 textAlign: 'right',
+                // Lining figures, so a column of digits stays a column. This
+                // lives here rather than on the token because `body` is the
+                // reading text token and sets prose everywhere else.
+                fontVariant: ['tabular-nums'],
               },
             ]}
           >
@@ -427,7 +431,7 @@ function DiaryList({
       // The end of the diary is a designed state too. Silence after the
       // last row reads the same as a list that failed to load more.
       logs.isFetchingNextPage ? (
-        <Loading label="Reading further back" fill={false} />
+        <Loading label="Reading further back" />
       ) : items.length > 0 && !logs.hasNextPage ? (
         <Text
           style={[
