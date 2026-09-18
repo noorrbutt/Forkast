@@ -19,7 +19,12 @@ export function useRestaurants(term = '') {
   // out of order.
   const query = useDebounced(term.trim());
   return useQuery({
-    queryKey: ['restaurants', query],
+    // Namespaced under 'search' rather than sitting directly under the search
+    // term. The two hooks here hit the same endpoint with different parameters,
+    // so a bare term would collide with the visited list the moment someone
+    // typed the word it happens to be keyed on, and the picker would show the
+    // map's hundred visited places instead of a search result.
+    queryKey: ['restaurants', 'search', query],
     // An empty term is a real request: it lists the registry for the picker.
     // One or two letters is not, it just matches most of it.
     enabled: signedIn && (query.length === 0 || query.length >= 2),
@@ -43,7 +48,7 @@ export function useRestaurants(term = '') {
 export function useVisitedRestaurants() {
   const { signedIn } = useAuth();
   return useQuery({
-    queryKey: ['restaurants', 'mine'],
+    queryKey: ['restaurants', 'visited'],
     enabled: signedIn,
     staleTime: 60_000,
     queryFn: async () => {
