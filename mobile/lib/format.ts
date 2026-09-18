@@ -1,14 +1,4 @@
-import type { FriendScale, Goal, Namedish, ServingSize } from './types';
-
-/** The backend may send a plain label or a small object for top_category and friends. */
-export function labelOf(value: Namedish, fallback = 'Not enough data'): string {
-  if (typeof value === 'string' && value.trim().length > 0) return value;
-  if (value && typeof value === 'object') {
-    if (typeof value.name === 'string' && value.name.length > 0) return value.name;
-    if (typeof value.slug === 'string' && value.slug.length > 0) return titleCase(value.slug);
-  }
-  return fallback;
-}
+import type { FriendScale, Goal, ServingSize } from './types';
 
 export function titleCase(slug: string): string {
   return slug

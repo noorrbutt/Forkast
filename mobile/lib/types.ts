@@ -139,8 +139,6 @@ export type BurnEquivalents = {
   cycling_minutes: number;
 };
 
-/** Accepted by labelOf, which renders any of these down to a display string. */
-export type Namedish = string | { name?: string | null; slug?: string | null } | null;
 
 export type TopCategory = {
   category_id: RefId;
