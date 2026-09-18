@@ -19,6 +19,11 @@ type GlyphPair = { outline: IoniconName; filled: IoniconName };
  * is what stops the same idea appearing as three different glyphs on three
  * screens. If a meaning is missing, add it here once.
  *
+ * Only meanings something actually draws. Thirteen of the thirty here had no
+ * caller anywhere: some were for features that were cut, some were speculative.
+ * A vocabulary is only useful while every word in it is in use, because the
+ * moment it carries spares it stops telling you what the app can say.
+ *
  * A meaning is either one glyph or a pair. Only the tab destinations carry a
  * pair so far, because the tab bar is the only place that shows the same icon
  * selected and unselected side by side.
@@ -31,26 +36,13 @@ const GLYPHS = {
   plan: { outline: 'sparkles-outline', filled: 'sparkles' },
   map: 'map',
   history: { outline: 'time-outline', filled: 'time' },
-  burn: 'bicycle',
   meal: 'restaurant',
   chart: 'stats-chart',
-  cuisine: 'globe',
-  category: 'pricetags',
-  fun: 'happy',
-  friends: 'people',
-  trophy: 'trophy',
-  back: 'chevron-back',
   forward: 'chevron-forward',
   check: 'checkmark',
   close: 'close',
   search: 'search',
-  star: 'star',
-  warning: 'warning',
-  offline: 'cloud-offline',
   empty: 'file-tray',
-  signOut: 'log-out',
-  bell: 'notifications',
-  clock: 'alarm',
   edit: 'create',
   trash: 'trash',
 } as const satisfies Record<string, IoniconName | GlyphPair>;
