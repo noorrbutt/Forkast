@@ -3,6 +3,7 @@ export { Card } from './Card';
 export { Chip } from './Chip';
 export { Empty } from './Empty';
 export { Field } from './Field';
+export { Checkbox } from './Checkbox';
 export { ErrorState } from './ErrorState';
 export { FormError } from './FormError';
 export { Frosted } from './Frosted';
