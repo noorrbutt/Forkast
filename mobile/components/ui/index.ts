@@ -18,3 +18,4 @@ export { Ring } from './Ring';
 export { HeroWash } from './HeroWash';
 export { ArchHero } from './ArchHero';
 export { Mark } from './Mark';
+export { TextLink } from './TextLink';

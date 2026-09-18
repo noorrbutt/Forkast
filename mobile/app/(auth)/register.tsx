@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { Button, Field, Screen } from '../../components/ui';
+import { Button, Field, Screen, TextLink } from '../../components/ui';
 import { useTheme } from '../../theme';
 import { useRegister } from '../../hooks/useAuth';
 import { describeError } from '../../lib/api';
@@ -22,13 +22,14 @@ import { describeError } from '../../lib/api';
  * What the one thing is now: "Sign up." at `display`, 48 against a next largest
  * of 16, the same words as the button that reaches it.
  *
- * What was demoted, and why that is correct: the way back to signing in is an
- * outlined button, matching the primary above it in size and width and parting
- * from it in fill. Someone who already has an account is the exception here,
- * and the exception gets a findable control, not an equally loud one.
+ * What was demoted, and why that is correct: the way back to signing in is one
+ * line of prose with the action tinted, "Already have an account? Sign in".
+ * Someone who already has an account is the exception on this screen, and the
+ * exception gets a findable control rather than an equally sized one. It was
+ * briefly a full width outlined button, and that made the two read as a choice.
  *
- * It sits centred, at the user's request, on the same axis as the primary
- * button above it. Its twin on the sign in screen does the same, which is the
+ * It sits centred, on the same axis as the primary button above it. Its twin on
+ * the sign in screen is the same component with the words swapped, which is the
  * point: these two screens have one job each and should not solve it two ways.
  */
 
@@ -119,25 +120,15 @@ export default function RegisterScreen() {
           <Button label="Sign up" size="lg" full onPress={submit} loading={register.isPending} />
         </View>
 
-        {/* Full width and `size="lg"`, for the reason its twin on the sign in
-            screen gives at length: an unstretched Button aligns itself to
-            flex-start and so ignored the centring on this container, and a
-            control that is merely near the size of the one above it is the one
-            arrangement section 7 rules out. Same size, same width, different
-            fill. */}
-        <View style={{ gap: spacing.sm, alignItems: 'center' }}>
-          <Text style={[type.caption, { color: colors.muted, textAlign: 'center' }]}>
-            Already have an account?
-          </Text>
-          <Button
-            label="Sign in"
-            variant="secondary"
-            size="lg"
-            full
-            onPress={() => router.replace('/login')}
-            disabled={register.isPending}
-          />
-        </View>
+        {/* The same component and the same placement as its twin on the sign
+            in screen, with the words swapped. */}
+        <TextLink
+          prompt="Already have an account?"
+          label="Sign in"
+          onPress={() => router.replace('/login')}
+          disabled={register.isPending}
+          accessibilityHint="Sign in to an account you already have"
+        />
       </View>
     </Screen>
   );

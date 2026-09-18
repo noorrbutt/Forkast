@@ -19,7 +19,7 @@ import LoginScreen from '../app/(auth)/login';
 import RegisterScreen from '../app/(auth)/register';
 import WelcomeScreen from '../app/(auth)/welcome';
 import { AuthProvider, useAuth } from '../hooks/useAuth';
-import { ThemeProvider } from '../theme';
+import { fonts, palettes, ThemeProvider } from '../theme';
 
 // Jest hoists mock factories above these declarations, so the names it
 // reaches into have to carry the mock prefix that marks them as safe.
@@ -158,11 +158,16 @@ describe('the welcome screen', () => {
     expect(pitch.props.children).toMatch(/plan/);
   });
 
-  it('offers both doors as buttons', async () => {
+  it('offers one door as a button and the other as a link', async () => {
+    // Both were buttons, briefly both full width, which put two controls of the
+    // same size on a screen whose whole job is to get a stranger to start. The
+    // way back is prose with a tinted verb now. It still has to be reachable as
+    // a control, which is what the role assertion is for: text nobody can
+    // address is the failure this file already has a bug report about.
     const { getByRole } = render(<WelcomeScreen />, { wrapper });
 
     await waitFor(() => expect(getByRole('button', { name: 'Get started' })).toBeTruthy());
-    expect(getByRole('button', { name: 'Sign in' })).toBeTruthy();
+    expect(getByRole('link', { name: 'Sign in' })).toBeTruthy();
   });
 
   it('leads with exactly one figure, and nothing else comes near it', async () => {
@@ -214,7 +219,7 @@ describe('the welcome screen', () => {
     fireEvent.press(getByRole('button', { name: 'Get started' }));
     expect(mockPush).toHaveBeenCalledWith('/register');
 
-    fireEvent.press(getByRole('button', { name: 'Sign in' }));
+    fireEvent.press(getByRole('link', { name: 'Sign in' }));
     expect(mockPush).toHaveBeenCalledWith('/login');
   });
 });
@@ -224,14 +229,18 @@ describe('finding the way in', () => {
     // "Create an account" was the old label. Nobody hunts a screen for that
     // phrase; the reported complaint was literally "no button that says signup
     // or sign in".
+    //
+    // The other-form route is a link rather than a button now, which is a
+    // change of shape and not of that requirement: the words still have to be
+    // there and still have to be addressable as a control.
     const login = render(<LoginScreen />, { wrapper });
     await waitFor(() => expect(login.getByRole('button', { name: 'Sign in' })).toBeTruthy());
-    expect(login.getByRole('button', { name: 'Sign up' })).toBeTruthy();
+    expect(login.getByRole('link', { name: 'Sign up' })).toBeTruthy();
     expect(login.queryByText('Create an account')).toBeNull();
 
     const reg = render(<RegisterScreen />, { wrapper });
     await waitFor(() => expect(reg.getByRole('button', { name: 'Sign up' })).toBeTruthy());
-    expect(reg.getByRole('button', { name: 'Sign in' })).toBeTruthy();
+    expect(reg.getByRole('link', { name: 'Sign in' })).toBeTruthy();
   });
 
   it('calls each form what the button that opened it called it', async () => {
@@ -246,37 +255,56 @@ describe('finding the way in', () => {
   });
 
   /**
-   * The caption offering the other form, and the button under it, move together.
+   * The offer of the other form is one centred line, and the verb in it is
+   * tinted.
    *
-   * This started as a rule that nothing on these screens was centred, because
-   * the caption used to be centred while the button below it was not, which
-   * changed the column's edge twice in a short scroll. The user then asked for
-   * the button to be centred, which fixes that complaint rather than
-   * reintroducing it: the pair now shares one axis, and it is the same axis as
-   * the full width primary button directly above them.
+   * This test has been three things, because the arrangement has been three
+   * things. First a rule that nothing here was centred, written when the
+   * caption was centred over a left aligned button and the column's edge
+   * changed twice in a short scroll. Then a rule that the caption and the
+   * button agreed, written when the button was centred to fix that. Both were
+   * guarding one thing under different names: the offer reads as one object.
    *
-   * So the thing worth guarding is no longer "nothing is centred". It is that
-   * the caption and the button agree.
+   * It is literally one object now, so what is left to guard is that it reads
+   * as a control rather than as a sentence. That is the tint. Muted prose with
+   * a muted verb in it is the failure here, and it is the one this app has
+   * already had reported once.
    */
-  it('centres the other-form caption and its button as one pair', async () => {
-    for (const [Screen, caption] of [
-      [LoginScreen, 'New to Forkast?'],
-      [RegisterScreen, 'Already have an account?'],
+  it('offers the other form as one centred line with the verb tinted', async () => {
+    // Either palette: the provider reads the system scheme, and which one a
+    // test run gets is not the point of this test.
+    const ACCENT = [palettes.light.accent, palettes.dark.accent];
+    const MUTED = [palettes.light.muted, palettes.dark.muted];
+    for (const [Screen, prompt, verb] of [
+      [LoginScreen, 'New to Forkast?', 'Sign up'],
+      [RegisterScreen, 'Already have an account?', 'Sign in'],
     ] as const) {
       const screen = render(<Screen />, { wrapper });
-      await waitFor(() => expect(screen.getByText(caption)).toBeTruthy());
+      await waitFor(() => expect(screen.getByRole('link', { name: verb })).toBeTruthy());
 
-      // The caption is centred.
-      const captionStyle = StyleSheet.flatten(screen.getByText(caption).props.style) as AnyStyle;
-      expect(captionStyle.textAlign).toBe('center');
+      // The prompt and the verb are one line now, not a caption with a control
+      // under it, so the prompt has no text node of its own to inspect. The
+      // line is addressed by the whole sentence, which is also the assertion
+      // that the two halves really are one run of text rather than two blocks
+      // that happen to sit close together.
+      const line = screen.getByText(`${prompt} ${verb}`);
+      const lineStyle = StyleSheet.flatten(line.props.style) as AnyStyle;
+      expect(lineStyle.textAlign).toBe('center');
+      expect(MUTED).toContain(lineStyle.color);
 
-      // And so is the container holding it and the button, which is what
-      // actually moves the button. A centred caption over a left aligned
-      // button is the arrangement this test exists to prevent.
-      const centred = everyStyle(screen.toJSON()).filter(
-        (style) => style.alignItems === 'center' && style.gap !== undefined,
+      // And the verb inside it is saffron, not more of the same muted grey.
+      const verbStyle = StyleSheet.flatten(screen.getByText(verb).props.style) as AnyStyle;
+      expect(ACCENT).toContain(verbStyle.color);
+      expect(verbStyle.color).not.toBe(lineStyle.color);
+      // Semibold needs the cut named as well as the weight, or it is a silent
+      // no-op on device. See the FAMILY note in tokens.
+      expect(verbStyle.fontFamily).toBe(fonts.semibold);
+
+      // The target is a target, not a 22pt line of type. Section 3 floor.
+      const tappable = everyStyle(screen.toJSON()).filter(
+        (style) => Number(style.minHeight ?? 0) >= 48,
       );
-      expect(centred.length).toBeGreaterThan(0);
+      expect(tappable.length).toBeGreaterThan(0);
 
       screen.unmount();
     }
@@ -347,9 +375,9 @@ describe('finding the way in', () => {
 
   it('swaps between the two forms rather than stacking them', async () => {
     const { getByRole } = render(<LoginScreen />, { wrapper });
-    await waitFor(() => expect(getByRole('button', { name: 'Sign up' })).toBeTruthy());
+    await waitFor(() => expect(getByRole('link', { name: 'Sign up' })).toBeTruthy());
 
-    fireEvent.press(getByRole('button', { name: 'Sign up' }));
+    fireEvent.press(getByRole('link', { name: 'Sign up' }));
 
     // replace, not push: pushing would grow a login/register/login stack that
     // the back gesture then has to walk all the way down.

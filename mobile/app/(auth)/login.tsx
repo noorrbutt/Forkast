@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { Button, Field, Screen } from '../../components/ui';
+import { Button, Field, Screen, TextLink } from '../../components/ui';
 import { useTheme } from '../../theme';
 import { useLogin } from '../../hooks/useAuth';
 import { describeError } from '../../lib/api';
@@ -26,12 +26,13 @@ import { describeError } from '../../lib/api';
  * of 16, naming the screen with the same words as the button that reaches it.
  * The bar keeps the back chevron and drops its title, so the name is said once.
  *
- * What was demoted, and why that is correct: the way to registration is an
- * outlined button under a caption rather than a second saffron one. It matches
- * the primary button in size and width, and parts from it in fill. Someone on
- * this screen came here to sign in; the other door has to be findable, not
- * equally loud, and a border against a fill says that without also saying "this
- * control is smaller than the one above it".
+ * What was demoted, and why that is correct: the way to registration is one
+ * line of prose with the action tinted at the end, "New to Forkast? Sign up".
+ * It was briefly a full width outlined button, which made the screen offer two
+ * controls of identical size and left someone scanning it to work out which of
+ * the two they came here for. Prose with a coloured verb is the arrangement
+ * every sign in screen already uses, and a convention costs less attention than
+ * a second slab. TextLink carries the rest of the reasoning.
  *
  * On the alignment, which changed twice. This block was first centred, then
  * pulled left because a centred line between left aligned blocks changed the
@@ -132,39 +133,20 @@ export default function LoginScreen() {
           <Button label="Sign in" size="lg" full onPress={submit} loading={login.isPending} />
         </View>
 
-        {/* Full width and `size="lg"`, so it is the same control as the button
-            above it in every dimension but fill.
+        {/* One sentence, centred under the primary button, with "Sign up"
+            tinted. Section 7 asks for boldness in one place per screen, and on
+            a screen called "Sign in." that place is the sign in button.
 
-            It used to be medium and unstretched, and Button defaults an
-            unstretched control to flex-start, which quietly beat the
-            `alignItems: 'center'` on this container: a centred caption with a
-            left aligned button under it, which is the exact misalignment
-            centring the pair was meant to remove. Stretching it settles the
-            axis question by removing it.
-
-            Section 7 is the reason this is the right fix rather than
-            `align="center"` on a medium button: two controls should be
-            obviously the same size or obviously different, and near equal is
-            worse than either. Full width against full width is obviously the
-            same, and saffron against an outline is the difference someone reads
-            without measuring.
-
-            Labelled with the word people actually look for: "Create an account"
-            was the old label, and it is not the phrase anyone scans a screen
+            The label is the word people actually look for: "Create an account"
+            was the old one, and it is not the phrase anyone scans a screen
             hunting for. */}
-        <View style={{ gap: spacing.sm, alignItems: 'center' }}>
-          <Text style={[type.caption, { color: colors.muted, textAlign: 'center' }]}>
-            New to Forkast?
-          </Text>
-          <Button
-            label="Sign up"
-            variant="secondary"
-            size="lg"
-            full
-            onPress={() => router.replace('/register')}
-            disabled={login.isPending}
-          />
-        </View>
+        <TextLink
+          prompt="New to Forkast?"
+          label="Sign up"
+          onPress={() => router.replace('/register')}
+          disabled={login.isPending}
+          accessibilityHint="Create a new Forkast account"
+        />
       </View>
     </Screen>
   );
