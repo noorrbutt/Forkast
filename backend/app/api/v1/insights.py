@@ -19,7 +19,6 @@ from fastapi import (
     Depends,
     File,
     HTTPException,
-    Request,
     Response,
     UploadFile,
     status,
@@ -29,6 +28,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, RateLimiterDep, SessionDep, bearer_scheme
+
 # The signature check that decides whether an upload really is an image, shared
 # with the meal photo route rather than written twice, so the two cannot drift
 # into accepting different files from each other.
@@ -50,12 +50,12 @@ from app.services.ai.deps import get_ai_service
 from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import PlanContext, PlanLogSummary, PlanRequest
 from app.services.insights import build_dashboard, compute_streaks
+from app.services.rate_limit import account_identity
 from app.services.security import (
     decode_access_token,
     hash_password_async,
     verify_password_async,
 )
-from app.services.rate_limit import client_identity
 
 router = APIRouter(tags=["insights"])
 
@@ -65,7 +65,6 @@ CallerToken = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_sche
 # How many recent logs to hand the planner. Enough to spot a pattern, small
 # enough to keep the prompt cheap once a real model is behind it.
 PLAN_LOG_WINDOW = 30
-
 
 
 @router.get("/me", response_model=UserOut)
@@ -100,6 +99,7 @@ async def delete_me(
     payload: AccountDelete,
     session: SessionDep,
     user: CurrentUser,
+    limiter: RateLimiterDep,
 ) -> Response:
     """Delete the account and everything belonging to it.
 
@@ -112,6 +112,18 @@ async def delete_me(
     Cascading the refresh tokens is what ends every other signed in device, so
     there is no need to revoke them separately.
     """
+    # Throttled like a login, because that is what it is: a password guess, made
+    # by whoever is holding the phone. Without this an unlocked handset is an
+    # unlimited offline-speed oracle against the owner's password, and the prize
+    # for guessing right is the irreversible deletion of every meal they logged.
+    settings = get_settings()
+    await limiter.hit(
+        "password-check",
+        account_identity(user.id),
+        limit=settings.login_rate_limit,
+        window_seconds=settings.login_rate_window_seconds,
+    )
+
     # Irreversible, so prove it is the account holder and not someone holding an
     # unlocked phone. The comparison is the same constant time one login uses.
     if not await verify_password_async(payload.password, user.password_hash):
@@ -146,6 +158,7 @@ async def change_password(
     session: SessionDep,
     user: CurrentUser,
     credentials: CallerToken,
+    limiter: RateLimiterDep,
 ) -> Response:
     """Change the password, and sign every other device out.
 
@@ -153,6 +166,18 @@ async def change_password(
     this runs, so a change cannot land a password registration would have
     turned away.
     """
+    # Shares the "password-check" bucket with account deletion, so guesses made
+    # against one route spend the other's allowance too. They are the same
+    # question asked twice, and letting each carry its own budget would simply
+    # double the number of tries available.
+    settings = get_settings()
+    await limiter.hit(
+        "password-check",
+        account_identity(user.id),
+        limit=settings.login_rate_limit,
+        window_seconds=settings.login_rate_window_seconds,
+    )
+
     # The same constant time comparison login uses, and asked for the same
     # reason deletion asks: the session proves the phone, not the person
     # holding it.
@@ -309,16 +334,21 @@ async def create_plan(
     session: SessionDep,
     user: CurrentUser,
     ai: AIDep,
-    request: Request,
     limiter: RateLimiterDep,
 ) -> AIPlan:
     # The only route that costs real money once Groq is behind it, and the only
     # one where an authenticated user can run up someone else's bill. Keyed on
-    # the user id rather than the peer, because the account is who pays.
+    # the user id ALONE, because the account is who pays.
+    #
+    # It used to be keyed on the peer address as well as the account. That is the one thing this limit must not do: the caller is
+    # already authenticated, so the address adds nothing about who they are, and
+    # moving between wifi and mobile data -- or setting X-Forwarded-For, once a
+    # proxy is trusted -- handed the same account a fresh hourly allowance of
+    # paid API calls each time.
     settings = get_settings()
     await limiter.hit(
         "plan",
-        client_identity(request, subject=str(user.id)),
+        account_identity(user.id),
         limit=settings.plan_rate_limit,
         window_seconds=settings.plan_rate_window_seconds,
     )
@@ -353,6 +383,16 @@ async def create_plan(
     streak = await compute_streaks(session, user)
     days = len(dashboard.calories_by_day) or 1
 
+    # Averaged over the chart window, from the chart's own per-day figures.
+    #
+    # It used to be total_calories / days, and those two are not the same span:
+    # total_calories sums the account's entire history with no date filter,
+    # while days is the length of the fourteen day chart window. An account with
+    # a year behind it was handed its whole year divided by a fortnight and told
+    # that was a daily average, so a real 1,800 arrived at the planner as 28,000
+    # -- presented as a figure the model is explicitly forbidden to re-derive.
+    windowed_calories = sum(day.calories for day in dashboard.calories_by_day)
+
     context = PlanContext(
         window_days=days,
         logs_count=dashboard.logs_count,
@@ -360,7 +400,7 @@ async def create_plan(
         total_burned=dashboard.total_burned,
         net_calories=dashboard.net_calories,
         junk_ratio=dashboard.junk_ratio,
-        avg_calories_per_day=round(dashboard.total_calories / days),
+        avg_calories_per_day=round(windowed_calories / days),
         current_streak=streak.current_streak,
         longest_streak=streak.longest_streak,
         top_category=dashboard.top_category.name if dashboard.top_category else None,
