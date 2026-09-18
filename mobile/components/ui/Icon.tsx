@@ -45,6 +45,13 @@ const GLYPHS = {
   empty: 'file-tray',
   edit: 'create',
   trash: 'trash',
+  // The two halves of the reveal control on a password field. A pair would be
+  // wrong here: outline and filled are two cuts of ONE meaning, and these are
+  // two opposite meanings that happen to share a drawing. The eye means the
+  // characters are hidden and pressing shows them; the struck eye means they
+  // are showing and pressing hides them.
+  reveal: 'eye-outline',
+  conceal: 'eye-off-outline',
 } as const satisfies Record<string, IoniconName | GlyphPair>;
 
 export type IconName = keyof typeof GLYPHS;
