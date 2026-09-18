@@ -68,6 +68,10 @@ export function BurnDialog({ visible, onDismiss }: Props) {
       save.reset();
       clear.reset();
     }
+    // save and clear are mutation handles whose identity changes on every
+    // render, so listing them would run this reset after each one and clear the
+    // field the user is typing into. Only the transition to closed matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   const trimmed = draft.trim();

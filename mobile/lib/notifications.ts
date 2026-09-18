@@ -55,6 +55,8 @@ function load(): NotificationsModule | null {
   try {
     // A require rather than an import, so this is genuinely deferred to the
     // first call rather than hoisted back to module scope by the bundler.
+    // The deferral is the point; an import would be hoisted to module scope.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     cached = require('expo-notifications') as NotificationsModule;
     return cached;
   } catch {

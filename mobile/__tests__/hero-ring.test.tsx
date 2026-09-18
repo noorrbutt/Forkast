@@ -8,11 +8,11 @@
  */
 
 import { render } from '@testing-library/react-native';
-import { Text, useWindowDimensions } from 'react-native';
+import { Text } from 'react-native';
 
 import { Hero } from '../components/ui/Hero';
 import { Ring } from '../components/ui/Ring';
-import { ThemeProvider, palettes } from '../theme';
+import { ThemeProvider } from '../theme';
 
 const wrap = ({ children }: { children: React.ReactNode }) => (
   <ThemeProvider>{children}</ThemeProvider>

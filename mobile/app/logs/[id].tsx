@@ -175,6 +175,12 @@ export default function MealScreen() {
     setFunScale(log.data.fun_scale);
     setFriendScale(log.data.friend_scale);
     setServingSize(log.data.serving_size);
+    // Keyed on the id alone, deliberately. Adding log.data would re-seed on
+    // every background refetch, wiping whatever the user had half-typed. The
+    // cost is that an edit made on another device is not pulled into a form
+    // that is already open, which is the ordinary last-write-wins a form has
+    // anyway, and far cheaper than losing the edit in front of you.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [log.data?.id]);
 
   const cuisineById = useMemo(

@@ -9,7 +9,7 @@ type StarRatingProps = {
 };
 
 export function StarRating({ value, onChange, max = 5 }: StarRatingProps) {
-  const { colors, spacing, isDark, type } = useTheme();
+  const { colors, isDark, type } = useTheme();
 
   return (
     // No gap: each star now carries its own 44pt box, and the glyph sits
