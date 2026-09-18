@@ -20,3 +20,6 @@ export { HeroWash } from './HeroWash';
 export { ArchHero } from './ArchHero';
 export { Mark } from './Mark';
 export { TextLink } from './TextLink';
+export { GoogleMark } from './GoogleMark';
+export { GoogleButton } from './GoogleButton';
+export { OrRule } from './OrRule';

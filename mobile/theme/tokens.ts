@@ -209,6 +209,31 @@ export const split: Record<ThemeName, { junk: string; clean: string }> = {
 };
 
 /**
+ * Google's four brand colours, for the mark on the sign in button.
+ *
+ * Here, rather than as hex in the component that draws them, because every
+ * colour in this app lives in this file and GoogleMark was the only file in the
+ * repo that broke that. A reader looking for "where do colours come from" has
+ * to find one answer, not two.
+ *
+ * Not in `palettes`, and not themed. Three reasons, and they are the whole
+ * point of this being its own export rather than a fifth palette entry. Google's
+ * guidelines fix these values and forbid recolouring the mark. They are
+ * identical in light and dark, so a per-theme pair would be the same four
+ * strings written twice. And a mark that took a theme colour would be a
+ * redrawn Google logo, which is what a phishing page does.
+ *
+ * `series` and `split` are already here on the same principle: colour that is
+ * not the palette, kept in the one file colour lives in.
+ */
+export const googleMark = {
+  blue: '#4285F4',
+  green: '#34A853',
+  amber: '#FBBC05',
+  red: '#EA4335',
+} as const;
+
+/**
  * The wash behind the one number a screen leads with.
  *
  * The reference apps get most of their warmth from a soft colour field sitting
