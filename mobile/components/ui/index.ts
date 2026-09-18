@@ -4,6 +4,7 @@ export { Chip } from './Chip';
 export { Empty } from './Empty';
 export { Field } from './Field';
 export { ErrorState } from './ErrorState';
+export { FormError } from './FormError';
 export { Frosted } from './Frosted';
 export { Icon, type IconName } from './Icon';
 export { Loading } from './Loading';

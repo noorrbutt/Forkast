@@ -1,12 +1,12 @@
 import axios from 'axios';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useChangePassword } from '../hooks/useAuth';
 import { describeError } from '../lib/api';
 import { haptics } from '../lib/haptics';
 import { useTheme } from '../theme';
-import { Dialog, Field, ListRow } from './ui';
+import { Dialog, Field, FormError, ListRow } from './ui';
 
 /** What the server will accept, checked here so a typo never costs a round trip. */
 const MIN_LENGTH = 8;
@@ -38,7 +38,7 @@ function explain(error: unknown): string {
  * say "eight characters".
  */
 export function ChangePassword({ last = false }: { last?: boolean }) {
-  const { colors, spacing, type } = useTheme();
+  const { spacing } = useTheme();
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
@@ -167,7 +167,7 @@ export function ChangePassword({ last = false }: { last?: boolean }) {
             onSubmitEditing={submit}
           />
           {message ? (
-            <Text style={[type.caption, { color: colors.danger }]}>{message}</Text>
+            <FormError>{message}</FormError>
           ) : null}
         </View>
       </Dialog>

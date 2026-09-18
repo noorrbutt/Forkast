@@ -5,16 +5,7 @@ import { ActivityIndicator, Switch, Text, View } from 'react-native';
 import { ChangePassword } from '../../components/ChangePassword';
 import { DeleteAccount } from '../../components/DeleteAccount';
 import { ProfileAvatar } from '../../components/ProfileAvatar';
-import {
-  Chip,
-  Dialog,
-  ErrorState,
-  Field,
-  ListGroup,
-  ListRow,
-  Loading,
-  Screen,
-} from '../../components/ui';
+import { Chip, Dialog, ErrorState, Field, FormError, ListGroup, ListRow, Loading, Screen } from '../../components/ui';
 import { useAuth, useMe } from '../../hooks/useAuth';
 import { hasAvatar } from '../../hooks/useAvatar';
 import { useUpdateProfile } from '../../hooks/useProfile';
@@ -203,7 +194,7 @@ function GoalRow({ goal, last }: { goal: Goal | null; last?: boolean }) {
  * the field, because an empty field is also what half typed looks like.
  */
 function TargetRow({ target, last }: { target: number | null; last?: boolean }) {
-  const { colors, spacing, type } = useTheme();
+  const { spacing } = useTheme();
   // Two mutations off the one hook, so a save and a clear keep their own
   // pending and error state instead of one spinner sitting on both actions.
   const save = useUpdateProfile();
@@ -362,7 +353,7 @@ function TargetRow({ target, last }: { target: number | null; last?: boolean }) 
             hint={problem ?? undefined}
           />
           {failure ? (
-            <Text style={[type.caption, { color: colors.danger }]}>{describeError(failure)}</Text>
+            <FormError>{describeError(failure)}</FormError>
           ) : null}
         </View>
       </Dialog>

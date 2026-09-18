@@ -2,18 +2,7 @@ import { useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, Pressable, RefreshControl, Text, View } from 'react-native';
 
-import {
-  Button,
-  Dialog,
-  Empty,
-  ErrorState,
-  Icon,
-  ListGroup,
-  Loading,
-  Screen,
-  useScreenInsets,
-  initialsOf,
-} from '../../components/ui';
+import { Button, Dialog, Empty, ErrorState, FormError, Icon, initialsOf, ListGroup, Loading, Screen, useScreenInsets } from '../../components/ui';
 import { useInfiniteLogs, useRepeatLog } from '../../hooks/useLogs';
 import { usePhotoSource } from '../../hooks/usePhoto';
 import { describeError } from '../../lib/api';
@@ -317,7 +306,7 @@ function MealRowBase({ log, last, onOpen, onRepeat, sending, confirmed, error }:
           ) : null}
         </View>
 
-        {error ? <Text style={[type.caption, { color: colors.danger }]}>{error}</Text> : null}
+        {error ? <FormError>{error}</FormError> : null}
       </View>
     </Pressable>
   );

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { Button, Chip, Field, Screen } from '../components/ui';
+import { Button, Chip, Field, FormError, Screen } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import { useUpdateProfile } from '../hooks/useProfile';
 import { describeError } from '../lib/api';
@@ -249,7 +249,7 @@ export default function SetupScreen() {
             : 'This device did not report a timezone, so your days follow the default clock. You can set it on the Profile tab.'}
         </Text>
 
-        {problem ? <Text style={[type.caption, { color: colors.danger }]}>{problem}</Text> : null}
+        {problem ? <FormError>{problem}</FormError> : null}
         {updateProfile.isError ? (
           <Text style={[type.caption, { color: colors.danger }]}>
             {describeError(updateProfile.error)}

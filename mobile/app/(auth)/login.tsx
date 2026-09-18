@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { Button, Field, Screen, TextLink } from '../../components/ui';
+import { Button, Field, FormError, Screen, TextLink } from '../../components/ui';
 import { useTheme } from '../../theme';
 import { useLogin } from '../../hooks/useAuth';
 import { describeError } from '../../lib/api';
@@ -128,7 +128,7 @@ export default function LoginScreen() {
             onSubmitEditing={submit}
           />
 
-          {message ? <Text style={[type.caption, { color: colors.danger }]}>{message}</Text> : null}
+          {message ? <FormError>{message}</FormError> : null}
 
           <Button label="Sign in" size="lg" full onPress={submit} loading={login.isPending} />
         </View>

@@ -4,19 +4,7 @@ import { Text, View } from 'react-native';
 
 import { MealPhoto } from '../../components/MealPhoto';
 import { StarRating } from '../../components/StarRating';
-import {
-  Button,
-  Card,
-  Chip,
-  ControlLabel,
-  ErrorState,
-  Field,
-  Hero,
-  Loading,
-  Screen,
-  Select,
-  type SelectOption,
-} from '../../components/ui';
+import { Button, Card, Chip, ControlLabel, ErrorState, Field, FormError, Hero, Loading, Screen, Select, type SelectOption } from '../../components/ui';
 import { useCategories, useCuisines, useSearch } from '../../hooks/useCatalog';
 import { useCreateLog } from '../../hooks/useLogs';
 import { useSetPhoto, type PickedPhoto } from '../../hooks/usePhoto';
@@ -737,7 +725,7 @@ export default function LogScreen() {
         <MealPhoto photo={photo} onPhotoChange={setPhoto} />
 
         {createLog.isError ? (
-          <Text style={[type.caption, { color: colors.danger }]}>{describeError(createLog.error)}</Text>
+          <FormError>{describeError(createLog.error)}</FormError>
         ) : null}
 
         <View style={{ gap: spacing.sm }}>

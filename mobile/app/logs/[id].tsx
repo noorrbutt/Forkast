@@ -3,20 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Text, View } from 'react-native';
 
 import { StarRating } from '../../components/StarRating';
-import {
-  Button,
-  Chip,
-  Dialog,
-  ErrorState,
-  Field,
-  Hero,
-  HeroWash,
-  Loading,
-  Screen,
-  ControlLabel,
-  Select,
-  type SelectOption,
-} from '../../components/ui';
+import { Button, Chip, ControlLabel, Dialog, ErrorState, Field, FormError, Hero, HeroWash, Loading, Screen, Select, type SelectOption } from '../../components/ui';
 import { useCategories, useCuisines } from '../../hooks/useCatalog';
 import { useDeleteLog, useLog, useRepeatLog, useUpdateLog } from '../../hooks/useLogs';
 import {
@@ -576,7 +563,7 @@ export default function MealScreen() {
               onRemove={() => setConfirmingPhotoRemoval(true)}
             />
             {photoError ? (
-              <Text style={[type.caption, { color: colors.danger }]}>{photoError}</Text>
+              <FormError>{photoError}</FormError>
             ) : null}
           </View>
 

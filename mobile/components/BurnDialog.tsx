@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useBurnToday, useClearBurn, useSetBurn } from '../hooks/useBurn';
 import { describeError } from '../lib/api';
 import { formatNumber } from '../lib/format';
 import { haptics } from '../lib/haptics';
 import { useTheme } from '../theme';
-import { Dialog, Field } from './ui';
+import { Dialog, Field, FormError } from './ui';
 
 /** Matches ck_burn_logs_calories_plausible, so a typo is caught before a round trip. */
 const MAX_BURN = 10_000;
@@ -31,7 +31,7 @@ type Props = {
  * same whether or not it has one.
  */
 export function BurnDialog({ visible, onDismiss }: Props) {
-  const { colors, spacing, type } = useTheme();
+  const { spacing } = useTheme();
   const today = useBurnToday();
   const save = useSetBurn();
   const clear = useClearBurn();
@@ -176,7 +176,7 @@ export function BurnDialog({ visible, onDismiss }: Props) {
           hint={problem ?? undefined}
         />
         {error ? (
-          <Text style={[type.caption, { color: colors.danger }]}>{describeError(error)}</Text>
+          <FormError>{describeError(error)}</FormError>
         ) : null}
       </View>
     </Dialog>
