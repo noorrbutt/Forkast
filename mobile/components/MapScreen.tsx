@@ -51,7 +51,14 @@ function groupByArea(restaurants: Restaurant[], logs: FoodLog[]): AreaGroup[] {
     const byId = countById.get(String(restaurant.id)) ?? 0;
     const byName = countByName.get(matchKey(restaurant.name)) ?? 0;
     // A log carries either the id or the free text name, never both as separate visits.
-    const count = Math.max(byId, byName);
+    //
+    // The server's figure wins when it sends one, because it counted the whole
+    // history and this only ever sees a page of it. Counting locally was fine
+    // until the hundredth meal and silently wrong after: a place visited thirty
+    // times last year read as zero, and nothing on the screen said the numbers
+    // were partial. The local count stays as the fallback for a build talking
+    // to a server from before the field existed.
+    const count = restaurant.visit_count ?? Math.max(byId, byName);
     seenNames.add(matchKey(restaurant.name));
 
     const area = restaurant.area?.trim() || UNLISTED;
@@ -121,7 +128,8 @@ function toPins(restaurants: Restaurant[], logs: FoodLog[]): Pin[] {
       area: r.area,
       latitude: Number(r.latitude),
       longitude: Number(r.longitude),
-      count: counts.get(String(r.id)) ?? 0,
+      // Same as above: the server counted everything, this saw a page.
+      count: r.visit_count ?? counts.get(String(r.id)) ?? 0,
     }));
 }
 

@@ -59,6 +59,11 @@ class RestaurantOut(BaseModel):
     # map needs a number. The column stays Numeric so the stored value is exact.
     latitude: float | None = None
     longitude: float | None = None
+    # How many times this user has logged a meal here, counted by the database
+    # over their whole history. Only sent for ?mine=true, because on the shared
+    # registry the question has no answer: the listing there is every
+    # restaurant, not this person's.
+    visit_count: int | None = None
 
 
 class RestaurantCreate(BaseModel):

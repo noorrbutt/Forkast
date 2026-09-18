@@ -359,3 +359,55 @@ async def test_a_losing_restaurant_insert_leaves_the_caller_intact(session_facto
         # The whole point: still readable, and without a second trip to the
         # database. A plain rollback() here expires it and this line raises.
         assert category.base_calorie_min == before
+
+
+# --------------------------------------------------------------------------
+# Visit counts are the server's job
+# --------------------------------------------------------------------------
+
+
+async def test_the_visited_listing_counts_the_whole_history(auth_client: AsyncClient) -> None:
+    """The map drew these as totals and derived them from a page of 100 logs.
+
+    Past the hundredth meal that is a different number wearing the same label:
+    a place visited often but not lately reads as zero, the busiest pin stops
+    being the busiest, and nothing says the figures are partial. Counting it in
+    the database is the only place the whole history is visible.
+    """
+    categories = (await auth_client.get("/api/v1/categories")).json()
+    category_id = categories[0]["id"]
+
+    for _ in range(3):
+        created = await auth_client.post(
+            "/api/v1/logs",
+            json={
+                "dish_name": "same place again",
+                "category_id": category_id,
+                "rating": 4,
+                "serving_size": "medium",
+                "restaurant_name": "Counted Cafe",
+            },
+        )
+        assert created.status_code == 201, created.text
+
+    visited = await auth_client.get("/api/v1/restaurants", params={"mine": True})
+    assert visited.status_code == 200
+
+    counted = {r["name"]: r["visit_count"] for r in visited.json()}
+    assert counted.get("Counted Cafe") == 3, counted
+
+
+async def test_the_shared_registry_does_not_claim_a_visit_count(
+    auth_client: AsyncClient,
+) -> None:
+    """Listing every restaurant is not a question about this person, so there is
+    no honest number to put here."""
+    created = await auth_client.post(
+        "/api/v1/restaurants", json={"name": "Registry Only", "area": "Somewhere"}
+    )
+    assert created.status_code in (200, 201), created.text
+
+    listed = (await auth_client.get("/api/v1/restaurants")).json()
+
+    assert listed, "the registry was empty, so this asserts nothing"
+    assert all(r["visit_count"] is None for r in listed)

@@ -192,7 +192,7 @@ async def list_restaurants(
         description="Only restaurants this user has actually logged a meal at.",
     ),
     limit: int = Query(default=20, ge=1, le=100),
-) -> list[Restaurant]:
+) -> list[RestaurantOut]:
     """The registry is shared, so by default this lists every restaurant.
 
     That is right for the autocomplete on the log screen, where the point is to
@@ -230,8 +230,29 @@ async def list_restaurants(
             .exists()
         )
 
+        # How many times, counted here rather than by the caller.
+        #
+        # The map draws these as totals, and it used to arrive at them by
+        # counting a page of the hundred most recent logs. Past a hundred meals
+        # that is simply a different number wearing the same label: a place
+        # visited thirty times last year reads as zero, the busiest pin stops
+        # being the busiest, and nothing on the screen says the figures are
+        # partial. The database is the only place that can see the whole
+        # history, so it is the only place the count can honestly come from.
+        visits = (
+            select(func.count(FoodLog.id))
+            .where(FoodLog.restaurant_id == Restaurant.id, FoodLog.user_id == user.id)
+            .correlate(Restaurant)
+            .scalar_subquery()
+        )
+        rows = (await session.execute(stmt.add_columns(visits.label("visit_count")))).all()
+        return [
+            RestaurantOut.model_validate(restaurant).model_copy(update={"visit_count": count})
+            for restaurant, count in rows
+        ]
+
     result = await session.scalars(stmt)
-    return list(result)
+    return [RestaurantOut.model_validate(restaurant) for restaurant in result]
 
 
 async def upsert_restaurant(

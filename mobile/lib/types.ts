@@ -69,6 +69,12 @@ export type Restaurant = {
   area: string | null;
   latitude: number | null;
   longitude: number | null;
+  /**
+   * How many times this account has logged a meal here, counted by the
+   * server over the whole history. Only sent for the visited listing; on
+   * the shared registry the question has no answer.
+   */
+  visit_count?: number | null;
 };
 
 export type FoodLog = {
