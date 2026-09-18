@@ -25,6 +25,7 @@ import {
   useRemovePhoto,
   useSetPhoto,
 } from '../../hooks/usePhoto';
+import { MealPhotoActions } from '../../components/MealPhotoActions';
 import { describeError } from '../../lib/api';
 import {
   FRIEND_LABELS,
@@ -563,50 +564,17 @@ export default function MealScreen() {
                 Optional. A picture turns a list of dishes into something worth looking back at.
               </Text>
             )}
-            {/* The second copy of this row. See the note in MealPhoto: this
-                screen does not use that component, it reimplements the control,
-                so the same three buttons overflowed the same 342pt here and the
-                fix has to be applied in both places or the screen the user
-                named first stays broken.
-
-                The variant also differs from MealPhoto's, which makes the
-                primary button on the log form secondary here. That is correct
-                on this screen: the meal already exists, so adding a photo is
-                not the main action. */}
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: spacing.md,
-              }}
-            >
-              <Button
-                label={hasPhoto ? 'Retake' : 'Take a photo'}
-                variant="secondary"
-                compact
-                onPress={() => void attachPhoto(true)}
-                disabled={photoBusy}
-                loading={preparing || upload.isPending}
-              />
-              <Button
-                label="Choose"
-                variant="secondary"
-                compact
-                onPress={() => void attachPhoto(false)}
-                disabled={photoBusy}
-              />
-              {hasPhoto ? (
-                <Button
-                  label="Remove"
-                  variant="ghost"
-                  compact
-                  onPress={() => setConfirmingPhotoRemoval(true)}
-                  disabled={photoBusy}
-                  loading={removePhoto.isPending}
-                />
-              ) : null}
-            </View>
+            <MealPhotoActions
+              hasPhoto={hasPhoto}
+              // The meal already exists here, so adding a picture is never the
+              // main action on this screen; saving the edit is.
+              prominent={false}
+              busy={photoBusy}
+              attaching={preparing || upload.isPending}
+              removing={removePhoto.isPending}
+              onAttach={(fromCamera) => void attachPhoto(fromCamera)}
+              onRemove={() => setConfirmingPhotoRemoval(true)}
+            />
             {photoError ? (
               <Text style={[type.caption, { color: colors.danger }]}>{photoError}</Text>
             ) : null}

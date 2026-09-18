@@ -198,24 +198,20 @@ describe('a row of three buttons', () => {
     expect(vertical?.[0]).not.toMatch(/compact/);
   });
 
-  it('applies compact at both copies of the photo row', () => {
-    // app/logs/[id].tsx does not use MealPhoto, it reimplements the control, so
-    // fixing only the component leaves the meal screen broken.
-    for (const file of ['components/MealPhoto.tsx', 'app/logs/[id].tsx']) {
-      const source = code(file);
-      const compacts = source.match(/\bcompact\b/g) ?? [];
+  it('applies compact to every button in the photo row', () => {
+    // This used to loop over two files, because app/logs/[id].tsx reimplemented
+    // the control rather than using MealPhoto, so the fix had to be made twice
+    // or the screen the user named first stayed broken. There is one copy now.
+    const compacts = code('components/MealPhotoActions.tsx').match(/\bcompact\b/g) ?? [];
 
-      expect(compacts.length).toBeGreaterThanOrEqual(3);
-    }
+    expect(compacts.length).toBeGreaterThanOrEqual(3);
   });
 
   it('keeps the row wrapping, which is the sanctioned way to degrade', () => {
     // Above the largest non-accessibility text size three labels cannot share a
     // line on any phone at any padding. The guide says wrap, never truncate, so
     // flexWrap has to survive anyone tidying it away once the row fits.
-    for (const file of ['components/MealPhoto.tsx', 'app/logs/[id].tsx']) {
-      expect(code(file)).toMatch(/flexWrap: 'wrap'/);
-    }
+    expect(code('components/MealPhotoActions.tsx')).toMatch(/flexWrap: 'wrap'/);
   });
 
   it('never truncates a button label', () => {
