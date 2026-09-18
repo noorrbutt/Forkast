@@ -39,10 +39,15 @@ export function Field({ label, hint, style, onFocus, onBlur, ...rest }: FieldPro
             // control away on the same screens, was already using outline at
             // 3.02:1, so a text field was the only control in the app failing a
             // rule its neighbour passed. 1.5 matches every other control edge.
-            borderWidth: 1.5,
+            // Focus thickens the edge as well as colouring it, and the padding
+            // gives back exactly what the extra width takes, so the box does not
+            // move under the cursor. Colour on its own was the whole signal
+            // before, which section 3 forbids: someone who cannot separate
+            // saffron from grey had no way to tell which field they were in.
+            borderWidth: focused ? 2.5 : 1.5,
             borderColor: focused ? colors.accent : colors.outline,
-            paddingHorizontal: spacing.lg,
-            paddingVertical: spacing.md + 2,
+            paddingHorizontal: focused ? spacing.lg - 1 : spacing.lg,
+            paddingVertical: focused ? spacing.md + 1 : spacing.md + 2,
           },
           style,
         ]}
