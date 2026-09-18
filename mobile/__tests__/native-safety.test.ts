@@ -19,6 +19,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { palettes } from '../theme/tokens';
+
 const root = join(__dirname, '..');
 const read = (relative: string) => readFileSync(join(root, relative), 'utf8');
 
@@ -103,5 +105,43 @@ describe('storing a session on every platform', () => {
 
     expect(source).toMatch(/probe/);
     expect(source).toMatch(/catch/);
+  });
+});
+
+/**
+ * The colours that paint before a single React frame exists.
+ *
+ * app.config.js is read by Expo's CLI before any TypeScript is compiled, so it
+ * cannot import the palette and has to keep copies. It carried a comment saying
+ * the two must be changed together, which is not a mechanism, and they drifted:
+ * the splash background was #FAFAF7, the exact pre-rebuild page colour that
+ * contrast.test.ts was written to get rid of, against a real page of #F4F1EE.
+ * So the launch sequence painted one background and the app painted a warmer
+ * one a frame later, on the one screen everybody sees every time.
+ *
+ * Asserted by reading the config as text rather than by importing it, because
+ * importing it executes an Expo config function that expects a CLI context.
+ */
+describe('the native config, against the palette it copies', () => {
+  const config = read('app.config.js');
+
+  const declared = (name: string): string => {
+    const found = new RegExp(`const ${name} = '(#[0-9A-Fa-f]{6})'`).exec(config);
+    if (!found) throw new Error(`app.config.js no longer declares ${name}`);
+    return found[1].toLowerCase();
+  };
+
+  it('paints the dark splash and the adaptive icon in the real dark page colour', () => {
+    expect(declared('INK')).toBe(palettes.dark.bg.toLowerCase());
+  });
+
+  it('paints the light splash in the real light page colour', () => {
+    expect(declared('PAPER')).toBe(palettes.light.bg.toLowerCase());
+  });
+
+  it('tints the notification icon in the real accent', () => {
+    // Dark's accent, because a notification is drawn on the system's surface
+    // rather than on either of the app's pages.
+    expect(declared('SAFFRON')).toBe(palettes.dark.accent.toLowerCase());
   });
 });

@@ -19,11 +19,18 @@
  * Copies of the tokens this file needs, from theme/tokens.ts.
  *
  * Native config is read by Expo's CLI before any TypeScript is compiled, so
- * tokens.ts cannot be imported here. These three values must be changed in both
- * places at once; everything else the app draws should still come from tokens.
+ * tokens.ts cannot be imported here. Saying "change both at once" in a comment
+ * is not a mechanism, and it did not hold: INK was #0E0E10 against a page of
+ * #0A0908, and PAPER was #FAFAF7, which is the exact pre-rebuild page colour
+ * that contrast.test.ts was written to get rid of. The splash therefore painted
+ * one background and the app painted a different, warmer one a frame later, on
+ * the launch every user sees every time.
+ *
+ * __tests__/native-safety.test.ts now asserts these three against the palette,
+ * so the next drift fails a test instead of shipping.
  */
-const INK = '#0E0E10';
-const PAPER = '#FAFAF7';
+const INK = '#0A0908';
+const PAPER = '#F4F1EE';
 const SAFFRON = '#F5A524';
 
 /**
