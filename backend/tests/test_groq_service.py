@@ -350,7 +350,6 @@ async def test_the_calorie_reasoning_is_cleaned_too() -> None:
     assert result.reasoning == "Cream, heavy, so upper end."
 
 
-
 # A Groq 400 for the empty generation case, close enough to the real message
 # that _is_retryable is matching on what production actually sees.
 _JSON_VALIDATE_FAILED = (
@@ -385,9 +384,7 @@ class _ScriptedCompletions:
         outcome = self.script.pop(0) if self.script else None
         if isinstance(outcome, Exception):
             raise outcome
-        return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content=outcome))]
-        )
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=outcome))])
 
 
 class _ScriptedClient:

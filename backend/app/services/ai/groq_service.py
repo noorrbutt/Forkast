@@ -300,7 +300,9 @@ class GroqAIService:
             logger.warning("Groq returned unparseable JSON: %r", content[:200])
             raise GroqResponseError("Groq returned content that was not JSON") from exc
 
-    async def _complete(self, system: str, user: str, schema: dict[str, Any], max_tokens: int) -> Any:
+    async def _complete(
+        self, system: str, user: str, schema: dict[str, Any], max_tokens: int
+    ) -> Any:
         """Call Groq, retrying the failures that are known to be a coin toss.
 
         Measured against the live API on 2026-09-16: the same plan prompt, same
@@ -336,13 +338,21 @@ class GroqAIService:
                     exc,
                 )
 
-        assert last is not None  # the loop cannot exit without setting it
+        if last is None:
+            # The loop cannot exit without setting it, so this is unreachable.
+            # It is a raise rather than an assert because `python -O` strips
+            # asserts, and the next line would then raise None and surface as a
+            # bare TypeError with none of the context above it.
+            raise GroqResponseError("Groq made no attempt at all")
         logger.warning("Groq gave up after %d attempts: %s", MAX_ATTEMPTS, last)
         raise last
 
     async def adjust_calories(self, req: CalorieAdjustRequest) -> CalorieAdjustResult:
         payload = await self._complete(
-            CALORIE_SYSTEM_PROMPT, _calorie_prompt(req), CALORIE_SCHEMA, max_tokens=CALORIE_MAX_TOKENS
+            CALORIE_SYSTEM_PROMPT,
+            _calorie_prompt(req),
+            CALORIE_SCHEMA,
+            max_tokens=CALORIE_MAX_TOKENS,
         )
 
         try:
