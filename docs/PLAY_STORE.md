@@ -125,9 +125,21 @@ server's own data, so there is no location permission to account for.
 ### Account deletion
 
 Play requires any app with account creation to offer account deletion inside the
-app **and** at a public web URL. Neither exists. The API can delete individual
-logs and plans but has no endpoint that deletes a user. This needs building
-before submission, not after.
+app **and** at a public web URL.
+
+The in-app half is built. Profile has "Delete my account", which asks for the
+password and calls `DELETE /api/v1/me`; the route re-verifies the password with
+the same constant-time comparison login uses, is rate limited against guessing,
+and cascades to every table holding that user's data. Restaurants deliberately
+survive with `created_by` set to null, because the registry is shared and
+removing a landmark other people have logged against would be wrong. Covered by
+`backend/tests/test_account_deletion.py` and
+`mobile/__tests__/delete-account.test.tsx`.
+
+**Still outstanding:** the publicly reachable web URL. Play wants a page anyone
+can find without installing the app, describing what deletion removes and what
+is retained. That needs somewhere to host it, which this project does not yet
+have.
 
 ### Other console forms
 

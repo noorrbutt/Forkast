@@ -1,13 +1,32 @@
 # Forkast
 
+[![CI](https://github.com/noorrbutt/Forkast/actions/workflows/ci.yml/badge.svg)](https://github.com/noorrbutt/Forkast/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Food logging that reads more like a diary than a tracker. You log what you ate,
 the app estimates the calories from the dish and its category, and the dashboard
 tells you the things you would actually want to know: how much of the week was
 junk, where you eat most, and how long you have gone without a junk meal.
 
+It is built for people who will not weigh their food. Every other tracker asks
+for a barcode or a gram count and is abandoned within a fortnight for exactly
+that reason. Forkast asks for the name of the dish and guesses the rest, on the
+view that an estimate you will actually record beats a precise figure you will
+not.
+
+A full stack project, not a toy: real authentication with rotating sessions,
+per-user data isolation, migrations, a seeded demo account, and roughly 750
+tests across both halves.
+
 - **Backend**: FastAPI, PostgreSQL 18, SQLAlchemy 2, Alembic
 - **App**: React Native on Expo SDK 57, Expo Router
 - **AI**: Groq, server side only
+
+Also here: [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow,
+[SECURITY.md](SECURITY.md) for what the auth layer does and how to report a
+hole, [DESIGN_STYLE_GUIDE.md](DESIGN_STYLE_GUIDE.md) for the rules every screen
+is composed against, and [docs/PLAY_STORE.md](docs/PLAY_STORE.md) for the
+release checklist.
 
 ## What is real and what is not
 
@@ -131,6 +150,7 @@ terminal, and again inside the Expo Go app itself. A QR scan alone will fail.
 
 ```bash
 cd backend
+ruff check . && ruff format --check .
 pytest                      # the suite, against forkast_test
 alembic check               # models and migrations have not drifted
 python -m scripts.smoke     # live end to end over real HTTP, needs the server running
@@ -138,10 +158,15 @@ python -m scripts.smoke     # live end to end over real HTTP, needs the server r
 
 ```bash
 cd mobile
-npx tsc --noEmit
+npm run lint
+npm run typecheck
 npx jest                    # includes the contrast and web parity checks
 npx expo-doctor
 ```
+
+All of the above except the smoke test run in CI on every push and pull request,
+against a real PostgreSQL 18 service container. See
+[.github/workflows/ci.yml](.github/workflows/ci.yml).
 
 Tests run against the real `forkast_test` database rather than a mock, so every
 run also re-proves that `alembic upgrade head` works on an empty database. That
@@ -204,12 +229,19 @@ To get it on Android, build a development client:
 
 ```bash
 npx expo login
-GOOGLE_MAPS_API_KEY=... eas build --profile development --platform android
+eas env:create --environment development --name GOOGLE_MAPS_API_KEY --value "AIza..." --visibility secret
+eas build --profile development --platform android
 ```
 
-The key goes in the environment rather than the repo. It ships inside the APK
-either way, so restrict it by package name and SHA-1 in the Google Cloud console
-instead of treating the file as the control.
+The variable is registered with EAS rather than exported in your shell, because
+the build runs on EAS servers and never sees your local environment. `VAR=... eas
+build` is the shape that looks obviously right and silently produces a build with
+no key in it, and on PowerShell it is not even valid syntax.
+
+The key ships inside the APK either way, so restrict it by package name and SHA-1
+in the Google Cloud console rather than treating secrecy as the control.
+
+To build locally instead, `eas build --local` does read your shell environment.
 
 ## Layout
 
