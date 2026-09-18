@@ -16,7 +16,6 @@ REGISTER = "/api/v1/auth/register"
 LOGIN = "/api/v1/auth/login"
 REFRESH = "/api/v1/auth/refresh"
 
-FIXTURE_EMAIL = "fixture@forkast.app"
 OLD = "password123"
 NEW = "a-far-better-password"
 
@@ -31,29 +30,31 @@ async def _login(client: AsyncClient, email: str, password: str):
     return await client.post(LOGIN, json={"email": email, "password": password})
 
 
-async def test_the_new_password_works_and_the_old_one_stops(auth_client: AsyncClient) -> None:
-    response = await auth_client.put(
-        PASSWORD, json={"current_password": OLD, "new_password": NEW}
-    )
+async def test_the_new_password_works_and_the_old_one_stops(
+    auth_client: AsyncClient, fixture_email: str
+) -> None:
+    response = await auth_client.put(PASSWORD, json={"current_password": OLD, "new_password": NEW})
 
     assert response.status_code == 204, response.text
-    assert (await _login(auth_client, FIXTURE_EMAIL, OLD)).status_code == 401
-    assert (await _login(auth_client, FIXTURE_EMAIL, NEW)).status_code == 200
+    assert (await _login(auth_client, fixture_email, OLD)).status_code == 401
+    assert (await _login(auth_client, fixture_email, NEW)).status_code == 200
 
 
-async def test_the_wrong_current_password_changes_nothing(auth_client: AsyncClient) -> None:
+async def test_the_wrong_current_password_changes_nothing(
+    auth_client: AsyncClient, fixture_email: str
+) -> None:
     """A session proves the phone, not the person holding it."""
     response = await auth_client.put(
         PASSWORD, json={"current_password": "not-the-password", "new_password": NEW}
     )
 
     assert response.status_code == 403
-    assert (await _login(auth_client, FIXTURE_EMAIL, OLD)).status_code == 200
-    assert (await _login(auth_client, FIXTURE_EMAIL, NEW)).status_code == 401
+    assert (await _login(auth_client, fixture_email, OLD)).status_code == 200
+    assert (await _login(auth_client, fixture_email, NEW)).status_code == 401
 
 
 async def test_a_new_password_under_eight_characters_is_refused(
-    auth_client: AsyncClient,
+    auth_client: AsyncClient, fixture_email: str
 ) -> None:
     """Registration will not accept one that short, so a change must not be the
     side door that lets it in."""
@@ -62,14 +63,12 @@ async def test_a_new_password_under_eight_characters_is_refused(
     )
 
     assert response.status_code == 422
-    assert (await _login(auth_client, FIXTURE_EMAIL, OLD)).status_code == 200
+    assert (await _login(auth_client, fixture_email, OLD)).status_code == 200
 
 
 async def test_changing_a_password_asks_for_both_of_them(auth_client: AsyncClient) -> None:
     assert (await auth_client.put(PASSWORD, json={"new_password": NEW})).status_code == 422
-    assert (
-        await auth_client.put(PASSWORD, json={"current_password": OLD})
-    ).status_code == 422
+    assert (await auth_client.put(PASSWORD, json={"current_password": OLD})).status_code == 422
 
 
 async def test_the_device_that_changed_it_stays_signed_in(client: AsyncClient) -> None:
@@ -168,8 +167,6 @@ async def test_replaying_the_callers_own_spent_token_still_kills_the_chain(
 
 
 async def test_changing_a_password_needs_authentication(client: AsyncClient) -> None:
-    response = await client.put(
-        PASSWORD, json={"current_password": OLD, "new_password": NEW}
-    )
+    response = await client.put(PASSWORD, json={"current_password": OLD, "new_password": NEW})
 
     assert response.status_code == 401

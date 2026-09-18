@@ -28,10 +28,12 @@ async def _log_pizza(client: AsyncClient) -> None:
     assert response.status_code == 201, response.text
 
 
-async def test_profile_returns_the_current_user(auth_client: AsyncClient) -> None:
+async def test_profile_returns_the_current_user(
+    auth_client: AsyncClient, fixture_email: str
+) -> None:
     body = (await auth_client.get("/api/v1/me")).json()
 
-    assert body["email"] == "fixture@forkast.app"
+    assert body["email"] == fixture_email
     assert body["goal"] == "maintain"
 
 

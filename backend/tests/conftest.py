@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import subprocess
 import sys
 from collections.abc import AsyncIterator
@@ -31,6 +32,8 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -50,11 +53,31 @@ TEST_DATABASE_URL = get_settings().test_database_url
 # empty the development database silently, and the first sign of it would be a
 # real account failing to log in. Refusing to collect is the cheapest possible
 # place to catch that.
-if TEST_DATABASE_URL.strip() == get_settings().database_url.strip():
+#
+# Compared on the parts that decide which database is actually opened, not on
+# the URL text. String equality passed happily when the same database was
+# spelled two ways -- localhost against 127.0.0.1, a different password, a
+# trailing slash, an added query parameter -- and every one of those spellings
+# connects to the identical server and truncates the identical tables.
+
+
+def _database_identity(url: str) -> tuple[str, int, str]:
+    """Host, port and database name, normalised so two spellings of one
+    database compare equal. Credentials and driver are deliberately ignored:
+    changing either still lands on the same data."""
+    parsed = make_url(url.strip())
+    host = (parsed.host or "localhost").lower()
+    # The loopback spellings are the ones that actually get typed differently.
+    if host in {"127.0.0.1", "::1", "localhost"}:
+        host = "localhost"
+    return host, parsed.port or 5432, (parsed.database or "").strip("/")
+
+
+if _database_identity(TEST_DATABASE_URL) == _database_identity(get_settings().database_url):
     raise RuntimeError(
-        "TEST_DATABASE_URL and DATABASE_URL are the same database. Running the "
-        "suite would truncate the development data. Point TEST_DATABASE_URL at "
-        "forkast_test."
+        "TEST_DATABASE_URL and DATABASE_URL resolve to the same database "
+        f"({_database_identity(TEST_DATABASE_URL)}). Running the suite would "
+        "truncate the development data. Point TEST_DATABASE_URL at forkast_test."
     )
 
 # Everything a test can create. Reference tables are excluded on purpose.
@@ -118,9 +141,7 @@ async def _truncate_if_present() -> None:
                 )
             ).all()
             if present:
-                await connection.execute(
-                    text(f"TRUNCATE {', '.join(present)} CASCADE")
-                )
+                await connection.execute(text(f"TRUNCATE {', '.join(present)} CASCADE"))
     finally:
         await engine.dispose()
 
@@ -149,10 +170,36 @@ def session_factory(test_engine):
 
 @pytest.fixture(autouse=True)
 async def clean_tables(test_engine) -> AsyncIterator[None]:
-    """Empty the mutable tables before each test."""
-    async with test_engine.begin() as connection:
-        await connection.execute(
-            text(f"TRUNCATE {', '.join(MUTABLE_TABLES)} RESTART IDENTITY CASCADE")
+    """Empty the mutable tables before each test.
+
+    Retried, because TRUNCATE needs an ACCESS EXCLUSIVE lock on every table it
+    names and the previous test may still have a writer holding a row lock on
+    one of them. Creating a log schedules `_refine_estimate` as a background
+    task, which opens its own session after the response has gone out, so a test
+    that logs a meal can still be writing while the next test starts clearing up
+    behind it. PostgreSQL spots the cycle and kills one side as a deadlock.
+
+    This is what made four tests error at random before, with no relation to
+    what any of them was asserting. lock_timeout turns the wait into a prompt,
+    retryable failure rather than a deadlock, and the short sleep gives the
+    straggler time to commit and let go.
+    """
+    statement = text(f"TRUNCATE {', '.join(MUTABLE_TABLES)} RESTART IDENTITY CASCADE")
+
+    last: Exception | None = None
+    for attempt in range(5):
+        try:
+            async with test_engine.begin() as connection:
+                await connection.execute(text("SET LOCAL lock_timeout = '2s'"))
+                await connection.execute(statement)
+            break
+        except DBAPIError as exc:  # deadlock, or the lock_timeout above expiring
+            last = exc
+            await asyncio.sleep(0.1 * (attempt + 1))
+    else:
+        raise AssertionError(
+            "could not clear the test tables after 5 attempts; something is "
+            f"still holding a lock on them: {last}"
         )
     yield
 
@@ -192,8 +239,29 @@ async def client(session_factory) -> AsyncIterator[AsyncClient]:
         app.dependency_overrides.clear()
 
 
+FIXTURE_PASSWORD = "password123"
+
+
 @pytest.fixture
-async def auth_client(client: AsyncClient) -> AsyncClient:
+def fixture_email(request: pytest.FixtureRequest) -> str:
+    """The address auth_client registers, distinct for every test.
+
+    It used to be the single literal "fixture@forkast.app" for all of them,
+    which coupled every test in the suite to every other one: a row that
+    outlived the truncate between two tests turned the next registration into a
+    409, and the test that then errored was never the test that caused it. That
+    showed up as a handful of unrelated failures that moved around between runs
+    and vanished when the file was run on its own.
+
+    Derived from the test's own name, so a failure names the test that owns the
+    data, and so the address is stable across runs of the same test.
+    """
+    local = re.sub(r"[^a-z0-9]+", "-", request.node.name.lower()).strip("-")[:50]
+    return f"{local or 'fixture'}@forkast.app"
+
+
+@pytest.fixture
+async def auth_client(client: AsyncClient, fixture_email: str) -> AsyncClient:
     """A client registered and authenticated through the real endpoints.
 
     Going through the API rather than injecting a user keeps every object
@@ -202,7 +270,7 @@ async def auth_client(client: AsyncClient) -> AsyncClient:
     """
     response = await client.post(
         "/api/v1/auth/register",
-        json={"email": "fixture@forkast.app", "password": "password123"},
+        json={"email": fixture_email, "password": FIXTURE_PASSWORD},
     )
     assert response.status_code == 201, response.text
     tokens = response.json()
@@ -224,4 +292,3 @@ def deterministic_ai() -> AsyncIterator[None]:
         yield
     finally:
         app.dependency_overrides.pop(get_ai_service, None)
-
