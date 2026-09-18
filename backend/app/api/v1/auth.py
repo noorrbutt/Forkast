@@ -20,7 +20,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import CurrentUser, RateLimiterDep, SessionDep
+from app.api.deps import RateLimiterDep, SessionDep
 from app.config import get_settings
 from app.models import RefreshToken, User
 from app.schemas.auth import (
@@ -28,7 +28,6 @@ from app.schemas.auth import (
     RefreshRequest,
     RegisterRequest,
     TokenPair,
-    UserOut,
 )
 from app.services.rate_limit import client_identity
 from app.services.security import (
@@ -293,7 +292,3 @@ async def logout(payload: RefreshRequest, session: SessionDep) -> Response:
     # token was real.
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-
-@router.get("/me", response_model=UserOut)
-async def me(user: CurrentUser) -> User:
-    return user

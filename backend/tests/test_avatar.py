@@ -60,7 +60,7 @@ async def test_the_profile_says_whether_there_is_one(auth_client: AsyncClient) -
     await auth_client.put(AVATAR, files=_upload(PNG))
 
     assert (await auth_client.get(ME)).json()["has_avatar"] is True
-    assert (await auth_client.get("/api/v1/auth/me")).json()["has_avatar"] is True
+    assert (await auth_client.get("/api/v1/me")).json()["has_avatar"] is True
 
 
 async def test_uploading_twice_replaces_rather_than_stacks(auth_client: AsyncClient) -> None:

@@ -147,7 +147,7 @@ async def test_me_returns_the_authenticated_user(client: AsyncClient) -> None:
     ).json()
 
     response = await client.get(
-        "/api/v1/auth/me", headers={"Authorization": f"Bearer {registered['access_token']}"}
+        "/api/v1/me", headers={"Authorization": f"Bearer {registered['access_token']}"}
     )
 
     assert response.status_code == 200
@@ -169,7 +169,7 @@ async def test_protected_routes_reject_an_anonymous_caller(
 
 async def test_a_garbage_token_is_rejected(client: AsyncClient) -> None:
     response = await client.get(
-        "/api/v1/auth/me", headers={"Authorization": "Bearer not-a-real-token"}
+        "/api/v1/me", headers={"Authorization": "Bearer not-a-real-token"}
     )
     assert response.status_code == 401
 
@@ -219,7 +219,7 @@ async def test_a_token_works_immediately_after_registering(client: AsyncClient) 
     assert refreshed.status_code == 200, refreshed.text
 
     me = await client.get(
-        "/api/v1/auth/me", headers={"Authorization": f"Bearer {registered['access_token']}"}
+        "/api/v1/me", headers={"Authorization": f"Bearer {registered['access_token']}"}
     )
     assert me.status_code == 200
 

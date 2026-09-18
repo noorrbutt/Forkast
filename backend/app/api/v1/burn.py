@@ -9,7 +9,6 @@ be guessing at something they already know.
 from __future__ import annotations
 
 import datetime as dt
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import select
@@ -17,7 +16,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from app.services.insights import today_for
 from app.api.deps import CurrentUser, SessionDep
-from app.models import BurnLog, User
+from app.models import BurnLog
 from app.schemas.burn import BurnOut, BurnUpsert
 
 router = APIRouter(prefix="/burn", tags=["burn"])
