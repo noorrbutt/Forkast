@@ -49,6 +49,11 @@ type TextLinkProps = {
  * FAMILY in tokens, React Native picks among registered cuts rather than
  * synthesising them, so weight without the family is a silent no-op on device,
  * and family without the weight is one on web.
+ *
+ * `textDecorationColor` is iOS only, and that is deliberate rather than
+ * overlooked. It is set to the same value the run is already drawn in, so the
+ * platforms that drop it underline in that colour anyway and the three agree.
+ * Naming it keeps the next person from reading its absence on Android as a bug.
  */
 export function TextLink({
   prompt,
