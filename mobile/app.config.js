@@ -222,16 +222,57 @@ const config = {
       "scheme": "forkast"
     };
 
+/**
+ * The URL scheme iOS has to claim for Google to be able to redirect back.
+ *
+ * It is the iOS OAuth client id with its two halves swapped, which is what
+ * Google hands out in the console as the "iOS URL scheme", so it is derived
+ * here rather than asked for as a fourth environment variable that has to agree
+ * with the third. `1234-abc.apps.googleusercontent.com` becomes
+ * `com.googleusercontent.apps.1234-abc`.
+ *
+ * Returns null when there is no iOS client id, and the plugin is then left out
+ * entirely: a build with no Google credentials hides the button anyway, and a
+ * config plugin registering an empty scheme would claim `` for the app.
+ */
+function iosUrlSchemeFor(clientId) {
+  const suffix = '.apps.googleusercontent.com';
+  if (!clientId || !clientId.endsWith(suffix)) return null;
+  return `com.googleusercontent.apps.${clientId.slice(0, -suffix.length)}`;
+}
+
 module.exports = () => {
   assertApiUrlForBuildProfile();
 
+  let next = config;
+
+  // Google sign in. The plugin writes the iOS URL scheme into the native
+  // project and wires the Android dependency, so it only matters in a real
+  // build; in Expo Go the button is hidden because the native module is not
+  // there to answer, which is the same story the map tells above.
+  //
+  // Added here rather than in the plugins array above so a checkout with no
+  // Google credentials still prebuilds. Listing it unconditionally with an
+  // undefined iosUrlScheme makes `expo prebuild` fail on a repo that has simply
+  // not been given the optional feature.
+  const iosUrlScheme = iosUrlSchemeFor(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID);
+  if (iosUrlScheme) {
+    next = {
+      ...next,
+      plugins: [
+        ...next.plugins,
+        ['@react-native-google-signin/google-signin', { iosUrlScheme }],
+      ],
+    };
+  }
+
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-  if (!apiKey) return config;
+  if (!apiKey) return next;
 
   return {
-    ...config,
+    ...next,
     android: {
-      ...config.android,
+      ...next.android,
       config: { googleMaps: { apiKey } },
     },
   };

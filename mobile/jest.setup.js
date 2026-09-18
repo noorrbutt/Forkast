@@ -71,3 +71,32 @@ jest.mock('expo-image-manipulator', () => ({
   manipulateAsync: jest.fn().mockResolvedValue({ uri: 'file:///resized.jpg' }),
   SaveFormat: { JPEG: 'jpeg', PNG: 'png' },
 }));
+
+// No Google sign in SDK in a test runner: the module reaches for native code at
+// import time, exactly like the two above. The default is a signed in user, so
+// the tests exercise the path a real person takes; a test that needs a refusal
+// or a cancellation overrides these for its own duration.
+//
+// `statusCodes` has to carry real values rather than be left empty. The native
+// half compares an error's code against SIGN_IN_CANCELLED to decide whether
+// backing out is drawn as a failure, and against undefined that comparison is
+// true for every error, so every failure would silently become "they changed
+// their mind" and the screen would say nothing at all.
+jest.mock('@react-native-google-signin/google-signin', () => ({
+  GoogleSignin: {
+    configure: jest.fn(),
+    hasPlayServices: jest.fn().mockResolvedValue(true),
+    signOut: jest.fn().mockResolvedValue(null),
+    signIn: jest.fn().mockResolvedValue({
+      type: 'success',
+      data: { idToken: 'google-id-token', user: { email: 'sara@gmail.com' } },
+    }),
+  },
+  isSuccessResponse: (response) => response?.type === 'success',
+  isErrorWithCode: (error) => typeof error?.code === 'string',
+  statusCodes: {
+    SIGN_IN_CANCELLED: 'SIGN_IN_CANCELLED',
+    IN_PROGRESS: 'IN_PROGRESS',
+    PLAY_SERVICES_NOT_AVAILABLE: 'PLAY_SERVICES_NOT_AVAILABLE',
+  },
+}));
