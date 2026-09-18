@@ -410,7 +410,13 @@ function TrendCard({ trend }: { trend: ReturnType<typeof useTrend> }) {
       verdict: 'none',
     },
     {
-      label: 'Junk ratio',
+      // "Junk meals", not "junk ratio", because that is what the figure counts:
+      // junk logs over total logs. The chart directly above this splits each
+      // day by junk CALORIES, so the two answer different questions and can
+      // disagree on screen. One fries against one biryani is half the meals and
+      // about a quarter of the calories, and the card used to imply the chart
+      // was wrong about it.
+      label: 'Junk meals',
       value: formatRatio(now.junk_ratio),
       // Points taken from the two percentages that actually get printed, so the
       // direction can never disagree with the number sitting beside it.
