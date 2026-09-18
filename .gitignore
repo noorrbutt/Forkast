@@ -16,6 +16,8 @@ node_modules/
 dist/
 web-build/
 *.tsbuildinfo
+# jest --coverage writes here
+coverage/
 
 # OS
 .DS_Store
