@@ -187,7 +187,7 @@ export function MapScreen() {
   if (groups.length === 0) {
     return (
       <Empty
-        emoji="📍"
+        icon="map"
         title="No places yet"
         message="Log a meal with a restaurant name and your map starts filling in."
       />

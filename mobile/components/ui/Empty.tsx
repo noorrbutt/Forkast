@@ -8,11 +8,13 @@ type EmptyProps = {
   title: string;
   message?: string;
   /**
-   * From the shared vocabulary, and preferred over emoji: it takes its colour
-   * from the theme, so it reads the same weight in both palettes.
+   * From the shared vocabulary. It takes its colour from the theme, so it reads
+   * the same weight in both palettes, which an emoji cannot: an emoji is a
+   * bitmap the platform picks, so it ignored the palette, changed shape between
+   * iOS, Android and web, and was a second way of saying what the Icon map
+   * already says.
    */
   icon?: IconName;
-  emoji?: string;
   actionLabel?: string;
   actionIcon?: IconName;
   onAction?: () => void;
@@ -35,7 +37,6 @@ export function Empty({
   title,
   message,
   icon,
-  emoji = '🍽️',
   actionLabel,
   actionIcon,
   onAction,
@@ -69,9 +70,7 @@ export function Empty({
         <View style={{ marginBottom: spacing.xs }}>
           <Icon name={icon} size={32} color={colors.muted} />
         </View>
-      ) : (
-        <Text style={{ fontSize: 30 }}>{emoji}</Text>
-      )}
+      ) : null}
       <Text style={[type.subtitle, { color: colors.text, textAlign: 'center' }]}>{title}</Text>
       {message ? (
         <Text style={[type.caption, { color: colors.muted, textAlign: 'center' }]}>{message}</Text>
