@@ -18,6 +18,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import IntegrityError
 
 from app.config import Settings
 from app.main import app
@@ -316,3 +317,45 @@ async def test_the_daily_average_is_not_a_lifetime_total_over_a_fortnight(
     # The stored plan does not echo the context back, so the check that matters
     # is the arithmetic itself: the average must come from the windowed figure.
     assert expected < naive
+
+
+# --------------------------------------------------------------------------
+# A failed insert must not take the caller's transaction with it
+# --------------------------------------------------------------------------
+
+
+async def test_a_losing_restaurant_insert_leaves_the_caller_intact(session_factory) -> None:
+    """upsert_restaurant used to call session.rollback() on the conflict path.
+
+    That rolls back the caller's whole transaction and expires every object
+    loaded in it. create_log loads the food category before calling and reads
+    the calorie range out of it afterwards, so the read landed on an expired
+    instance and tried to refresh itself by emitting IO from a plain attribute
+    access. In an async session that is a MissingGreenlet, which names nothing
+    about what actually went wrong.
+
+    Written against the mechanism rather than the race, because the race needs
+    two connections to interleave on an exact instruction and would be a
+    coin toss in CI. A SAVEPOINT is what makes the difference, so that is what
+    is asserted.
+    """
+    from sqlalchemy import select as sa_select
+
+    from app.models import FoodCategory, Restaurant
+
+    async with session_factory() as session:
+        category = await session.scalar(sa_select(FoodCategory).limit(1))
+        assert category is not None
+        before = category.base_calorie_min
+
+        session.add(Restaurant(name="Savepoint Cafe", area=None, created_by=None))
+        await session.flush()
+
+        with pytest.raises(IntegrityError):
+            async with session.begin_nested():
+                session.add(Restaurant(name="Savepoint Cafe", area=None, created_by=None))
+                await session.flush()
+
+        # The whole point: still readable, and without a second trip to the
+        # database. A plain rollback() here expires it and this line raises.
+        assert category.base_calorie_min == before

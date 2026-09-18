@@ -287,17 +287,29 @@ async def upsert_restaurant(
         longitude=longitude,
         created_by=created_by,
     )
-    session.add(restaurant)
-
     try:
-        await session.flush()
+        # A SAVEPOINT, not the whole transaction. The insert below is allowed to
+        # fail and be discarded; everything the caller did before calling here
+        # is not.
+        #
+        # This used to be a plain session.rollback(), which throws away the
+        # caller's entire transaction and, worse, expires every object loaded in
+        # it. create_log loads the food category before it gets here and reads
+        # the calorie range out of it afterwards, so on this path that read hit
+        # an expired instance and tried to refresh it by emitting IO from a
+        # plain attribute access, which in an async session is a MissingGreenlet
+        # rather than anything that names the real problem. Two people adding
+        # the same new restaurant at the same moment is the ordinary case this
+        # branch exists for, so it has to leave the caller intact.
+        async with session.begin_nested():
+            session.add(restaurant)
+            await session.flush()
     except IntegrityError:
         # The lookup above is not atomic, the same way register's is not. Two
         # people logging a meal at the same new restaurant at the same moment
         # both miss, and the index catches the loser. That is a shared registry
         # working correctly, not an error, so the loser adopts the row the
         # winner just made.
-        await session.rollback()
         found = await find()
         if found is None:
             raise
