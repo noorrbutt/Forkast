@@ -406,6 +406,23 @@ async def create_plan(
         top_category=dashboard.top_category.name if dashboard.top_category else None,
     )
 
+    # Let go of the database before asking the model anything.
+    #
+    # Everything above this line is reads, and SQLAlchemy holds the connection
+    # they opened until the transaction ends. Without this the connection sat
+    # idle in transaction for the whole of up to three Groq round trips, which
+    # on a slow day is tens of seconds. The default pool is five connections
+    # plus ten overflow per worker with a thirty second checkout timeout, so a
+    # handful of people asking for a plan at once could starve every other
+    # request in the app of a connection, including the ones that have nothing
+    # to do with plans.
+    #
+    # Safe to commit rather than roll back: there is nothing pending, and
+    # expire_on_commit is False on this factory, so `user` stays usable below
+    # instead of trying to refresh itself from a connection we have just
+    # returned.
+    await session.commit()
+
     try:
         result = await ai.generate_plan(
             PlanRequest(
