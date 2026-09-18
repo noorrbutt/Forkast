@@ -5,28 +5,16 @@ import { Button, Chip, Field, FormError, Screen } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import { useUpdateProfile } from '../hooks/useProfile';
 import { describeError } from '../lib/api';
-import { GOAL_BLURBS, GOAL_LABELS, formatNumber, suggestedTarget } from '../lib/format';
+import { GOAL_BLURBS, GOAL_LABELS, MAX_TARGET, MIN_TARGET, formatNumber, suggestedTarget } from '../lib/format';
+import { deviceTimezone } from '../lib/deviceTimezone';
 import { GOALS, type Goal } from '../lib/types';
 import { useTheme } from '../theme';
 
 /** Matches ck_users_calorie_target_plausible, so a typo is caught before a round trip. */
-const MIN_TARGET = 0;
-const MAX_TARGET = 10_000;
 
 /** The goal this screen opens on, and therefore the target it opens with. */
 const FIRST_GOAL: Goal = 'maintain';
 
-
-/** What the device thinks it is, which is almost always what the user wants. */
-function deviceTimezone(): string | null {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
-  } catch {
-    // Some Android builds ship an ICU without a resolvable zone. Falling back
-    // to the server default is fine; the Profile tab can still fix it later.
-    return null;
-  }
-}
 
 /**
  * The one time setup, shown once immediately after an account is created.

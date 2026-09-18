@@ -131,8 +131,10 @@ export const FUN_HINT = '1 was a meal, 5 was a night worth remembering.';
  *
  * These are opening guesses, not prescriptions. Nobody's real maintenance is
  * knowable from a chip on a setup screen, which is exactly why the number
- * stays editable and why the copy says so. All three sit well inside the 800
- * to 10,000 the server will accept.
+ * stays editable and why the copy says so. All three sit well inside
+ * MIN_TARGET to MAX_TARGET below, which is what the server will accept. The
+ * floor was 800 when this was written and is 0 now, so naming the constants
+ * rather than the numbers is what stops this drifting again.
  */
 const SUGGESTED_TARGETS: Record<Goal, number> = {
   cut: 1_500,
@@ -143,6 +145,17 @@ const SUGGESTED_TARGETS: Record<Goal, number> = {
 export function suggestedTarget(goal: Goal): number {
   return SUGGESTED_TARGETS[goal];
 }
+
+/**
+ * The daily target range the server will accept.
+ *
+ * Checked on the client so a typo never costs a round trip and a 422. It lived
+ * as a pair of constants in both setup.tsx and profile.tsx, which are the only
+ * two screens that can set this number, so the one rule the server actually
+ * enforces was written down twice and could be changed in one place alone.
+ */
+export const MIN_TARGET = 0;
+export const MAX_TARGET = 10_000;
 
 /**
  * Cut, maintain and bulk are gym words, and someone who has never set foot in

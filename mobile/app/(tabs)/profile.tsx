@@ -12,7 +12,8 @@ import { useUpdateProfile } from '../../hooks/useProfile';
 import { useReminders } from '../../hooks/useReminders';
 import { REMINDERS_AVAILABLE } from '../../lib/notifications';
 import { describeError } from '../../lib/api';
-import { GOAL_BLURBS, GOAL_LABELS, formatDate, formatNumber, fullName } from '../../lib/format';
+import { GOAL_BLURBS, GOAL_LABELS, MAX_TARGET, MIN_TARGET, formatDate, formatNumber, fullName } from '../../lib/format';
+import { deviceTimezone } from '../../lib/deviceTimezone';
 import { haptics } from '../../lib/haptics';
 import { GOALS, type Goal } from '../../lib/types';
 import { useTheme } from '../../theme';
@@ -58,9 +59,6 @@ import { useTheme } from '../../theme';
  * the left edge and stayed at 12.
  */
 
-/** The range the server accepts, checked here so a typo never costs a 422. */
-const MIN_TARGET = 0;
-const MAX_TARGET = 10_000;
 
 
 /**
@@ -70,14 +68,6 @@ const MAX_TARGET = 10_000;
  * enough of a narrow phone's width that the email had nowhere to wrap to.
  */
 const AVATAR_SIZE = 72;
-
-function deviceTimezone(): string | null {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Who this account is. The one thing on this screen.
