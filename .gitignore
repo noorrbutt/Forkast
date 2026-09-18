@@ -4,6 +4,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
 
 # Environment / secrets
 .env
@@ -33,3 +37,11 @@ mobile/skills-lock.json
 # project while a browser session is driving it.
 .playwright-cli/
 mobile/.playwright-cli/
+
+# Editor settings are shared on purpose (see .vscode/settings.json): this is a
+# monorepo with no root package.json, so without them an editor opened at the
+# top level cannot resolve either half. Personal overrides go in the ignored
+# file beside it.
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
