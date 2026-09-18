@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import uuid
 
 from fastapi import HTTPException, Request, status
 from sqlalchemy import delete
@@ -55,17 +56,48 @@ def client_identity(request: Request, *, subject: str | None = None) -> str:
     X-Forwarded-For is consulted only when the deployment says it sits behind a
     proxy. Trusting it unconditionally lets any caller choose their own identity
     per request, which turns the limiter off entirely.
+
+    And it is read from the RIGHT, never the left. Every proxy that sets this
+    header appends to it, so the list reads `client, proxy1, proxy2` with the
+    nearest hop last and the leftmost entry being whatever the original caller
+    sent -- attacker controlled, in other words. nginx's standard
+    $proxy_add_x_forwarded_for, Cloudflare, ALB and Heroku all behave this way.
+    Taking the leftmost entry therefore handed a caller a brand new rate-limit
+    identity on every request simply by sending the header themselves, and it
+    did so in exactly the deployment this flag exists for. Counting hops in from
+    the right lands on the address the proxy itself observed, which the caller
+    cannot forge.
     """
     peer = request.client.host if request.client else "unknown"
-    if get_settings().trust_proxy_headers:
-        forwarded = request.headers.get("x-forwarded-for", "")
-        if forwarded.strip():
-            peer = forwarded.split(",")[0].strip() or peer
+    settings = get_settings()
+    if settings.trust_proxy_headers:
+        hops = max(settings.trusted_proxy_hops, 1)
+        entries = [part.strip() for part in request.headers.get("x-forwarded-for", "").split(",")]
+        entries = [part for part in entries if part]
+        if entries:
+            # With one proxy in front, the last entry is what it saw. With two,
+            # the last is the inner proxy and the one before it is the client.
+            # Anything the caller prepended sits further left than this index
+            # and is never reached.
+            index = min(hops, len(entries))
+            peer = entries[-index] or peer
 
     identity = f"{peer}|{subject.strip().lower()}" if subject else peer
     if len(identity) > _MAX_IDENTITY:
         identity = hashlib.sha256(identity.encode("utf-8")).hexdigest()
     return identity
+
+
+def account_identity(user_id: uuid.UUID) -> str:
+    """Who the attempt is counted against when the caller is already known.
+
+    Deliberately carries no address. Once a request is authenticated the account
+    is the identity that matters, and mixing the peer back in only means the
+    same account gets a fresh allowance from a different network -- which is
+    free to arrange and defeats the limit entirely. Prefixed so an account key
+    can never collide with a bare address from client_identity.
+    """
+    return f"user:{user_id}"
 
 
 class RateLimiter:
