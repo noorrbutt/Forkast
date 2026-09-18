@@ -50,4 +50,4 @@ pytest-cov==7.0.0
 
 # Lint and format. Pinned like everything else so CI and a laptop cannot
 # disagree about whether the code is clean.
-ruff==0.14.2
+ruff==0.16.7
