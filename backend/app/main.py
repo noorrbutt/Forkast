@@ -46,6 +46,17 @@ app = FastAPI(
 # so credentials are not needed with a wildcard anyway.
 _allow_all_origins = settings.cors_origin_list == ["*"]
 
+# add_middleware prepends, so the LAST one added is the outermost. The order
+# below is therefore, from the outside in: security headers, CORS, body limit.
+#
+# The body limit is innermost on purpose. It used to be outermost, where its 413
+# was returned without ever passing back through the other two, so the one
+# response most likely to be produced by a hostile or misconfigured client
+# carried neither the security headers nor the CORS headers -- which meant a
+# browser could not even read the status, and reported it as an opaque network
+# failure instead of "your upload was too big".
+app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_request_bytes)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -54,10 +65,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Added after CORS, so it runs outermost and its headers reach even the
-# responses CORS short-circuits.
+# Outermost, so its headers reach even the responses CORS short-circuits.
 app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_request_bytes)
 
 app.include_router(api_router)
 
