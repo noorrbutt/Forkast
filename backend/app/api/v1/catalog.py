@@ -48,9 +48,30 @@ async def _apply_similarity_threshold(session: SessionDep) -> None:
     unrelated request. The value is a module constant, never user input, so
     inlining it is safe.
     """
-    await session.execute(
-        text(f"SET LOCAL pg_trgm.similarity_threshold = {SIMILARITY_THRESHOLD}")
+    await session.execute(text(f"SET LOCAL pg_trgm.similarity_threshold = {SIMILARITY_THRESHOLD}"))
+
+
+# The characters LIKE treats as wildcards. Escaped rather than stripped, because
+# a restaurant genuinely called "100% Chai" should still be findable by typing
+# its name.
+_LIKE_ESCAPE = "\\"
+
+
+def _contains(term: str) -> str:
+    """A LIKE pattern matching `term` anywhere, with its wildcards defused.
+
+    Interpolating a raw term leaves % and _ live: q=%% matches every row in the
+    table, which turns a typo-tolerant search box into a full table scan any
+    unauthenticated-adjacent caller can trigger, and q=_ quietly matches far
+    more than the single character the user typed. Callers must pass the result
+    to .ilike(..., escape=_LIKE_ESCAPE) so PostgreSQL reads the escapes.
+    """
+    escaped = (
+        term.replace(_LIKE_ESCAPE, _LIKE_ESCAPE * 2)
+        .replace("%", f"{_LIKE_ESCAPE}%")
+        .replace("_", f"{_LIKE_ESCAPE}_")
     )
+    return f"%{escaped}%"
 
 
 @router.get("/cuisines", response_model=list[CuisineOut])
@@ -101,17 +122,20 @@ async def search(
     await _apply_similarity_threshold(session)
 
     term = q
-    pattern = f"%{term}%"
+    pattern = _contains(term)
 
     cuisine_stmt = (
         select(Cuisine)
         .where(
             or_(
-                Cuisine.name.ilike(pattern),
+                Cuisine.name.ilike(pattern, escape=_LIKE_ESCAPE),
                 _fuzzy(Cuisine.name, term),
             )
         )
-        .order_by(Cuisine.name.ilike(pattern).desc(), func.similarity(Cuisine.name, term).desc())
+        .order_by(
+            Cuisine.name.ilike(pattern, escape=_LIKE_ESCAPE).desc(),
+            func.similarity(Cuisine.name, term).desc(),
+        )
         .limit(limit)
     )
 
@@ -119,12 +143,12 @@ async def search(
         select(FoodCategory)
         .where(
             or_(
-                FoodCategory.name.ilike(pattern),
+                FoodCategory.name.ilike(pattern, escape=_LIKE_ESCAPE),
                 _fuzzy(FoodCategory.name, term),
             )
         )
         .order_by(
-            FoodCategory.name.ilike(pattern).desc(),
+            FoodCategory.name.ilike(pattern, escape=_LIKE_ESCAPE).desc(),
             func.similarity(FoodCategory.name, term).desc(),
         )
         .limit(limit)
@@ -136,7 +160,7 @@ async def search(
         .where(
             FoodLog.user_id == user.id,
             or_(
-                FoodLog.dish_name.ilike(pattern),
+                FoodLog.dish_name.ilike(pattern, escape=_LIKE_ESCAPE),
                 _fuzzy(FoodLog.dish_name, term),
             ),
         )
@@ -186,12 +210,12 @@ async def list_restaurants(
             select(Restaurant)
             .where(
                 or_(
-                    Restaurant.name.ilike(f"%{term}%"),
+                    Restaurant.name.ilike(_contains(term), escape=_LIKE_ESCAPE),
                     _fuzzy(Restaurant.name, term),
                 )
             )
             .order_by(
-                Restaurant.name.ilike(f"%{term}%").desc(),
+                Restaurant.name.ilike(_contains(term), escape=_LIKE_ESCAPE).desc(),
                 func.similarity(Restaurant.name, term).desc(),
             )
             .limit(limit)
@@ -243,8 +267,7 @@ async def upsert_restaurant(
                 # at a restaurant with such a character in its name got a 500
                 # and lost the meal.
                 func.lower(Restaurant.name) == func.lower(name.strip()),
-                func.coalesce(func.lower(Restaurant.area), "")
-                == func.lower(normalised_area or ""),
+                func.coalesce(func.lower(Restaurant.area), "") == func.lower(normalised_area or ""),
             )
         )
 
