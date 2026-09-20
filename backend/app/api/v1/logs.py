@@ -23,7 +23,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -125,12 +125,28 @@ async def _refine_estimate(
         )
 
         async with factory() as session:
-            log = await session.get(FoodLog, log_id)
-            if log is None or log.category_id != category_id:
+            result = await session.execute(
+                text(
+                    """
+                    UPDATE food_logs
+                    SET estimated_calories = :value
+                    WHERE id = :id
+                      AND category_id = :category_id
+                      AND dish_name = :dish_name
+                      AND serving_size = :serving_size
+                    """
+                ),
+                {
+                    "value": refined,
+                    "id": log_id,
+                    "category_id": category_id,
+                    "dish_name": dish_name,
+                    "serving_size": serving_size,
+                },
+            )
+            if result.rowcount == 0:
                 return
-            if refined != log.estimated_calories:
-                log.estimated_calories = refined
-                await session.commit()
+            await session.commit()
     except Exception:
         logger.warning("Could not refine the estimate for log %s", log_id, exc_info=True)
 

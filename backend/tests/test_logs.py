@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 
 import pytest
@@ -206,6 +207,44 @@ async def test_editing_the_serving_size_recalculates_the_estimate(
 
     assert updated["serving_size"] == "large"
     assert updated["estimated_calories"] > created["estimated_calories"]
+
+
+async def test_a_slow_refine_does_not_overwrite_a_newer_serving_size_edit(
+    auth_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    category = await _a_category(auth_client)
+    release = asyncio.Event()
+
+    async def delayed_estimate(*, dish_name: str, category_name: str, serving_size, **kwargs):
+        await release.wait()
+        return 9999
+
+    monkeypatch.setattr("app.api.v1.logs._estimate_calories", delayed_estimate)
+
+    created = (
+        await auth_client.post(
+            LOGS,
+            json={
+                "dish_name": "chicken biryani",
+                "category_id": category["id"],
+                "rating": 4,
+                "serving_size": "small",
+            },
+        )
+    ).json()
+
+    await asyncio.sleep(0.05)
+    updated = (
+        await auth_client.patch(f"{LOGS}/{created['id']}", json={"serving_size": "large"})
+    ).json()
+
+    assert updated["serving_size"] == "large"
+    release.set()
+    await asyncio.sleep(0.05)
+
+    final = (await auth_client.get(f"{LOGS}/{created['id']}" )).json()
+    assert final["serving_size"] == "large"
+    assert final["estimated_calories"] == updated["estimated_calories"]
 
 
 async def test_editing_only_the_rating_leaves_the_estimate_alone(
