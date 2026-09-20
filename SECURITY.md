@@ -5,7 +5,7 @@
 Report privately, not in a public issue.
 
 - GitHub: open a [private advisory](https://github.com/noorrbutt/Forkast/security/advisories/new)
-- Or email: nooramir.nb@gmail.com
+- Or email: noorbbutt@gmail.com
 
 Please include what you did, what happened, and what you expected. A request and
 its response, or a short script, is worth more than a description.
