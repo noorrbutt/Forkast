@@ -328,28 +328,21 @@ async def google(
     return await _issue_tokens(session, user)
 
 
-async def _revoke_family_on_reuse(session: SessionDep, token_hash: str, now: dt.datetime) -> None:
-    """Kill every live token for the owner of an already-spent refresh token.
+async def _revoke_family_on_reuse(
+    session: SessionDep, session_id: uuid.UUID, now: dt.datetime
+) -> None:
+    """Kill every live refresh token in the session that just got replayed.
 
-    Silent by design: the caller still gets the same "invalid or expired"
-    message it would have got for a token that never existed, because telling
-    an attacker which of the two happened is telling them their token was real.
-    An expired-but-unrevoked token is left alone -- that is an idle client, not
-    evidence of a leak.
+    A replayed refresh token is evidence of a leak; it means the holder of the
+    token is still trying to use it after the valid client already rotated it.
+    The response stays silent, but the session is what gets torn down rather
+    than every live session for that user. A fresh retry within the grace period
+    is treated as a client-side timeout, not a leak.
     """
-    reused = await session.scalar(
-        select(RefreshToken).where(
-            RefreshToken.token_hash == token_hash,
-            RefreshToken.revoked_at.is_not(None),
-        )
-    )
-    if reused is None:
-        return
-
     await session.execute(
         update(RefreshToken)
         .where(
-            RefreshToken.user_id == reused.user_id,
+            RefreshToken.session_id == session_id,
             RefreshToken.revoked_at.is_(None),
         )
         .values(revoked_at=now)
@@ -392,13 +385,31 @@ async def refresh(
     row = claimed.first()
     if row is None:
         # Nothing matched. Either the token never existed, or it did and has
-        # already been spent -- and the second case is the interesting one.
-        # Rotation alone does not help if the thief refreshes first: the victim
-        # gets a 401 and the thief holds a chain that keeps rotating forever.
-        # A replay of an already-revoked token is the signal that the chain
-        # leaked, so every live token for that account goes with it and both
-        # sides have to log in again. RFC 9700 section 4.14.2.
-        await _revoke_family_on_reuse(session, token_hash, now)
+        # already been spent. A retry within the grace period is a client-side
+        # timeout, not a leak, so the same session gets a fresh pair rather
+        # than every live token for the account getting logged out.
+        reused = await session.scalar(
+            select(RefreshToken).where(
+                RefreshToken.token_hash == token_hash,
+                RefreshToken.revoked_at.is_not(None),
+            )
+        )
+        if reused is not None:
+            leeway = dt.timedelta(seconds=get_settings().refresh_reuse_leeway_seconds)
+            if reused.revoked_at is not None and now - reused.revoked_at <= leeway:
+                live_in_session = await session.scalar(
+                    select(RefreshToken).where(
+                        RefreshToken.session_id == reused.session_id,
+                        RefreshToken.revoked_at.is_(None),
+                        RefreshToken.expires_at > now,
+                    )
+                )
+                if live_in_session is not None:
+                    user = await session.get(User, reused.user_id)
+                    if user is not None:
+                        return await _issue_tokens(session, user, session_id=reused.session_id)
+
+            await _revoke_family_on_reuse(session, reused.session_id, now)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
+import uuid
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.models import RefreshToken, User
 from app.services.security import decode_access_token, hash_refresh_token
 
@@ -144,16 +147,12 @@ async def test_refresh_rotates_the_token_and_kills_the_old_one(client: AsyncClie
     rotated = first.json()["refresh_token"]
     assert rotated != original_refresh
 
-    # The rotated one works, and rotates again. Checked before the replay
-    # below, because a replay is treated as evidence that the chain leaked and
-    # deliberately takes every live token for the account with it -- see
-    # test_replaying_a_spent_refresh_token_kills_the_whole_chain.
     second = await client.post(REFRESH, json={"refresh_token": rotated})
     assert second.status_code == 200
 
-    # Replaying the original must fail, which is the whole point of rotation.
     replay = await client.post(REFRESH, json={"refresh_token": original_refresh})
-    assert replay.status_code == 401
+    assert replay.status_code == 200
+    assert replay.json()["refresh_token"] != rotated
 
 
 async def test_refresh_tokens_are_stored_only_as_a_hash(
@@ -177,6 +176,143 @@ async def test_refresh_tokens_are_stored_only_as_a_hash(
         select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_token(raw))
     )
     assert stored is not None
+
+
+async def test_retrying_a_recently_spent_refresh_keeps_the_session_alive(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    registered = (
+        await client.post(
+            REGISTER,
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "retry-leeway@forkast.app",
+                "password": "password123",
+            },
+        )
+    ).json()
+    first_refresh = registered["refresh_token"]
+
+    user = await session.scalar(select(User).where(User.email == "retry-leeway@forkast.app"))
+    assert user is not None
+
+    second_raw = "second-live-refresh-token"
+    session.add(
+        RefreshToken(
+            user_id=user.id,
+            session_id=uuid.uuid4(),
+            token_hash=hash_refresh_token(second_raw),
+            expires_at=dt.datetime.now(dt.UTC) + dt.timedelta(days=1),
+        )
+    )
+    await session.commit()
+
+    rotated = await client.post(REFRESH, json={"refresh_token": first_refresh})
+    assert rotated.status_code == 200
+
+    replay = await client.post(REFRESH, json={"refresh_token": first_refresh})
+    assert replay.status_code == 200
+    assert replay.json()["refresh_token"] != rotated.json()["refresh_token"]
+    assert (await client.post(REFRESH, json={"refresh_token": second_raw})).status_code == 200
+
+    live_rows = await session.scalars(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.revoked_at.is_(None),
+        )
+    )
+    assert len(live_rows.all()) >= 2
+
+
+async def test_reusing_a_refresh_after_the_leeway_revokes_only_that_session(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    registered = (
+        await client.post(
+            REGISTER,
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "retry-stale@forkast.app",
+                "password": "password123",
+            },
+        )
+    ).json()
+    first_refresh = registered["refresh_token"]
+
+    user = await session.scalar(select(User).where(User.email == "retry-stale@forkast.app"))
+    assert user is not None
+
+    second_raw = "second-stale-refresh-token"
+    session.add(
+        RefreshToken(
+            user_id=user.id,
+            session_id=uuid.uuid4(),
+            token_hash=hash_refresh_token(second_raw),
+            expires_at=dt.datetime.now(dt.UTC) + dt.timedelta(days=1),
+        )
+    )
+    await session.commit()
+
+    assert (await client.post(REFRESH, json={"refresh_token": first_refresh})).status_code == 200
+
+    stale = await session.scalar(
+        select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_token(first_refresh))
+    )
+    assert stale is not None
+    stale.revoked_at = dt.datetime.now(dt.UTC) - dt.timedelta(
+        seconds=get_settings().refresh_reuse_leeway_seconds + 1
+    )
+    await session.commit()
+
+    replay = await client.post(REFRESH, json={"refresh_token": first_refresh})
+    assert replay.status_code == 401
+    assert (await client.post(REFRESH, json={"refresh_token": second_raw})).status_code == 200
+
+    live_rows = await session.scalars(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.revoked_at.is_(None),
+        )
+    )
+    assert len(live_rows.all()) == 1
+
+
+async def test_unknown_refresh_tokens_do_not_revoke_any_session(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    registered = (
+        await client.post(
+            REGISTER,
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "unknown-refresh@forkast.app",
+                "password": "password123",
+            },
+        )
+    ).json()
+
+    user = await session.scalar(select(User).where(User.email == "unknown-refresh@forkast.app"))
+    assert user is not None
+    before = await session.scalar(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.revoked_at.is_(None),
+        )
+    )
+    assert before is not None
+    assert (
+        await client.post(REFRESH, json={"refresh_token": "totally-not-a-real-refresh-token"})
+    ).status_code == 401
+    after = await session.scalar(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.revoked_at.is_(None),
+        )
+    )
+    assert after is not None
 
 
 async def test_logout_revokes_the_refresh_token(client: AsyncClient) -> None:

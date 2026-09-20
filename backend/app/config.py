@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     access_token_expire_minutes: int = Field(default=30, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
     refresh_token_expire_days: int = Field(default=30, alias="REFRESH_TOKEN_EXPIRE_DAYS")
+    refresh_reuse_leeway_seconds: int = Field(default=30, alias="REFRESH_REUSE_LEEWAY_SECONDS")
 
     default_timezone: str = Field(default="Asia/Karachi", alias="DEFAULT_TIMEZONE")
 
