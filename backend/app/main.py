@@ -14,12 +14,18 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
+from app.api.deps import SessionDep
 from app.api.v1 import api_router
 from app.config import AIProvider, get_settings
-from app.middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
+from app.middleware import (
+    BodySizeLimitMiddleware,
+    RequestLoggingMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.services.ai.deps import get_ai_service
 
 settings = get_settings()
@@ -84,6 +90,7 @@ app.add_middleware(
 
 # Outermost, so its headers reach even the responses CORS short-circuits.
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
 
 app.include_router(api_router)
 
@@ -93,3 +100,13 @@ async def health() -> dict[str, str]:
     """Unauthenticated liveness check, handy for confirming the phone can
     actually reach the laptop before debugging anything else."""
     return {"status": "ok", "ai_provider": settings.ai_provider.value}
+
+
+@app.get("/ready", tags=["meta"])
+async def ready(session: SessionDep) -> dict[str, str]:
+    """Authenticated readiness: application can talk to Postgres right now."""
+    try:
+        await session.execute(text("SELECT 1"))
+    except Exception as exc:  # pragma: no cover - DB failure path
+        raise HTTPException(status_code=503, detail="Database unavailable") from exc
+    return {"status": "ready"}

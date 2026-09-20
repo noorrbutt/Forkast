@@ -11,7 +11,9 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
-from app.config import Settings, get_settings
+from app.config import Settings, _rewrite_database_url, get_settings
+from app.db import get_session
+from app.main import app
 from app.middleware import SECURITY_HEADERS
 
 REGISTER = "/api/v1/auth/register"
@@ -21,11 +23,61 @@ REFRESH = "/api/v1/auth/refresh"
 LOGS = "/api/v1/logs"
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected_async", "expected_sync"),
+    [
+        (
+            "postgres://user:pass@db.example/app?sslmode=require",
+            "postgresql+asyncpg://user:pass@db.example/app?ssl=require",
+            "postgresql+psycopg://user:pass@db.example/app?sslmode=require",
+        ),
+        (
+            "postgresql://user:pass@db.example/app?sslmode=verify-full",
+            "postgresql+asyncpg://user:pass@db.example/app?ssl=verify-full",
+            "postgresql+psycopg://user:pass@db.example/app?sslmode=verify-full",
+        ),
+        (
+            "postgresql://user:pass@db.example/app?ssl=require",
+            "postgresql+asyncpg://user:pass@db.example/app?ssl=require",
+            "postgresql+psycopg://user:pass@db.example/app?sslmode=require",
+        ),
+    ],
+)
+def test_database_urls_are_rewritten_for_asyncpg_and_psycopg(raw: str, expected_async: str, expected_sync: str) -> None:
+    assert _rewrite_database_url(raw, async_driver=True) == expected_async
+    assert _rewrite_database_url(raw, async_driver=False) == expected_sync
+
+
 async def test_every_response_carries_the_security_headers(client: AsyncClient) -> None:
     response = await client.get("/health")
 
     for header, value in SECURITY_HEADERS.items():
         assert response.headers.get(header) == value, header
+
+
+async def test_ready_works_and_uses_the_database(client: AsyncClient) -> None:
+    response = await client.get("/ready")
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "ready"
+
+
+async def test_ready_returns_503_when_the_db_dependency_fails(client: AsyncClient) -> None:
+    async def broken() -> None:
+        raise RuntimeError("database down")
+
+    app.dependency_overrides[get_session] = broken
+    try:
+        response = await client.get("/ready")
+    finally:
+        app.dependency_overrides.pop(get_session, None)
+
+    assert response.status_code == 503, response.text
+    assert response.json()["detail"] == "Database unavailable"
+
+
+async def test_request_id_is_echoed_in_the_response(client: AsyncClient) -> None:
+    response = await client.get("/health", headers={"X-Request-ID": "abc-123"})
+    assert response.headers["X-Request-ID"] == "abc-123"
 
 
 async def test_hsts_is_not_sent_over_plain_http(client: AsyncClient) -> None:

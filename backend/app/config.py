@@ -5,6 +5,7 @@ from __future__ import annotations
 import enum
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -29,6 +30,28 @@ class Environment(str, enum.Enum):
 
     dev = "dev"
     production = "production"
+
+
+def _rewrite_database_url(raw_url: str, *, async_driver: bool) -> str:
+    parsed = urlsplit(raw_url)
+    scheme = parsed.scheme.lower()
+    if scheme in {"postgres", "postgresql"}:
+        scheme = "postgresql+asyncpg" if async_driver else "postgresql+psycopg"
+    elif scheme in {"postgresql+asyncpg", "postgresql+psycopg"}:
+        scheme = "postgresql+asyncpg" if async_driver else "postgresql+psycopg"
+
+    params = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    if async_driver:
+        sslmode = params.pop("sslmode", None)
+        if sslmode is not None and "ssl" not in params:
+            params["ssl"] = sslmode
+    else:
+        ssl = params.pop("ssl", None)
+        if ssl is not None and "sslmode" not in params:
+            params["sslmode"] = ssl
+
+    rebuilt = urlencode(params, doseq=True)
+    return urlunsplit((scheme, parsed.netloc, parsed.path, rebuilt, ""))
 
 
 class Settings(BaseSettings):
@@ -123,6 +146,12 @@ class Settings(BaseSettings):
     plan_rate_window_seconds: int = Field(default=3600, alias="PLAN_RATE_WINDOW_SECONDS")
 
     @model_validator(mode="after")
+    def _normalise_database_urls(self) -> Settings:
+        self.database_url = _rewrite_database_url(self.database_url, async_driver=True)
+        self.test_database_url = _rewrite_database_url(self.test_database_url, async_driver=True)
+        return self
+
+    @model_validator(mode="after")
     def _refuse_an_unsafe_configuration(self) -> Settings:
         """Fail at import rather than at the first request.
 
@@ -215,7 +244,7 @@ class Settings(BaseSettings):
     @property
     def sync_database_url(self) -> str:
         """Alembic's offline/sync path needs a non-async driver URL."""
-        return self.database_url.replace("+asyncpg", "")
+        return _rewrite_database_url(self.database_url, async_driver=False)
 
 
 @lru_cache

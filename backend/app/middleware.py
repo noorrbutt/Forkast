@@ -8,7 +8,10 @@ a limit the application enforces itself cannot be lost by a misconfigured one.
 
 from __future__ import annotations
 
+import json
 import logging
+import time
+import uuid
 
 from app.config import get_settings
 from starlette.datastructures import Headers
@@ -38,6 +41,50 @@ SECURITY_HEADERS = {
 
 logger = logging.getLogger(__name__)
 _WARNED_ABOUT_X_FORWARDED_FOR = False
+
+
+class RequestLoggingMiddleware:
+    """Log one JSON line per request without leaking body or headers."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request_id = None
+        for key, value in scope.get("headers", []):
+            if key == b"x-request-id":
+                request_id = value.decode()
+                break
+        if request_id is None:
+            request_id = uuid.uuid4().hex
+
+        method = scope.get("method", "GET")
+        path = scope.get("path", "/")
+        start = time.perf_counter()
+        status = 500
+
+        async def tracked_send(message: Message) -> None:
+            nonlocal status
+            if message["type"] == "http.response.start":
+                status = message["status"]
+                headers = list(message.get("headers", []))
+                headers.append((b"x-request-id", request_id.encode()))
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, tracked_send)
+
+        duration_ms = int((time.perf_counter() - start) * 1000)
+        logger.info(
+            json.dumps(
+                {"method": method, "path": path, "status": status, "duration_ms": duration_ms},
+                separators=(",", ":"),
+            )
+        )
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):

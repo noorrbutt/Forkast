@@ -12,7 +12,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import pool
+from sqlalchemy import pool, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -95,6 +95,9 @@ async def run_async_migrations() -> None:
     )
 
     async with connectable.connect() as connection:
+        server_version = await connection.scalar(text("SHOW server_version_num"))
+        if server_version is None or int(server_version) < 180000:
+            raise RuntimeError("Postgres 18 required (uuidv7)")
         await connection.run_sync(do_run_migrations)
 
     await connectable.dispose()
