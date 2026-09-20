@@ -106,11 +106,16 @@ class Settings(BaseSettings):
     # single account's allowance. Much higher, because a whole office behind one
     # NAT address shares it.
     login_peer_rate_limit: int = Field(default=50, alias="LOGIN_PEER_RATE_LIMIT")
+    # Refresh is a different shape from login: a single mobile carrier or office
+    # can share one peer behind CGNAT, and a user may legitimately rotate many
+    # refresh tokens during a single active session. The limit therefore sits on
+    # its own bucket rather than inheriting the login peer allowance.
+    refresh_rate_limit: int = Field(default=300, alias="REFRESH_RATE_LIMIT")
     # Registration is counted per peer only. The point of limiting it is that
     # 409-on-duplicate is an account existence oracle, and walking a list uses a
     # different address every time, so a per-address key would never trip. Real
     # people register approximately once.
-    register_rate_limit: int = Field(default=5, alias="REGISTER_RATE_LIMIT")
+    register_rate_limit: int = Field(default=30, alias="REGISTER_RATE_LIMIT")
     login_rate_window_seconds: int = Field(default=300, alias="LOGIN_RATE_WINDOW_SECONDS")
 
     # Plans are the only route that costs real money once Groq is behind it.
@@ -159,6 +164,13 @@ class Settings(BaseSettings):
             )
 
         if self.environment is Environment.production:
+            if "trust_proxy_headers" not in self.model_fields_set:
+                raise ValueError(
+                    "TRUST_PROXY_HEADERS must be explicitly set in production. "
+                    "Set it to true only when a trusted reverse proxy rewrites "
+                    "X-Forwarded-For; leaving it unset makes the app misidentify "
+                    "shared CGNAT or proxy peers as one client."
+                )
             if "*" in self.cors_origin_list:
                 raise ValueError(
                     "CORS_ORIGINS must name real origins in production, not '*'. "

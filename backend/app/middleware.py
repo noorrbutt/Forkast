@@ -8,6 +8,9 @@ a limit the application enforces itself cannot be lost by a misconfigured one.
 
 from __future__ import annotations
 
+import logging
+
+from app.config import get_settings
 from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -33,6 +36,9 @@ SECURITY_HEADERS = {
     "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
 }
 
+logger = logging.getLogger(__name__)
+_WARNED_ABOUT_X_FORWARDED_FOR = False
+
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add the headers above, plus HSTS when the request actually arrived over TLS.
@@ -43,6 +49,17 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        global _WARNED_ABOUT_X_FORWARDED_FOR
+
+        if request.headers.get("x-forwarded-for") and not get_settings().trust_proxy_headers:
+            if not _WARNED_ABOUT_X_FORWARDED_FOR:
+                logger.warning(
+                    "X-Forwarded-For arrived while TRUST_PROXY_HEADERS is false; "
+                    "proxy headers are being ignored and the rate-limit identity is "
+                    "based on the direct peer address only."
+                )
+                _WARNED_ABOUT_X_FORWARDED_FOR = True
+
         response = await call_next(request)
         for header, value in SECURITY_HEADERS.items():
             response.headers.setdefault(header, value)

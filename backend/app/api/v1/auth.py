@@ -370,7 +370,7 @@ async def refresh(
     await limiter.hit(
         "refresh",
         client_identity(request),
-        limit=get_settings().login_peer_rate_limit,
+        limit=get_settings().refresh_rate_limit,
         window_seconds=get_settings().login_rate_window_seconds,
     )
     await _prune_if_due(limiter)

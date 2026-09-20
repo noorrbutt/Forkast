@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.middleware import SECURITY_HEADERS
 
 REGISTER = "/api/v1/auth/register"
@@ -205,6 +205,45 @@ async def test_x_forwarded_for_cannot_be_used_to_reset_the_limit(client: AsyncCl
         )
 
     assert 429 in statuses, f"a spoofed peer address defeated the limit: {statuses}"
+
+
+def test_production_requires_an_explicit_trust_proxy_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Production must explicitly opt into trusting a proxy, or the app can
+    never safely identify a shared NAT or CGNAT peer."""
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.delenv("TRUST_PROXY_HEADERS", raising=False)
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://user:pass@localhost:5432/forkast")
+    monkeypatch.setenv("TEST_DATABASE_URL", "postgresql+asyncpg://user:pass@localhost:5432/forkast_test")
+    monkeypatch.setenv("JWT_SECRET", "a-very-long-secret-that-is-matching-the-required-minimum")
+
+    with pytest.raises(ValueError, match="TRUST_PROXY_HEADERS"):
+        Settings()
+
+
+async def test_refresh_allows_more_than_the_login_peer_window(client: AsyncClient) -> None:
+    """Refresh calls are a different bucket from login attempts, because a CGNAT
+    or a corporate proxy can share one peer across many users."""
+    tokens = []
+    for i in range(60):
+        user = (
+            await client.post(
+                REGISTER,
+                json={
+                    "first_name": "Refresh",
+                    "last_name": "User",
+                    "email": f"refresh-{i}@forkast.app",
+                    "password": "password123",
+                },
+            )
+        ).json()
+        tokens.append(user["refresh_token"])
+
+    statuses = [
+        (await client.post(REFRESH, json={"refresh_token": token})).status_code
+        for token in tokens
+    ]
+
+    assert 429 not in statuses, statuses
 
 
 async def test_signing_out_stops_the_access_token_immediately(client: AsyncClient) -> None:
