@@ -55,6 +55,7 @@ class FoodLog(Base):
         str_enum(ServingSize, "serving_size", length=16), nullable=False
     )
     estimated_calories: Mapped[int] = mapped_column(nullable=False)
+    client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -84,6 +85,13 @@ class FoodLog(Base):
         Index("ix_food_logs_user_id_created_at", "user_id", text("created_at DESC")),
         Index("ix_food_logs_user_id_category_id", "user_id", "category_id"),
         Index("ix_food_logs_restaurant_id", "restaurant_id"),
+        Index(
+            "ux_food_logs_user_client_id",
+            "user_id",
+            "client_id",
+            unique=True,
+            postgresql_where=text("client_id IS NOT NULL"),
+        ),
         Index(
             "ix_food_logs_dish_name_trgm",
             "dish_name",

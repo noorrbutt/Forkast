@@ -1,5 +1,6 @@
+import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { MealPhoto } from '../../components/MealPhoto';
@@ -152,6 +153,14 @@ export default function LogScreen() {
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
   const [photoStatus, setPhotoStatus] = useState<PhotoStatus>('none');
   const [saved, setSaved] = useState<FoodLog | null>(null);
+  const clientIdRef = useRef<string | null>(null);
+  const ensureClientId = () => {
+    if (clientIdRef.current === null) {
+      clientIdRef.current = Crypto.randomUUID();
+    }
+    return clientIdRef.current;
+  };
+  ensureClientId();
   // Whether "Log it" has been pressed on a form that was not ready. The button
   // stays live either way; this only decides whether the line under it is said
   // quietly or urgently.
@@ -219,6 +228,7 @@ export default function LogScreen() {
   );
 
   const resetForm = () => {
+    clientIdRef.current = Crypto.randomUUID();
     setQuery('');
     setCuisineId(null);
     setCategoryId(null);
@@ -306,6 +316,7 @@ export default function LogScreen() {
       category_id: categoryId,
       rating,
       serving_size: servingSize,
+      client_id: ensureClientId(),
     };
     if (funScale !== null) input.fun_scale = funScale;
     if (friendScale !== null) input.friend_scale = friendScale;
@@ -317,6 +328,7 @@ export default function LogScreen() {
       // The moment worth celebrating, and the only success haptic in the app.
       onSuccess: (log) => {
         haptics.success();
+        clientIdRef.current = null;
         setSaved(log);
         if (photo) void attachPhoto(log.id, photo);
       },
@@ -365,9 +377,8 @@ export default function LogScreen() {
           >
             <Hero
               value={formatNumber(saved.estimated_calories)}
-              caption={`kcal for ${saved.dish_name}${
-                saved.restaurant ? ` at ${saved.restaurant.name}` : ''
-              }`}
+              caption={`kcal for ${saved.dish_name}${saved.restaurant ? ` at ${saved.restaurant.name}` : ''
+                }`}
               align="center"
             />
           </View>
@@ -575,8 +586,8 @@ export default function LogScreen() {
               hint={
                 selectedCategory
                   ? `Usually ${formatNumber(selectedCategory.base_calorie_min)} to ${formatNumber(
-                      selectedCategory.base_calorie_max,
-                    )} kcal${selectedCategory.is_junk ? ', counts as junk' : ''}.`
+                    selectedCategory.base_calorie_max,
+                  )} kcal${selectedCategory.is_junk ? ', counts as junk' : ''}.`
                   : 'The calorie estimate comes from this. Type a cuisine to see its categories.'
               }
               disabled={categoryOptions.length === 0}

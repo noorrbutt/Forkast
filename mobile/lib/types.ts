@@ -120,6 +120,7 @@ export type LogInput = {
   fun_scale?: number;
   friend_scale?: FriendScale;
   serving_size: ServingSize;
+  client_id?: Uuid;
 };
 
 /**

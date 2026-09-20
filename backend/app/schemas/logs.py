@@ -27,6 +27,7 @@ class FoodLogCreate(BaseModel):
     fun_scale: int | None = Field(default=None, ge=1, le=5)
     friend_scale: FriendScale | None = None
     serving_size: ServingSize = ServingSize.medium
+    client_id: uuid.UUID | None = None
 
     # Optional, for backfilling older meals. Defaults to now on the server.
     created_at: dt.datetime | None = None

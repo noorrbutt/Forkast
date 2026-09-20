@@ -24,6 +24,7 @@ from fastapi import (
     status,
 )
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -248,6 +249,7 @@ async def create_log(
     factory: SessionFactoryDep,
     background: BackgroundTasks,
     limiter: RateLimiterDep,
+    response: Response,
 ) -> FoodLog:
     settings = get_settings()
     await limiter.hit(
@@ -275,6 +277,14 @@ async def create_log(
         )
         restaurant_id = restaurant.id
 
+    if payload.client_id is not None:
+        existing = await session.scalar(
+            select(FoodLog).where(FoodLog.user_id == user.id, FoodLog.client_id == payload.client_id)
+        )
+        if existing is not None:
+            response.status_code = status.HTTP_200_OK
+            return await _load_log(session, user.id, existing.id)
+
     # Saved with a figure that needs nobody's permission, and refined behind
     # the response. See _provisional_estimate.
     estimated = _provisional_estimate(category, payload.serving_size)
@@ -290,12 +300,24 @@ async def create_log(
         friend_scale=payload.friend_scale,
         serving_size=payload.serving_size,
         estimated_calories=estimated,
+        client_id=payload.client_id,
     )
     if payload.created_at is not None:
         log.created_at = payload.created_at
 
     session.add(log)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError:
+        await session.rollback()
+        if payload.client_id is not None:
+            existing = await session.scalar(
+                select(FoodLog).where(FoodLog.user_id == user.id, FoodLog.client_id == payload.client_id)
+            )
+            if existing is not None:
+                response.status_code = status.HTTP_200_OK
+                return await _load_log(session, user.id, existing.id)
+        raise
     created = await _load_log(session, user.id, log.id)
     await session.commit()
     # After the commit, so the row is certainly there when the task opens its
