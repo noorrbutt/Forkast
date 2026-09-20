@@ -1,16 +1,16 @@
-"""Deduping a restaurant by name, when the name is not plain ASCII.
+"""Deduping a restaurant by name when the name is not plain ASCII.
 
 The registry is shared: everyone logging at the same place gets the same row, so
-that the map and the per-restaurant totals mean anything. The dedupe was done by
-comparing PostgreSQL's `lower()` on the stored column against Python's
-`str.lower()` on the incoming name, which reads as the same comparison and is
-not one.
+that the map and the per-restaurant totals mean anything. The dedupe compares
+PostgreSQL's `lower()` on the stored column against Python's `str.lower()` on the
+incoming name, which looks equivalent but is not.
 
-They disagree on real characters. PostgreSQL leaves U+0130 (the Turkish dotted
-capital I) and U+1E9E (capital sharp s) exactly as they are; Python folds the
-first to 'i' plus a combining dot and the second to 'ss'. So the lookup missed a
-row that was already there, the insert ran anyway, and the unique index on
-lower(name) rejected it with an IntegrityError that nothing caught.
+Python `lower()` folds U+0130 (the Turkish dotted capital I) to 'i' plus a
+combining dot and U+1E9E (capital sharp s) to U+00DF (ß). PostgreSQL's
+`lower()` uses the host OS libc character tables, so on some systems it leaves
+U+1E9E alone while on others it folds it to U+00DF, just like Python. The
+important invariant is that the two functions can disagree, and the lookup must
+compare the database and incoming values using the same PostgreSQL function.
 
 The user-visible result was a 500 and a lost meal for the second person to log
 at such a restaurant, which the log form's autocomplete makes the likely case
@@ -37,17 +37,23 @@ TRICKY_NAMES = [
 async def test_postgres_and_python_really_do_fold_these_differently(
     session: AsyncSession,
 ) -> None:
-    """The premise of the rest of this file.
+    """These names are still a valid canary on some platforms.
 
-    If a future PostgreSQL or Python ever agrees on these, the tests below stop
-    proving anything and this one says so rather than letting them pass for the
-    wrong reason.
+    U+0130 always differs: Python lower() folds it to 'i' plus a combining dot,
+    while PostgreSQL lower() depends on the libc tables. U+1E9E differs only on
+    platforms where PostgreSQL leaves it alone; on glibc Linux it often folds to
+    U+00DF just like Python. The test therefore requires at least one real
+    difference rather than assuming every tricky name will disagree on every OS.
     """
+    differing = []
     for name in TRICKY_NAMES:
         in_postgres = await session.scalar(select(func.lower(name)))
-        assert in_postgres != name.lower(), (
-            f"{name!r} now folds identically in both, so these tests are moot"
-        )
+        if in_postgres != name.lower():
+            differing.append(name)
+
+    assert differing, (
+        "Postgres and Python now fold every tricky name identically, so these tests are moot"
+    )
 
 
 async def test_logging_at_the_same_restaurant_twice_does_not_500(

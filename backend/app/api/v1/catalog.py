@@ -278,15 +278,16 @@ async def upsert_restaurant(
         return await session.scalar(
             select(Restaurant).where(
                 # func.lower on BOTH sides, never Python's str.lower on one of
-                # them. They are not the same function: PostgreSQL leaves U+0130
-                # (the Turkish dotted capital I) and U+1E9E (capital sharp s)
-                # alone, while Python folds them to 'i' plus a combining dot and
-                # to 'ss'. The unique index uses PostgreSQL's, so a Python
-                # folded lookup missed a row that was already there, the insert
-                # below ran anyway, and the index rejected it with an
-                # IntegrityError nothing caught. The second person to log a meal
-                # at a restaurant with such a character in its name got a 500
-                # and lost the meal.
+                # them. They are not the same function: PostgreSQL lower() uses
+                # the host OS libc character tables, so it may leave U+0130 (the
+                # Turkish dotted capital I) and U+1E9E (capital sharp s) alone or
+                # fold them differently. Python lower() folds U+0130 to 'i' plus a
+                # combining dot and U+1E9E to U+00DF (ß). The unique index uses
+                # PostgreSQL's lower(), so a Python folded lookup missed a row that
+                # was already there, the insert below ran anyway, and the index
+                # rejected it with an IntegrityError nothing caught. The second
+                # person to log a meal at a restaurant with such a character in its
+                # name got a 500 and lost the meal.
                 func.lower(Restaurant.name) == func.lower(name.strip()),
                 func.coalesce(func.lower(Restaurant.area), "") == func.lower(normalised_area or ""),
             )
