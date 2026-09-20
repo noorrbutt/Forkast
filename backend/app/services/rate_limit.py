@@ -27,7 +27,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import get_settings
-from app.models import RateLimitCounter
+from app.db import get_session_factory
+from app.models import RateLimitCounter, RefreshToken
 
 # Identities longer than the column are hashed rather than truncated, so two
 # long addresses sharing a prefix do not end up sharing an allowance.
@@ -153,3 +154,21 @@ class RateLimiter:
             )
             await session.commit()
             return result.rowcount or 0
+
+
+async def prune_refresh_tokens(
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
+) -> int:
+    """Drop expired refresh rows while keeping revoked-but-unexpired ones alive.
+
+    These rows are reused to detect token replay and logout semantics, so we keep
+    a revoked token until it naturally expires instead of deleting it early.
+    """
+    session_factory = session_factory or get_session_factory()
+    cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(days=1)
+    async with session_factory() as session:
+        result = await session.execute(
+            delete(RefreshToken).where(RefreshToken.expires_at < cutoff)
+        )
+        await session.commit()
+        return result.rowcount or 0

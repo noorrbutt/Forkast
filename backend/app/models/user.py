@@ -159,8 +159,14 @@ class RefreshToken(Base):
     __table_args__ = (
         Index("ix_refresh_tokens_user_id", "user_id"),
         # Every authenticated request checks this session is still live, so it
-        # is the hottest lookup in the schema.
-        Index("ix_refresh_tokens_session_id", "session_id"),
+        # is the hottest lookup in the schema. The partial index keeps revoked
+        # rows out of the hot path while still leaving them available for reuse
+        # detection and logout semantics.
+        Index(
+            "ix_refresh_tokens_live_session",
+            "session_id",
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
     )
 
 

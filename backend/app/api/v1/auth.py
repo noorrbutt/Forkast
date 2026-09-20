@@ -14,6 +14,7 @@ can hammer for free, so they are the ones that are rate limited.
 from __future__ import annotations
 
 import datetime as dt
+import random
 import uuid
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
@@ -31,7 +32,7 @@ from app.schemas.auth import (
     TokenPair,
 )
 from app.services.google import GoogleAuthError, GoogleIdentity, verify_google_id_token
-from app.services.rate_limit import client_identity
+from app.services.rate_limit import client_identity, prune_refresh_tokens
 from app.services.security import (
     create_access_token,
     create_refresh_token,
@@ -42,6 +43,14 @@ from app.services.security import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+async def _prune_if_due(limiter: RateLimiterDep) -> None:
+    """Run both stale-data cleanups rarely enough to avoid churn on hot paths."""
+    if random.randint(1, 50) != 1:
+        return
+    await limiter.prune()
+    await prune_refresh_tokens(limiter._session_factory)
 
 
 async def _throttle_login(limiter: RateLimiterDep, request: Request, email: str) -> None:
@@ -154,9 +163,7 @@ async def login(
     payload: LoginRequest, session: SessionDep, request: Request, limiter: RateLimiterDep
 ) -> TokenPair:
     await _throttle_login(limiter, request, payload.email)
-    # Cheap to do here and there is no cron to install: the table only grows
-    # while someone is failing to authenticate.
-    await limiter.prune()
+    await _prune_if_due(limiter)
 
     user = await session.scalar(
         select(User).where(func.lower(User.email) == payload.email.strip().lower())
@@ -366,6 +373,7 @@ async def refresh(
         limit=get_settings().login_peer_rate_limit,
         window_seconds=get_settings().login_rate_window_seconds,
     )
+    await _prune_if_due(limiter)
 
     # Claim the token in a single conditional UPDATE rather than reading it,
     # checking it, then writing it back. Two requests arriving together with the
