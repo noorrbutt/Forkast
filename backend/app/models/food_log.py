@@ -58,6 +58,9 @@ class FoodLog(Base):
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    estimate_refined_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     category: Mapped[FoodCategory] = relationship(lazy="joined")
     restaurant: Mapped[Restaurant | None] = relationship(lazy="joined")

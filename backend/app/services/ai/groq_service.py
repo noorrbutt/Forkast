@@ -260,6 +260,21 @@ class GroqAIService:
         self._client = client
         self._model = model
 
+    async def probe(self) -> None:
+        """Fail fast if the configured Groq model is unavailable."""
+        try:
+            models = self._client.models
+            if hasattr(models, "retrieve"):
+                await models.retrieve(self._model)
+                return
+            if hasattr(models, "list"):
+                listed = await models.list()
+                names = {item.id for item in listed.data}
+                if self._model not in names:
+                    raise GroqResponseError(f"Groq model {self._model} is not available")
+        except Exception as exc:
+            raise GroqResponseError(f"Groq model probe failed for {self._model}: {exc}") from exc
+
     async def _attempt(
         self, system: str, user: str, schema: dict[str, Any], max_tokens: int, seed: int
     ) -> Any:

@@ -12,14 +12,30 @@ requests being answered by the wrong server rather than as a bind error.
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import api_router
-from app.config import get_settings
+from app.config import AIProvider, get_settings
 from app.middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
+from app.services.ai.deps import get_ai_service
 
 settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if settings.ai_provider is AIProvider.groq:
+        try:
+            await get_ai_service().probe()
+        except Exception as exc:  # pragma: no cover - startup failure path
+            raise RuntimeError(
+                f"AI_PROVIDER is groq but the configured model is unavailable: {exc}"
+            ) from exc
+    yield
+
 
 app = FastAPI(
     title="Forkast API",
@@ -38,6 +54,7 @@ app = FastAPI(
         "a deterministic local one that needs no key. An upstream AI failure is "
         "reported as 502, since the provider is not this service."
     ),
+    lifespan=lifespan,
 )
 
 # A wildcard origin and allow_credentials cannot be combined: browsers reject

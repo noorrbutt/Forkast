@@ -129,7 +129,8 @@ async def _refine_estimate(
                 text(
                     """
                     UPDATE food_logs
-                    SET estimated_calories = :value
+                    SET estimated_calories = :value,
+                        estimate_refined_at = NOW()
                     WHERE id = :id
                       AND category_id = :category_id
                       AND dish_name = :dish_name
@@ -148,7 +149,7 @@ async def _refine_estimate(
                 return
             await session.commit()
     except Exception:
-        logger.warning("Could not refine the estimate for log %s", log_id, exc_info=True)
+        logger.error("refine_failed log_id=%s", log_id, exc_info=True)
 
 
 async def _get_category(session: SessionDep, category_id: int) -> FoodCategory:
@@ -360,6 +361,7 @@ async def update_log(
     if refine:
         category = await _get_category(session, log.category_id)
         log.estimated_calories = _provisional_estimate(category, log.serving_size)
+        log.estimate_refined_at = None
 
     await session.flush()
     updated = await _load_log(session, user.id, log.id)
@@ -431,6 +433,7 @@ async def repeat_log(
         # also keeps this route a pure database copy, so a one tap repeat cannot
         # fail with a 502 or wait on an upstream call.
         estimated_calories=original.estimated_calories,
+        estimate_refined_at=original.estimate_refined_at,
     )
     # created_at is deliberately left to the column default. That is the whole
     # point of a repeat: same meal, this moment.
