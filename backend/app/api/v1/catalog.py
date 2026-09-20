@@ -8,7 +8,8 @@ from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, RateLimiterDep, SessionDep
+from app.config import get_settings
 from app.models import Cuisine, FoodCategory, FoodLog, Restaurant
 from app.schemas.catalog import (
     SMALLINT_MAX,
@@ -20,6 +21,7 @@ from app.schemas.catalog import (
     SearchResults,
 )
 from app.schemas.text import optional_text_field, text_field
+from app.services.rate_limit import account_identity
 
 router = APIRouter(tags=["catalog"])
 
@@ -342,8 +344,19 @@ async def upsert_restaurant(
 
 @router.post("/restaurants", response_model=RestaurantOut, status_code=status.HTTP_201_CREATED)
 async def create_restaurant(
-    payload: RestaurantCreate, session: SessionDep, user: CurrentUser, response: Response
+    payload: RestaurantCreate,
+    session: SessionDep,
+    user: CurrentUser,
+    response: Response,
+    limiter: RateLimiterDep,
 ) -> Restaurant:
+    settings = get_settings()
+    await limiter.hit(
+        "restaurant-day",
+        account_identity(user.id),
+        limit=settings.restaurant_daily_limit,
+        window_seconds=86400,
+    )
     restaurant, created = await upsert_restaurant(
         session,
         name=payload.name,

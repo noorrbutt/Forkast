@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = Field(default=30, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
     refresh_token_expire_days: int = Field(default=30, alias="REFRESH_TOKEN_EXPIRE_DAYS")
     refresh_reuse_leeway_seconds: int = Field(default=30, alias="REFRESH_REUSE_LEEWAY_SECONDS")
+    refine_rate_limit: int = Field(default=60, alias="REFINE_RATE_LIMIT")
+    log_daily_limit: int = Field(default=300, alias="LOG_DAILY_LIMIT")
+    photo_daily_limit: int = Field(default=100, alias="PHOTO_DAILY_LIMIT")
+    restaurant_daily_limit: int = Field(default=20, alias="RESTAURANT_DAILY_LIMIT")
 
     default_timezone: str = Field(default="Asia/Karachi", alias="DEFAULT_TIMEZONE")
 

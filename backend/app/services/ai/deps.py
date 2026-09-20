@@ -18,7 +18,11 @@ def _build_ai_service() -> AIService:
             raise RuntimeError("AI_PROVIDER is groq but GROQ_API_KEY is empty")
         from groq import AsyncGroq
 
-        client = AsyncGroq(api_key=settings.groq_api_key.get_secret_value())
+        client = AsyncGroq(
+            api_key=settings.groq_api_key.get_secret_value(),
+            timeout=10.0,
+            max_retries=0,
+        )
         return GroqAIService(client, model=settings.groq_model)
     return DeterministicAIService()
 

@@ -27,8 +27,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, RateLimiterDep, SessionDep
 from app.api.v1.catalog import upsert_restaurant
+from app.config import get_settings
 from app.db import get_session_factory
 from app.models import MAX_PHOTO_BYTES, FoodCategory, FoodLog, FoodLogPhoto, Restaurant
 from app.models.enums import ServingSize
@@ -40,6 +41,7 @@ from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import CalorieAdjustRequest
 from app.services.calories import finalise_estimate
 from app.services.insights import build_trend
+from app.services.rate_limit import account_identity
 
 logs_router = APIRouter(prefix="/logs", tags=["logs"])
 trend_router = APIRouter(tags=["insights"])
@@ -210,12 +212,26 @@ async def create_log(
     ai: AIDep,
     factory: SessionFactoryDep,
     background: BackgroundTasks,
+    limiter: RateLimiterDep,
 ) -> FoodLog:
+    settings = get_settings()
+    await limiter.hit(
+        "log-day",
+        account_identity(user.id),
+        limit=settings.log_daily_limit,
+        window_seconds=86400,
+    )
     category = await _get_category(session, payload.category_id)
 
     restaurant_id = payload.restaurant_id
     await _require_restaurant(session, restaurant_id)
     if payload.restaurant_name:
+        await limiter.hit(
+            "restaurant-day",
+            account_identity(user.id),
+            limit=settings.restaurant_daily_limit,
+            window_seconds=86400,
+        )
         restaurant, _ = await upsert_restaurant(
             session,
             name=payload.restaurant_name,
@@ -291,6 +307,7 @@ async def update_log(
     ai: AIDep,
     factory: SessionFactoryDep,
     background: BackgroundTasks,
+    limiter: RateLimiterDep,
 ) -> FoodLog:
     log = await _load_log(session, user.id, log_id)
     changes = payload.model_dump(exclude_unset=True)
@@ -314,7 +331,19 @@ async def update_log(
     updated = await _load_log(session, user.id, log.id)
     await session.commit()
     if refine:
-        background.add_task(_refine_estimate, updated.id, updated.category_id, ai, factory)
+        settings = get_settings()
+        try:
+            await limiter.hit(
+                "refine",
+                account_identity(user.id),
+                limit=settings.refine_rate_limit,
+                window_seconds=3600,
+            )
+        except HTTPException as exc:
+            if exc.status_code != status.HTTP_429_TOO_MANY_REQUESTS:
+                raise
+        else:
+            background.add_task(_refine_estimate, updated.id, updated.category_id, ai, factory)
     return updated
 
 
@@ -329,13 +358,25 @@ async def delete_log(log_id: uuid.UUID, session: SessionDep, user: CurrentUser) 
 @logs_router.post(
     "/{log_id}/repeat", response_model=FoodLogOut, status_code=status.HTTP_201_CREATED
 )
-async def repeat_log(log_id: uuid.UUID, session: SessionDep, user: CurrentUser) -> FoodLog:
+async def repeat_log(
+    log_id: uuid.UUID,
+    session: SessionDep,
+    user: CurrentUser,
+    limiter: RateLimiterDep,
+) -> FoodLog:
     """Log the same thing again, now, without retyping any of it.
 
     A new row rather than a counter on the old one: two chai at nine and at four
     are two meals on two parts of the day, and collapsing them would flatten the
     calorie chart and the streak alike.
     """
+    settings = get_settings()
+    await limiter.hit(
+        "log-day",
+        account_identity(user.id),
+        limit=settings.log_daily_limit,
+        window_seconds=86400,
+    )
     original = await _load_log(session, user.id, log_id)
 
     repeated = FoodLog(
@@ -430,6 +471,7 @@ async def set_photo(
     session: SessionDep,
     user: CurrentUser,
     file: Annotated[UploadFile, File()],
+    limiter: RateLimiterDep,
 ) -> FoodLog:
     """Attach or replace the picture on a meal.
 
@@ -437,6 +479,13 @@ async def set_photo(
     the same state instead of stacking a second image. A retry after a dropped
     connection is then safe by construction.
     """
+    settings = get_settings()
+    await limiter.hit(
+        "photo-day",
+        account_identity(user.id),
+        limit=settings.photo_daily_limit,
+        window_seconds=86400,
+    )
     log = await _load_log(session, user.id, log_id)
 
     # Read with one byte of headroom so a file on the limit passes and anything
