@@ -58,6 +58,13 @@ def _local_day(user: User):
     return cast(func.timezone(user.timezone, FoodLog.created_at), Date)
 
 
+def _local_bounds(user: User, start_date: dt.date, end_date: dt.date) -> tuple[dt.datetime, dt.datetime]:
+    tz = ZoneInfo(user.timezone)
+    start = dt.datetime.combine(start_date, dt.time.min, tzinfo=tz).astimezone(dt.UTC)
+    end = dt.datetime.combine(end_date, dt.time.min, tzinfo=tz).astimezone(dt.UTC)
+    return start, end
+
+
 def today_for(user: User) -> dt.date:
     """The user's own calendar day, in Python.
 
@@ -98,6 +105,7 @@ async def build_dashboard(session: AsyncSession, user: User) -> DashboardOut:
 
     today = dt.datetime.now(ZoneInfo(user.timezone)).date()
     window_start = today - dt.timedelta(days=CHART_DAYS - 1)
+    window_start_utc, window_end_utc = _local_bounds(user, window_start, today + dt.timedelta(days=1))
 
     if logs_count == 0 and total_burned == 0:
         return DashboardOut(
@@ -144,7 +152,11 @@ async def build_dashboard(session: AsyncSession, user: User) -> DashboardOut:
             case((FoodCategory.is_junk, FoodLog.estimated_calories), else_=0).label("junk"),
         )
         .join(FoodCategory, FoodCategory.id == FoodLog.category_id)
-        .where(FoodLog.user_id == user.id, _local_day(user) >= window_start)
+        .where(
+            FoodLog.user_id == user.id,
+            FoodLog.created_at >= window_start_utc,
+            FoodLog.created_at < window_end_utc,
+        )
         .subquery()
     )
     day_rows = (
@@ -302,7 +314,20 @@ def _streak_message(current: int, has_any_logs: bool) -> str:
 async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
     today = dt.datetime.now(ZoneInfo(user.timezone)).date()
     window_start = today - dt.timedelta(days=STREAK_WINDOW_DAYS)
+    window_start_utc, window_end_utc = _local_bounds(user, window_start, today + dt.timedelta(days=1))
 
+    logged_days = set(
+        (
+            await session.scalars(
+                select(func.distinct(_local_day(user)))
+                .where(
+                    FoodLog.user_id == user.id,
+                    FoodLog.created_at >= window_start_utc,
+                    FoodLog.created_at < window_end_utc,
+                )
+            )
+        ).all()
+    )
     junk_days = set(
         (
             await session.scalars(
@@ -312,11 +337,13 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
                 .where(
                     FoodLog.user_id == user.id,
                     FoodCategory.is_junk.is_(True),
-                    _local_day(user) >= window_start,
+                    FoodLog.created_at >= window_start_utc,
+                    FoodLog.created_at < window_end_utc,
                 )
             )
         ).all()
     )
+    clean_days = logged_days - junk_days
 
     first_logged_day = await session.scalar(
         select(func.min(_local_day(user))).where(FoodLog.user_id == user.id)
@@ -330,16 +357,14 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
             message=_streak_message(0, has_any_logs=False),
         )
 
-    # A day with no logs at all counts as junk free, which is what "days without
-    # a junk flagged log" literally means. The walk stops at the first day the
-    # user ever logged, not at the window edge: days before the account had any
-    # history are not clean days someone earned, and counting them would hand a
-    # user who logged one salad this morning a streak of a full year.
     earliest = max(first_logged_day, window_start)
 
+    if today not in logged_days:
+        cursor = today - dt.timedelta(days=1)
+    else:
+        cursor = today
     current_streak = 0
-    cursor = today
-    while cursor >= earliest and cursor not in junk_days:
+    while cursor >= earliest and cursor in clean_days:
         current_streak += 1
         cursor -= dt.timedelta(days=1)
 
@@ -347,11 +372,11 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
     run = 0
     day = earliest
     while day <= today:
-        if day in junk_days:
-            run = 0
-        else:
+        if day in logged_days and day not in junk_days:
             run += 1
             longest_streak = max(longest_streak, run)
+        else:
+            run = 0
         day += dt.timedelta(days=1)
 
     last_junk_date = max(junk_days) if junk_days else None
@@ -362,13 +387,15 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
     # one that ended the day still broken.
     last_junk_dish = None
     if last_junk_date is not None:
+        start_utc, end_utc = _local_bounds(user, last_junk_date, last_junk_date + dt.timedelta(days=1))
         last_junk_dish = await session.scalar(
             select(FoodLog.dish_name)
             .join(FoodCategory, FoodCategory.id == FoodLog.category_id)
             .where(
                 FoodLog.user_id == user.id,
                 FoodCategory.is_junk.is_(True),
-                _local_day(user) == last_junk_date,
+                FoodLog.created_at >= start_utc,
+                FoodLog.created_at < end_utc,
             )
             .order_by(FoodLog.created_at.desc())
             .limit(1)
@@ -416,6 +443,7 @@ async def _month_totals(
     month in Karachi belongs to the new month rather than being dragged back
     into the old one by its UTC date.
     """
+    start_utc, end_utc = _local_bounds(user, start, end)
     row = (
         await session.execute(
             select(
@@ -427,8 +455,8 @@ async def _month_totals(
             .join(FoodCategory, FoodCategory.id == FoodLog.category_id)
             .where(
                 FoodLog.user_id == user.id,
-                _local_day(user) >= start,
-                _local_day(user) < end,
+                FoodLog.created_at >= start_utc,
+                FoodLog.created_at < end_utc,
             )
         )
     ).one()

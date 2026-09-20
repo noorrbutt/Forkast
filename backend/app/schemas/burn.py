@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Matches ck_burn_logs_calories_plausible. Kept in step with the database on
 # purpose: the constraint is the guarantee, this is what turns a typo into a 422
@@ -18,6 +18,16 @@ class BurnUpsert(BaseModel):
     # Omitted means today, in the user's own timezone. Present so a forgotten
     # day can be filled in later, the same way a meal can be backfilled.
     day: dt.date | None = None
+
+    @field_validator("day")
+    @classmethod
+    def _bounded_day(cls, value: dt.date | None) -> dt.date | None:
+        if value is None:
+            return value
+        today = dt.date.today()
+        if value < today - dt.timedelta(days=3650) or value > today + dt.timedelta(days=1):
+            raise ValueError("day must be within the last ten years or tomorrow")
+        return value
 
 
 class BurnOut(BaseModel):

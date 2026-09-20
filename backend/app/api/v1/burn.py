@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
@@ -18,6 +18,8 @@ from app.api.deps import CurrentUser, SessionDep
 from app.models import BurnLog
 from app.schemas.burn import BurnOut, BurnUpsert
 from app.services.insights import today_for
+
+MAX_BURN_HISTORY_DAYS = 3650
 
 router = APIRouter(prefix="/burn", tags=["burn"])
 
@@ -35,7 +37,13 @@ async def set_burn(payload: BurnUpsert, session: SessionDep, user: CurrentUser) 
     entries. The upsert is one statement, so two devices saving at once cannot
     both insert and trip the unique index.
     """
-    day = payload.day or today_for(user)
+    today = today_for(user)
+    day = payload.day or today
+    if day < today - dt.timedelta(days=MAX_BURN_HISTORY_DAYS) or day > today + dt.timedelta(days=1):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Burn day must be within the last 10 years or tomorrow, in the user's timezone.",
+        )
 
     stmt = (
         insert(BurnLog)
