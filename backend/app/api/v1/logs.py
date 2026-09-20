@@ -207,9 +207,10 @@ async def _estimate_calories(
         # The AI provider is upstream of us, so its failure is a 502 rather than
         # a 500. The log still gets written by the caller's retry; nothing here
         # has been persisted yet.
+        logger.warning("Calorie estimation failed", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"The calorie estimator is unavailable: {exc}",
+            detail="The calorie estimator is unavailable.",
         ) from exc
     return finalise_estimate(
         adjustment.calories,

@@ -11,6 +11,7 @@ changing the password, the profile picture, and closing the account.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Annotated
 
@@ -59,6 +60,7 @@ from app.services.security import (
 )
 
 router = APIRouter(tags=["insights"])
+logger = logging.getLogger(__name__)
 
 AIDep = Annotated[AIService, Depends(get_ai_service)]
 CallerToken = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)]
@@ -477,9 +479,10 @@ async def create_plan(
             )
         )
     except GroqResponseError as exc:
+        logger.warning("Plan generation failed", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"The plan generator is unavailable: {exc}",
+            detail="Plan generation is unavailable, try again shortly.",
         ) from exc
 
     plan = AIPlan(

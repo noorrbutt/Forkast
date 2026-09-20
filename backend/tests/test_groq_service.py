@@ -218,7 +218,7 @@ class _AlwaysFailingAI:
         raise GroqResponseError("Groq request failed: connection timed out")
 
     async def generate_plan(self, req):
-        raise GroqResponseError("Groq request failed: connection timed out")
+        raise GroqResponseError("marker: upstream response text must not leak")
 
 
 async def test_a_dead_ai_provider_is_a_502_not_a_500(auth_client) -> None:
@@ -244,7 +244,9 @@ async def test_a_dead_ai_provider_is_a_502_not_a_500(auth_client) -> None:
         app.dependency_overrides.pop(get_ai_service, None)
 
     assert plan.status_code == 502, plan.text
-    assert "unavailable" in plan.json()["detail"]
+    detail = plan.json()["detail"]
+    assert detail == "Plan generation is unavailable, try again shortly."
+    assert "marker: upstream response text must not leak" not in plan.text
 
 
 async def test_a_dead_ai_provider_does_not_stop_a_meal_being_logged(auth_client) -> None:
