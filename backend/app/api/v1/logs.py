@@ -93,16 +93,9 @@ async def _refine_estimate(
 ) -> None:
     """Replace a provisional figure with the model's, after the response is out.
 
-    Runs on its own session, because the request's is closed by the time this
-    is reached. Every failure here is swallowed deliberately: the row already
-    holds a defensible number, and the user has long since moved on, so there is
-    nobody to report a problem to and nothing that a 502 would improve.
-
-    Both the service and the session factory are handed in rather than resolved
-    here, and for the same reason: resolving either one directly steps past
-    app.dependency_overrides. That is what keeps the suite off a paid API, and
-    more importantly what keeps it off the real database, which is the one this
-    module's own factory is bound to.
+    The first session only reads the values needed for the model, then closes
+    before the Groq call so the DB pool is free for other requests. The second
+    session updates the row only after the estimate is ready.
     """
     try:
         async with factory() as session:
@@ -111,11 +104,30 @@ async def _refine_estimate(
             # this has to lose rather than overwrite.
             if log is None or log.category_id != category_id:
                 return
+
             category = await session.get(FoodCategory, category_id)
             if category is None:
                 return
 
-            refined = await _estimate_calories(ai, category, log.dish_name, log.serving_size)
+            dish_name = log.dish_name
+            serving_size = log.serving_size
+            category_name = category.name
+            base_calorie_min = category.base_calorie_min
+            base_calorie_max = category.base_calorie_max
+
+        refined = await _estimate_calories(
+            ai,
+            dish_name=dish_name,
+            category_name=category_name,
+            base_calorie_min=base_calorie_min,
+            base_calorie_max=base_calorie_max,
+            serving_size=serving_size,
+        )
+
+        async with factory() as session:
+            log = await session.get(FoodLog, log_id)
+            if log is None or log.category_id != category_id:
+                return
             if refined != log.estimated_calories:
                 log.estimated_calories = refined
                 await session.commit()
@@ -149,7 +161,13 @@ async def _require_restaurant(session: SessionDep, restaurant_id: uuid.UUID | No
 
 
 async def _estimate_calories(
-    ai: AIService, category: FoodCategory, dish_name: str, serving_size
+    ai: AIService,
+    *,
+    dish_name: str,
+    category_name: str,
+    base_calorie_min: int,
+    base_calorie_max: int,
+    serving_size: ServingSize,
 ) -> int:
     """Ask the AI for an in-range figure, then clamp and scale it.
 
@@ -161,9 +179,9 @@ async def _estimate_calories(
         adjustment = await ai.adjust_calories(
             CalorieAdjustRequest(
                 dish_name=dish_name,
-                category_name=category.name,
-                base_calorie_min=category.base_calorie_min,
-                base_calorie_max=category.base_calorie_max,
+                category_name=category_name,
+                base_calorie_min=base_calorie_min,
+                base_calorie_max=base_calorie_max,
                 serving_size=serving_size,
             )
         )
@@ -177,8 +195,8 @@ async def _estimate_calories(
         ) from exc
     return finalise_estimate(
         adjustment.calories,
-        category.base_calorie_min,
-        category.base_calorie_max,
+        base_calorie_min,
+        base_calorie_max,
         serving_size,
     )
 
