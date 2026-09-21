@@ -107,6 +107,44 @@ class UserOut(BaseModel):
     created_at: dt.datetime
 
 
+class ExportLog(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    dish_name: str
+    category_name: str | None = None
+    restaurant_name: str | None = None
+    estimated_calories: int | None = None
+    created_at: dt.datetime
+    has_photo: bool = False
+
+
+class ExportBurnLog(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    calories: int | None = None
+    created_at: dt.datetime | None = None
+    note: str | None = None
+
+
+class ExportPlan(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    goal: str | None = None
+    created_at: dt.datetime
+    model: str | None = None
+    generated_plan: dict
+
+
+class DataExport(BaseModel):
+    user: UserOut
+    logs: list[ExportLog]
+    burn_logs: list[ExportBurnLog]
+    plans: list[ExportPlan]
+
+
 class AccountDelete(BaseModel):
     """Deleting an account asks the holder to prove themselves again.
 

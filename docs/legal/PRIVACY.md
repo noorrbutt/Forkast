@@ -183,8 +183,9 @@ For people in the UK and EU, under GDPR Article 6:
 Your account and everything in it are kept until you delete the account. There
 is no inactivity expiry. Deletion is immediate and is described below.
 
-Rate-limiting records are deleted automatically after 24 hours. Sign-in sessions
-expire after 30 days, and sooner if you sign out.
+Rate-limiting records are removed by a scheduled maintenance job. Sign-in
+sessions are also removed by a scheduled maintenance job, and sooner if you sign
+out.
 
 ## Deleting your account
 
@@ -213,10 +214,10 @@ Depending on where you live you have some or all of these. Forkast will honour
 all of them for everyone, regardless of where you are, because it is simpler
 than checking.
 
-- **See your data.** [[FILL: there is currently no export button. GDPR Art. 20
-  gives a right to receive your data in a machine-readable format. Until one
-  exists you must be able to satisfy this manually, within one month, from the
-  contact address above. Building an export endpoint would be the honest fix.]]
+- **See your data.** You can request a JSON export from the app at
+  **Profile → Export my data**, which returns the account record, food logs, burn
+  logs, and generated plans in a machine-readable format. The export omits
+  password hashes and photo bytes but includes whether each log has a photo.
 - **Correct it.** Your name, goal, target and time zone are editable in the app.
   Individual meals can be edited or deleted.
 - **Delete it.** In the app, as above.

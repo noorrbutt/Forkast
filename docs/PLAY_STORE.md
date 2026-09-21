@@ -29,7 +29,7 @@ address fails on EAS with an explanation instead of shipping.
 
 ## Done in this repo
 
-- [x] Android adaptive icon background is ink (`#0E0E10`), not the pale blue
+- [x] Android adaptive icon background is ink (`#0A0908`), not the pale blue
       `#E6F4FE` left over from the Expo template.
 - [x] Icon set redrawn. Every icon in `assets/` was the stock Expo chevron, which
       is Expo's own logo and not something to publish under your name. They are
@@ -37,7 +37,7 @@ address fails on EAS with an explanation instead of shipping.
       monochrome layers, the notification icon and the favicon.
 - [x] `assets/play-store-icon.png` is the 512x512 PNG the Play listing asks for.
 - [x] Splash screen wired through the `expo-splash-screen` plugin, with paper
-      (`#FAFAF7`) behind a burnt amber mark in light mode and ink behind a saffron
+      (`#F4F1EE`) behind a burnt amber mark in light mode and ink behind a saffron
       mark in dark mode. Those are the two saffrons `theme/tokens.ts` already
       uses, so the launch screen matches the first screen the app paints.
 - [x] `POST_NOTIFICATIONS` and `RECEIVE_BOOT_COMPLETED` are declared explicitly.
@@ -60,12 +60,6 @@ address fails on EAS with an explanation instead of shipping.
 
 ## Before the first build
 
-- [ ] `npx expo install expo-splash-screen`. The config references the plugin and
-      the package is not in `package.json`, so `npx expo start` and `eas build`
-      both fail until this is run. This one is required, not advisable.
-- [ ] `npx expo install expo-system-ui`. Without it `userInterfaceStyle:
-      "automatic"` is ignored on Android, which Expo warns about on every config
-      read. The JS already follows the system theme; this is the native half.
 - [ ] `eas init`. This writes `extra.eas.projectId` into the config. EAS builds
       cannot start without it.
 - [ ] Set the API origin on the EAS production environment:

@@ -38,13 +38,23 @@ from app.config import get_settings
 from app.models import (
     MAX_AVATAR_BYTES,
     AIPlan,
+    BurnLog,
     FoodCategory,
     FoodLog,
     RefreshToken,
     User,
     UserAvatar,
 )
-from app.schemas.auth import AccountDelete, PasswordChange, UserOut, UserUpdate
+from app.schemas.auth import (
+    AccountDelete,
+    DataExport,
+    ExportBurnLog,
+    ExportLog,
+    ExportPlan,
+    PasswordChange,
+    UserOut,
+    UserUpdate,
+)
 from app.schemas.insights import DashboardOut, PlanCreate, PlanOut, StreaksOut
 from app.services.ai.base import AIService
 from app.services.ai.deps import get_ai_service
@@ -73,6 +83,77 @@ PLAN_LOG_WINDOW = 30
 @router.get("/me", response_model=UserOut)
 async def read_me(user: CurrentUser) -> User:
     return user
+
+
+@router.get("/me/export", response_model=DataExport)
+async def export_me(session: SessionDep, user: CurrentUser, limiter: RateLimiterDep) -> DataExport:
+    """Return the caller's account and content as a JSON attachment.
+
+    The response is deliberately a plain file download rather than a webpage, so
+    it is easy to hand to a regulator or to the user themselves without any
+    browser UI around it. The user row is the public profile shape so it never
+    includes password_hash or google_sub, and the nested logs intentionally omit
+    photo bytes while still exposing whether a photo exists.
+    """
+    await limiter.hit(
+        "data-export",
+        account_identity(user.id),
+        limit=5,
+        window_seconds=60 * 60,
+    )
+
+    log_rows = await session.scalars(
+        select(FoodLog)
+        .where(FoodLog.user_id == user.id)
+        .order_by(FoodLog.created_at.desc())
+        .options(selectinload(FoodLog.category), selectinload(FoodLog.restaurant))
+    )
+    logs = [
+        ExportLog(
+            id=log.id,
+            dish_name=log.dish_name,
+            category_name=getattr(log.category, "name", None),
+            restaurant_name=getattr(log.restaurant, "name", None),
+            estimated_calories=getattr(log, "estimated_calories", None),
+            created_at=log.created_at,
+            has_photo=bool(getattr(log, "photo", None) is not None),
+        )
+        for log in log_rows
+    ]
+
+    burn_rows = await session.scalars(
+        select(BurnLog).where(BurnLog.user_id == user.id).order_by(BurnLog.created_at.desc())
+    )
+    burn_logs = [
+        ExportBurnLog(
+            id=burn.id,
+            calories=getattr(burn, "calories", None),
+            created_at=getattr(burn, "created_at", None),
+            note=getattr(burn, "note", None),
+        )
+        for burn in burn_rows
+    ]
+
+    plan_rows = await session.scalars(
+        select(AIPlan).where(AIPlan.user_id == user.id).order_by(AIPlan.created_at.desc())
+    )
+    plans = [
+        ExportPlan(
+            id=plan.id,
+            goal=getattr(plan, "goal", None),
+            created_at=plan.created_at,
+            model=getattr(plan, "model", None),
+            generated_plan=getattr(plan, "generated_plan", {}) or {},
+        )
+        for plan in plan_rows
+    ]
+
+    export = DataExport(user=user, logs=logs, burn_logs=burn_logs, plans=plans)
+    return Response(
+        content=export.model_dump_json(indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": 'attachment; filename="forkast-export.json"'},
+    )
 
 
 @router.patch("/me", response_model=UserOut)

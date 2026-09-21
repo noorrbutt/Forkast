@@ -89,7 +89,7 @@ const PRIVACY: LegalDocument = {
     {
       heading: 'Your rights',
       body: [
-        'You can see, correct and delete your data, withdraw consent, object to processing, and complain to your data protection authority.',
+        'You can see, correct and delete your data, export it as JSON from Profile → Export my data, withdraw consent, object to processing, and complain to your data protection authority.',
         'Most of it is editable in the app. For anything else, write to the address in the full policy and it will be handled within one month.',
       ],
     },
