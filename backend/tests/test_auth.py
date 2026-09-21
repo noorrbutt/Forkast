@@ -282,17 +282,15 @@ async def test_reusing_a_refresh_after_the_leeway_revokes_only_that_session(
 async def test_unknown_refresh_tokens_do_not_revoke_any_session(
     client: AsyncClient, session: AsyncSession
 ) -> None:
-    registered = (
-        await client.post(
-            REGISTER,
-            json={
-                "first_name": "Test",
-                "last_name": "User",
-                "email": "unknown-refresh@forkast.app",
-                "password": "password123",
-            },
-        )
-    ).json()
+    await client.post(
+        REGISTER,
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "unknown-refresh@forkast.app",
+            "password": "password123",
+        },
+    )
 
     user = await session.scalar(select(User).where(User.email == "unknown-refresh@forkast.app"))
     assert user is not None

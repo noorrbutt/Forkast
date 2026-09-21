@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime as dt
+import logging
 
 from sqlalchemy import select
 
@@ -11,6 +12,8 @@ from app.db import get_session_factory
 from app.models import FoodLog
 from app.services.ai.deps import get_ai_service
 from app.services.rate_limit import RateLimiter, prune_refresh_tokens
+
+logger = logging.getLogger(__name__)
 
 
 async def _prune_all() -> tuple[int, int]:
@@ -24,7 +27,7 @@ async def _prune_all() -> tuple[int, int]:
 async def _refine_backfill(limit: int = 100) -> int:
     session_factory = get_session_factory()
     ai = get_ai_service()
-    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=10)
+    cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(minutes=10)
     async with session_factory() as session:
         rows = await session.execute(
             select(FoodLog.id, FoodLog.category_id)
@@ -50,12 +53,12 @@ def main() -> None:
 
     if args.command == "prune":
         rate_limit_rows, refresh_rows = asyncio.run(_prune_all())
-        print(f"rate_limit={rate_limit_rows} refresh_tokens={refresh_rows}")
+        logger.info("rate_limit=%s refresh_tokens=%s", rate_limit_rows, refresh_rows)
         return
 
     if args.command == "refine-backfill":
         refined = asyncio.run(_refine_backfill(args.limit))
-        print(f"refine_backfilled={refined}")
+        logger.info("refine_backfilled=%s", refined)
         return
 
     parser.error(f"unknown command: {args.command}")

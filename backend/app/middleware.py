@@ -13,7 +13,6 @@ import logging
 import time
 import uuid
 
-from app.config import get_settings
 from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -21,6 +20,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.status import HTTP_413_CONTENT_TOO_LARGE
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from app.config import get_settings
 
 # Sent on every response. Deliberately short: this serves JSON to a native app,
 # not HTML to a browser, so the headers that matter are the ones that stop a
