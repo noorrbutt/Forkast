@@ -47,7 +47,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 async def _prune_if_due(limiter: RateLimiterDep) -> None:
     """Run both stale-data cleanups rarely enough to avoid churn on hot paths."""
-    if random.randint(1, 50) != 1:
+    if random.randint(1, 50) != 1:  # noqa: S311 - non-crypto sampling for cleanup throttling
         return
     await limiter.prune()
     await prune_refresh_tokens(limiter._session_factory)
