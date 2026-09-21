@@ -1,6 +1,6 @@
 """Create a partial index for live refresh-token lookups.
 
-Revision ID: 0012_refresh_token_live_session_index
+Revision ID: 0012_refresh_live_session_idx
 Revises: 0011_names_and_google_accounts
 """
 
@@ -11,7 +11,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0012_refresh_token_live_session_index"
+revision: str = "0012_refresh_live_session_idx"
 down_revision: str | Sequence[str] | None = "0011_names_and_google_accounts"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

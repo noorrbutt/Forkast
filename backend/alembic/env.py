@@ -99,6 +99,8 @@ async def run_async_migrations() -> None:
         if server_version is None or int(server_version) < 180000:
             raise RuntimeError("Postgres 18 required (uuidv7)")
         await connection.run_sync(do_run_migrations)
+        await connection.commit()
+
 
     await connectable.dispose()
 

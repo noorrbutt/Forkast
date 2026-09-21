@@ -1,7 +1,7 @@
 """add estimate_refined_at to food_logs
 
 Revision ID: 0013_add_estimate_refined_at
-Revises: 0012_refresh_token_live_session_index
+Revises: 0012_refresh_live_session_idx
 Create Date: 2026-09-20
 """
 
@@ -12,7 +12,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "0013_add_estimate_refined_at"
-down_revision = "0012_refresh_token_live_session_index"
+down_revision = "0012_refresh_live_session_idx"
 branch_labels = None
 depends_on = None
 

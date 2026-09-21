@@ -192,6 +192,11 @@ async def login(
         )
 
     if not await verify_password_async(payload.password, user.password_hash):
+        # Keep the timing the same as an unknown email, not just the error text.
+        # Otherwise a fast rejection tells the attacker they have hit a real
+        # account and guessed the wrong password, which is exactly the oracle
+        # the shared message is meant to suppress.
+        await waste_time_like_a_verify()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
