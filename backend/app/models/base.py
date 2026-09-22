@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import enum
+import secrets
+import time
 import uuid
 from typing import TypeVar
 
@@ -56,10 +58,20 @@ def str_enum(enum_cls: type[_E], name: str, length: int = 32) -> SAEnum:
 
 
 def new_uuid7() -> uuid.UUID:
-    """Client-side UUIDv7 (stdlib on Python 3.14).
+    """Generate a UUIDv7, with a compatibility fallback for Python < 3.14.
 
-    Generated in the application rather than by the `uuidv7()` server default so
-    a row's id is known before the INSERT returns -- which is what offline-capable
-    logging needs. The server default remains as a safety net.
+    Python 3.13 does not expose `uuid.uuid7()`, but this project needs a v7 id
+    before INSERTs return so offline logs can attach their row id immediately.
+    The fallback keeps the canonical RFC 9562 layout: the first 48 bits are the
+    Unix timestamp in milliseconds, the next 4 bits are version 7, and the RFC
+    4122 variant bits remain set to ``10``.
     """
-    return uuid.uuid7()
+    try:
+        return uuid.uuid7()
+    except AttributeError:
+        timestamp_ms = time.time_ns() // 1_000_000
+        raw = bytearray(secrets.token_bytes(16))
+        raw[0:6] = (timestamp_ms & ((1 << 48) - 1)).to_bytes(6, byteorder="big")
+        raw[6] = (0x70 | (raw[6] & 0x0F))
+        raw[8] = (0x80 | (raw[8] & 0x3F))
+        return uuid.UUID(bytes=bytes(raw))

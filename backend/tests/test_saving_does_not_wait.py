@@ -108,15 +108,26 @@ async def test_refine_does_not_block_a_second_save_while_waiting_on_the_ai(
     auth_client: AsyncClient,
 ) -> None:
     """The refinement must release the DB connection before waiting on the
-    model, otherwise a second save can deadlock behind a single pool slot."""
+    model, otherwise a second save can deadlock behind a single pool slot.
+
+    Two things about this harness shape the test. httpx's ASGITransport does not
+    hand back a response until the whole ASGI call has finished, and that
+    includes background tasks, so the first POST cannot be awaited inline: its
+    own refinement is the thing being held open. And only the FIRST refinement
+    may block, or the second POST would sit behind its own background task too.
+    """
     category = await _a_category(auth_client)
     started = asyncio.Event()
     release = asyncio.Event()
+    calls = 0
 
     class BlockedEstimator:
         async def adjust_calories(self, request):
-            started.set()
-            await release.wait()
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                started.set()
+                await release.wait()
             return type("Response", (), {"calories": 0})()
 
         async def generate_plan(self, request):
@@ -124,16 +135,24 @@ async def test_refine_does_not_block_a_second_save_while_waiting_on_the_ai(
 
     app.dependency_overrides[get_ai_service] = lambda: BlockedEstimator()
 
-    first = await auth_client.post(LOGS, json=_payload(category))
-    assert first.status_code == 201, first.text
-    await asyncio.wait_for(started.wait(), timeout=5)
+    first = asyncio.create_task(auth_client.post(LOGS, json=_payload(category)))
+    try:
+        # The first refinement is now parked on the model, holding nothing.
+        await asyncio.wait_for(started.wait(), timeout=5)
+        assert not first.done(), "the first request should still be waiting on its refinement"
 
-    second = await asyncio.wait_for(
-        auth_client.post(LOGS, json=_payload(category)),
-        timeout=5,
-    )
-    assert second.status_code == 201, second.text
-    release.set()
+        second = await asyncio.wait_for(
+            auth_client.post(LOGS, json=_payload(category)),
+            timeout=5,
+        )
+        assert second.status_code == 201, second.text
+    finally:
+        # Always let the parked task go, or a failure here leaves it hanging
+        # and the whole run sits there again.
+        release.set()
+
+    first_response = await asyncio.wait_for(first, timeout=5)
+    assert first_response.status_code == 201, first_response.text
 
 
 async def test_the_response_does_not_wait_on_the_model(auth_client: AsyncClient) -> None:

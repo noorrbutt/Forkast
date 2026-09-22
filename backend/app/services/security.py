@@ -54,7 +54,16 @@ _DUMMY_HASH = hash_password("forkast-timing-equaliser")
 
 
 async def waste_time_like_a_verify() -> None:
-    await verify_password_async("not-the-password", _DUMMY_HASH)
+    """Burn a fixed amount of work before answering a login failure.
+
+    One verify is not enough on some hosts: the real wrong-password path can take
+    many seconds while a single dummy verify is still cheap enough to stand out as
+    a different timing class. Repeating the dummy check brings the unknown-email
+    path into the same rough range as the real account branch without revealing
+    which case it was.
+    """
+    for _ in range(30):
+        await verify_password_async("not-the-password", _DUMMY_HASH)
 
 
 def _now() -> dt.datetime:

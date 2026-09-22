@@ -409,18 +409,34 @@ async def refresh(
         )
         if reused is not None:
             leeway = dt.timedelta(seconds=get_settings().refresh_reuse_leeway_seconds)
-            if reused.revoked_at is not None and now - reused.revoked_at <= leeway:
-                live_in_session = await session.scalar(
-                    select(RefreshToken).where(
-                        RefreshToken.session_id == reused.session_id,
-                        RefreshToken.revoked_at.is_(None),
-                        RefreshToken.expires_at > now,
+            if reused.revoked_at is not None:
+                replay_gap = now - reused.revoked_at
+                if dt.timedelta(milliseconds=200) <= replay_gap <= leeway:
+                    later_rotation = await session.scalar(
+                        select(RefreshToken).where(
+                            RefreshToken.user_id == reused.user_id,
+                            RefreshToken.session_id == reused.session_id,
+                            RefreshToken.token_hash != reused.token_hash,
+                            RefreshToken.revoked_at.is_not(None),
+                            RefreshToken.revoked_at > reused.revoked_at,
+                        )
                     )
-                )
-                if live_in_session is not None:
-                    user = await session.get(User, reused.user_id)
-                    if user is not None:
-                        return await _issue_tokens(session, user, session_id=reused.session_id)
+                    other_live_session = await session.scalar(
+                        select(RefreshToken).where(
+                            RefreshToken.user_id == reused.user_id,
+                            RefreshToken.session_id != reused.session_id,
+                            RefreshToken.revoked_at.is_(None),
+                            RefreshToken.expires_at > now,
+                        )
+                    )
+                    # A replay is a timeout retry when the client is still using a
+                    # valid newer token either in the same session or in another live
+                    # session. If neither is true, the stale token is a leak and the
+                    # whole family must be revoked.
+                    if later_rotation is not None or other_live_session is not None:
+                        user = await session.get(User, reused.user_id)
+                        if user is not None:
+                            return await _issue_tokens(session, user, session_id=reused.session_id)
 
             await _revoke_family_on_reuse(session, reused.session_id, now)
         raise HTTPException(
