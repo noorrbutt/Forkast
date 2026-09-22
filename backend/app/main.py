@@ -12,6 +12,7 @@ requests being answered by the wrong server rather than as a bind error.
 
 from __future__ import annotations
 
+import inspect
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -108,17 +109,14 @@ async def ready() -> dict[str, str]:
     dependency = app.dependency_overrides.get(get_session, get_session)
     try:
         value = dependency()
-        if hasattr(value, "__anext__"):
+        if inspect.isasyncgen(value):
             session = await value.__anext__()
             try:
                 await session.execute(text("SELECT 1"))
             finally:
                 await value.aclose()
-        else:
+        elif inspect.isawaitable(value):
             await value
-            session = None
     except Exception as exc:  # pragma: no cover - DB failure path
         raise HTTPException(status_code=503, detail="Database unavailable") from exc
-    if session is None:
-        return {"status": "ready"}
     return {"status": "ready"}

@@ -193,6 +193,13 @@ class Settings(BaseSettings):
             )
 
         if self.environment is Environment.production:
+            if "trust_proxy_headers" not in self.model_fields_set:
+                raise ValueError(
+                    "TRUST_PROXY_HEADERS must be explicitly set in production. "
+                    "Set it to true only when a trusted reverse proxy rewrites "
+                    "X-Forwarded-For; leaving it unset makes the app misidentify "
+                    "shared CGNAT or proxy peers as one client."
+                )
             if "*" in self.cors_origin_list:
                 raise ValueError(
                     "CORS_ORIGINS must name real origins in production, not '*'. "
