@@ -316,18 +316,6 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
     window_start = today - dt.timedelta(days=STREAK_WINDOW_DAYS)
     window_start_utc, window_end_utc = _local_bounds(user, window_start, today + dt.timedelta(days=1))
 
-    logged_days = set(
-        (
-            await session.scalars(
-                select(func.distinct(_local_day(user)))
-                .where(
-                    FoodLog.user_id == user.id,
-                    FoodLog.created_at >= window_start_utc,
-                    FoodLog.created_at < window_end_utc,
-                )
-            )
-        ).all()
-    )
     junk_days = set(
         (
             await session.scalars(
