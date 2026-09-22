@@ -148,6 +148,29 @@ class Settings(BaseSettings):
     plan_rate_limit: int = Field(default=20, alias="PLAN_RATE_LIMIT")
     plan_rate_window_seconds: int = Field(default=3600, alias="PLAN_RATE_WINDOW_SECONDS")
 
+    # Argon2id cost parameters, matching argon2-cffi's own OWASP-aligned
+    # defaults (t=3, m=64 MiB, p=4). Overridable rather than hardcoded in
+    # security.py so the test suite can ask for a cheap, single-threaded
+    # hasher without touching production behaviour. This matters for two
+    # separate reasons: a real Argon2 hash costs ~100ms, and hundreds of them
+    # in a burst test add up to real wall-clock minutes; and parallelism > 1
+    # makes argon2-cffi spin up its own worker threads per hash, which -- run
+    # from inside an anyio worker thread that a request handler is already
+    # blocking on -- has been the source of hangs on Windows. Tests set
+    # ARGON2_TIME_COST=1, ARGON2_MEMORY_COST small, and ARGON2_PARALLELISM=1
+    # (see tests/conftest.py) to avoid both problems at once.
+    argon2_time_cost: int = Field(default=3, alias="ARGON2_TIME_COST")
+    argon2_memory_cost: int = Field(default=65536, alias="ARGON2_MEMORY_COST")
+    argon2_parallelism: int = Field(default=4, alias="ARGON2_PARALLELISM")
+
+    # How long, in seconds, waste_time_like_a_verify burns per failed login to
+    # keep the unknown-email path in the same timing class as a wrong-password
+    # check. This is a fixed wall-clock cost paid on *every* failed attempt
+    # regardless of Argon2 speed, so a brute-force test that fires off dozens
+    # of bad logins pays dozens of these paddings back to back. Production
+    # wants it comfortably above a real verify; tests want it short.
+    login_timing_pad_seconds: float = Field(default=0.25, alias="LOGIN_TIMING_PAD_SECONDS")
+
     @model_validator(mode="after")
     def _normalise_database_urls(self) -> Settings:
         self.database_url = _rewrite_database_url(self.database_url, async_driver=True)

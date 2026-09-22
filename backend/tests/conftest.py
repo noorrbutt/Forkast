@@ -40,6 +40,32 @@ from sqlalchemy.pool import NullPool
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND_DIR))
 
+# Must be set before the first call to get_settings() (below, and again on
+# import of app.main), since Settings is built once and then @lru_cached.
+#
+# Two independent problems, one fix: a real Argon2 hash costs ~100ms, and this
+# suite performs hundreds of them across the registration and brute-force
+# burst tests -- easily minutes of wall clock at production cost. Worse,
+# argon2-cffi's default parallelism (4) spins up its own worker threads per
+# hash; done from inside an anyio worker thread that a request handler is
+# already blocking on, that nested threading is what was hanging the suite on
+# Windows (visible as a stuck native argon2_hash call in the pytest-timeout
+# thread dump). time_cost=1, a small memory_cost, and parallelism=1 make every
+# hash cheap and single-threaded without changing any application code path --
+# the tests exercise the exact same hash-and-verify logic production does.
+# setdefault, not assignment, so a developer can still override these from the
+# environment (e.g. to reproduce a timing-sensitive bug at real cost).
+os.environ.setdefault("ARGON2_TIME_COST", "1")
+os.environ.setdefault("ARGON2_MEMORY_COST", "8192")
+os.environ.setdefault("ARGON2_PARALLELISM", "1")
+# The timing-equaliser pads every failed login to a fixed wall-clock cost
+# regardless of how fast Argon2 itself runs, so the brute-force tests -- which
+# fire off dozens of bad logins each -- pay this back to back. 250ms of real
+# padding was fine for a handful of attempts; multiplied across four separate
+# burst tests it was several extra seconds each. 30ms still keeps the
+# unknown-email path in the same rough timing class as a fast test-mode verify.
+os.environ.setdefault("LOGIN_TIMING_PAD_SECONDS", "0.03")
+
 from app.config import get_settings  # noqa: E402
 from app.db import get_session, get_session_factory  # noqa: E402
 from app.main import app  # noqa: E402

@@ -18,11 +18,34 @@ from typing import Any, Literal, NamedTuple
 import jwt
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
+from pwdlib.hashers.argon2 import Argon2Hasher
 from starlette.concurrency import run_in_threadpool
 
 from app.config import get_settings
 
-_password_hash = PasswordHash.recommended()  # Argon2
+
+def _build_password_hash() -> PasswordHash:
+    """Argon2id, with cost parameters pulled from settings rather than
+    `PasswordHash.recommended()`'s fixed defaults.
+
+    This is what lets the test suite ask for a cheap, parallelism=1 hasher
+    (see tests/conftest.py) without a second code path here: production gets
+    argon2-cffi's normal OWASP-aligned costs simply because nothing has
+    overridden them.
+    """
+    settings = get_settings()
+    return PasswordHash(
+        (
+            Argon2Hasher(
+                time_cost=settings.argon2_time_cost,
+                memory_cost=settings.argon2_memory_cost,
+                parallelism=settings.argon2_parallelism,
+            ),
+        )
+    )
+
+
+_password_hash = _build_password_hash()
 
 TokenType = Literal["access", "refresh"]
 
@@ -63,7 +86,7 @@ async def waste_time_like_a_verify() -> None:
     path in the same rough range as a wrong-password check without making a
     single failed login drag the whole suite into a timeout.
     """
-    deadline = time.monotonic() + 0.25
+    deadline = time.monotonic() + get_settings().login_timing_pad_seconds
     while time.monotonic() < deadline:
         await verify_password_async("not-the-password", _DUMMY_HASH)
 
