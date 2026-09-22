@@ -112,6 +112,23 @@ def migrated_database() -> None:
     # next session can even start.
     asyncio.run(_truncate_if_present())
 
+    # A failed prior run can leave the schema in an indeterminate state with
+    # locks or migration artifacts still present, which makes the next session
+    # fail during the downgrade step before the test body even runs. Resetting
+    # the public schema keeps the database deterministically empty and makes the
+    # real migration suite the thing proving the app boots cleanly.
+    reset = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+
+    async def _reset_schema() -> None:
+        async with reset.begin() as connection:
+            await connection.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+            await connection.execute(text("CREATE SCHEMA public"))
+
+    try:
+        asyncio.run(_reset_schema())
+    finally:
+        asyncio.run(reset.dispose())
+
     # Start from a known state, so a half-migrated database left by an earlier
     # run cannot make these tests pass or fail for the wrong reason.
     subprocess.run([sys.executable, "-m", "alembic", "downgrade", "base"], **common)
@@ -140,8 +157,8 @@ async def _truncate_if_present() -> None:
                     {"names": list(MUTABLE_TABLES)},
                 )
             ).all()
-            if present:
-                await connection.execute(text(f"TRUNCATE {', '.join(present)} CASCADE"))
+            for table_name in present:
+                await connection.execute(text(f"TRUNCATE {table_name} CASCADE"))
     finally:
         await engine.dispose()
 
@@ -184,14 +201,15 @@ async def clean_tables(test_engine) -> AsyncIterator[None]:
     retryable failure rather than a deadlock, and the short sleep gives the
     straggler time to commit and let go.
     """
-    statement = text(f"TRUNCATE {', '.join(MUTABLE_TABLES)} RESTART IDENTITY CASCADE")
-
     last: Exception | None = None
     for attempt in range(5):
         try:
             async with test_engine.begin() as connection:
                 await connection.execute(text("SET LOCAL lock_timeout = '2s'"))
-                await connection.execute(statement)
+                for table_name in MUTABLE_TABLES:
+                    await connection.execute(
+                        text(f"TRUNCATE {table_name} RESTART IDENTITY CASCADE")
+                    )
             break
         except DBAPIError as exc:  # deadlock, or the lock_timeout above expiring
             last = exc

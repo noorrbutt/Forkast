@@ -343,7 +343,6 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
             )
         ).all()
     )
-    clean_days = logged_days - junk_days
 
     first_logged_day = await session.scalar(
         select(func.min(_local_day(user))).where(FoodLog.user_id == user.id)
@@ -359,12 +358,12 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
 
     earliest = max(first_logged_day, window_start)
 
-    if today not in logged_days:
-        cursor = today - dt.timedelta(days=1)
-    else:
-        cursor = today
+    # A streak is a sequence of days without a junk log, not a sequence of days
+    # with a clean meal. Empty days still count as clean until the next junk day
+    # resets the run.
     current_streak = 0
-    while cursor >= earliest and cursor in clean_days:
+    cursor = today
+    while cursor >= earliest and cursor not in junk_days:
         current_streak += 1
         cursor -= dt.timedelta(days=1)
 
@@ -372,7 +371,7 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
     run = 0
     day = earliest
     while day <= today:
-        if day in logged_days and day not in junk_days:
+        if day not in junk_days:
             run += 1
             longest_streak = max(longest_streak, run)
         else:
