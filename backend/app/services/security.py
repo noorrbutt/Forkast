@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import secrets
+import time
 import uuid
 from typing import Any, Literal, NamedTuple
 
@@ -58,11 +59,12 @@ async def waste_time_like_a_verify() -> None:
 
     One verify is not enough on some hosts: the real wrong-password path can take
     many seconds while a single dummy verify is still cheap enough to stand out as
-    a different timing class. Repeating the dummy check brings the unknown-email
-    path into the same rough range as the real account branch without revealing
-    which case it was.
+    a different timing class. A small fixed-duration loop keeps the unknown-email
+    path in the same rough range as a wrong-password check without making a
+    single failed login drag the whole suite into a timeout.
     """
-    for _ in range(30):
+    deadline = time.monotonic() + 0.25
+    while time.monotonic() < deadline:
         await verify_password_async("not-the-password", _DUMMY_HASH)
 
 

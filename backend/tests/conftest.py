@@ -112,10 +112,44 @@ def migrated_database() -> None:
     # next session can even start.
     asyncio.run(_truncate_if_present())
 
-    # Start from a known state, so a half-migrated database left by an earlier
-    # run cannot make these tests pass or fail for the wrong reason.
-    subprocess.run([sys.executable, "-m", "alembic", "downgrade", "base"], **common)
+    # Drop the entire public schema, then rebuild it from the migration chain.
+    # This avoids the stale-object and deadlock states that arise when a prior
+    # run leaves half-finished tables behind, and it keeps the suite aligned
+    # with the real migration history instead of whichever leftover rows the
+    # previous test happened to leave behind.
+    reset = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+    try:
+        async def _reset_schema() -> None:
+            async with reset.begin() as connection:
+                await connection.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+                await connection.execute(text("CREATE SCHEMA public"))
+
+        asyncio.run(_reset_schema())
+    finally:
+        asyncio.run(reset.dispose())
+
     subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], **common)
+
+
+async def _clear_stale_connections(engine) -> None:
+    """Drop any test DB sessions left behind by a crashed pytest process.
+
+    A timed-out or interrupted run can leave backends alive long enough to hold
+    ACCESS EXCLUSIVE locks, which then makes the next run fail during the normal
+    TRUNCATE cleanup before any test body runs. Terminating stale sessions is a
+    test-only safety net and is safe because the database is dedicated to pytest.
+    """
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                """
+                SELECT pg_terminate_backend(pid)
+                FROM pg_stat_activity
+                WHERE datname = current_database()
+                  AND pid <> pg_backend_pid()
+                """
+            )
+        )
 
 
 async def _truncate_if_present() -> None:
@@ -128,6 +162,7 @@ async def _truncate_if_present() -> None:
     """
     engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
     try:
+        await _clear_stale_connections(engine)
         async with engine.begin() as connection:
             present = (
                 await connection.scalars(
@@ -140,10 +175,34 @@ async def _truncate_if_present() -> None:
                     {"names": list(MUTABLE_TABLES)},
                 )
             ).all()
-            for table_name in present:
-                await connection.execute(text(f"TRUNCATE {table_name} CASCADE"))
+            if present:
+                quoted = ", ".join(f'"{table_name}"' for table_name in present)
+                await connection.execute(text(f"TRUNCATE {quoted} RESTART IDENTITY CASCADE"))
     finally:
         await engine.dispose()
+
+
+async def _reset_app_db_pool() -> None:
+    """Drop stale asyncpg connections held by the app-wide engine.
+
+    A prior failed test run can leave a connection alive in the connection pool,
+    and that pool survives across test setup. Disposing the global engine makes
+    the next request open a fresh connection set instead of reusing a dead one.
+    """
+    import app.db as app_db
+
+    if hasattr(app_db, "engine"):
+        await app_db.engine.dispose()
+    if hasattr(app_db, "SessionLocal") and getattr(app_db.SessionLocal, "bind", None) is not None:
+        await app_db.SessionLocal.bind.dispose()
+
+    app_db.engine = create_async_engine(TEST_DATABASE_URL, echo=False, pool_pre_ping=True)
+    app_db.SessionLocal = async_sessionmaker(
+        app_db.engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autoflush=False,
+    )
 
 
 @pytest.fixture
@@ -187,17 +246,25 @@ async def clean_tables(test_engine) -> AsyncIterator[None]:
     last: Exception | None = None
     for attempt in range(5):
         try:
+            await _clear_stale_connections(test_engine)
+            await _reset_app_db_pool()
             async with test_engine.begin() as connection:
                 await connection.execute(text("SET LOCAL lock_timeout = '2s'"))
-                for table_name in MUTABLE_TABLES:
-                    try:
-                        await connection.execute(
-                            text(f"TRUNCATE {table_name} RESTART IDENTITY CASCADE")
-                        )
-                    except DBAPIError as exc:
-                        if "does not exist" in str(exc):
-                            continue
-                        raise
+                present = (
+                    await connection.execute(
+                        text(
+                            """
+                            SELECT table_name FROM information_schema.tables
+                            WHERE table_schema = 'public' AND table_name = ANY(:names)
+                            """
+                        ),
+                        {"names": list(MUTABLE_TABLES)},
+                    )
+                ).all()
+                present_names = [row[0] for row in present]
+                if present_names:
+                    quoted = ", ".join(f'"{table_name}"' for table_name in present_names)
+                    await connection.execute(text(f"TRUNCATE {quoted} RESTART IDENTITY CASCADE"))
             break
         except DBAPIError as exc:  # deadlock, or the lock_timeout above expiring
             last = exc
@@ -227,7 +294,10 @@ async def client(session_factory) -> AsyncIterator[AsyncClient]:
             try:
                 yield db
             except Exception:
-                await db.rollback()
+                try:
+                    await db.rollback()
+                except Exception:
+                    pass
                 raise
 
     app.dependency_overrides[get_session] = _override_session

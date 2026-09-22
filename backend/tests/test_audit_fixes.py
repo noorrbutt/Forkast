@@ -220,6 +220,7 @@ def test_a_sound_configuration_still_loads() -> None:
         JWT_SECRET="0" * 64,
         AI_PROVIDER="fake",
         CORS_ORIGINS="https://forkast.app,https://www.forkast.app",
+        TRUST_PROXY_HEADERS=True,
     )
 
     assert settings.docs_enabled is False

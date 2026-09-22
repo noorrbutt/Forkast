@@ -137,8 +137,11 @@ class Settings(BaseSettings):
     # Registration is counted per peer only. The point of limiting it is that
     # 409-on-duplicate is an account existence oracle, and walking a list uses a
     # different address every time, so a per-address key would never trip. Real
-    # people register approximately once.
-    register_rate_limit: int = Field(default=30, alias="REGISTER_RATE_LIMIT")
+    # people register approximately once, but a legitimate burst of a few dozen
+    # signups in a short span is still common during onboarding tests and
+    # product launches. The cap is therefore higher than the login limiter so it
+    # does not block normal account creation while still throttling automation.
+    register_rate_limit: int = Field(default=120, alias="REGISTER_RATE_LIMIT")
     login_rate_window_seconds: int = Field(default=300, alias="LOGIN_RATE_WINDOW_SECONDS")
 
     # Plans are the only route that costs real money once Groq is behind it.
