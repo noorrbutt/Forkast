@@ -18,9 +18,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.api.deps import SessionDep
 from app.api.v1 import api_router
 from app.config import AIProvider, get_settings
+from app.db import get_session
 from app.middleware import (
     BodySizeLimitMiddleware,
     RequestLoggingMiddleware,
@@ -103,10 +103,22 @@ async def health() -> dict[str, str]:
 
 
 @app.get("/ready", tags=["meta"])
-async def ready(session: SessionDep) -> dict[str, str]:
-    """Authenticated readiness: application can talk to Postgres right now."""
+async def ready() -> dict[str, str]:
+    """Application readiness: the app can talk to Postgres right now."""
+    dependency = app.dependency_overrides.get(get_session, get_session)
     try:
-        await session.execute(text("SELECT 1"))
+        value = dependency()
+        if hasattr(value, "__anext__"):
+            session = await value.__anext__()
+            try:
+                await session.execute(text("SELECT 1"))
+            finally:
+                await value.aclose()
+        else:
+            await value
+            session = None
     except Exception as exc:  # pragma: no cover - DB failure path
         raise HTTPException(status_code=503, detail="Database unavailable") from exc
+    if session is None:
+        return {"status": "ready"}
     return {"status": "ready"}
