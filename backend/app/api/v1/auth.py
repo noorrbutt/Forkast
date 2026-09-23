@@ -411,7 +411,7 @@ async def refresh(
             leeway = dt.timedelta(seconds=get_settings().refresh_reuse_leeway_seconds)
             if reused.revoked_at is not None:
                 replay_gap = now - reused.revoked_at
-                if dt.timedelta(milliseconds=200) <= replay_gap <= leeway:
+                if replay_gap <= leeway:
                     later_rotation = await session.scalar(
                         select(RefreshToken).where(
                             RefreshToken.user_id == reused.user_id,
