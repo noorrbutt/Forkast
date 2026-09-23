@@ -215,10 +215,21 @@ async def test_throttling_one_account_does_not_lock_another(client: AsyncClient)
     assert unrelated.status_code == 200, unrelated.text
 
 
+@pytest.mark.timeout(180)
 async def test_registration_is_throttled_too(client: AsyncClient) -> None:
     """Register answers 409 for an address that exists, which is an account
     existence oracle. It cannot be removed without an email round trip, so the
-    limit is what stops it being run against a list."""
+    limit is what stops it being run against a list.
+
+    Marked with a longer timeout than the suite default: register_rate_limit
+    is 120 in production, so burst_size (limit*2+1, chosen to survive a window
+    boundary split) means 241 real sequential registrations here, each a real
+    Argon2 hash plus a DB insert and commit. That routinely runs past the
+    60s default, and pytest-timeout's thread method (the only one available on
+    Windows, which has no SIGALRM) can't actually kill a thread stuck mid-await
+    -- it can only dump the stack -- so hitting the default timeout hangs the
+    whole run instead of just failing this one test.
+    """
     # A different address every time, which is exactly what enumeration does
     # and exactly what a per-address key would fail to catch.
     statuses = [

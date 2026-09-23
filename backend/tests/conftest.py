@@ -26,7 +26,7 @@ import os
 import re
 import subprocess
 import sys
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
 import pytest
@@ -120,7 +120,7 @@ MUTABLE_TABLES = (
 
 
 @pytest.fixture(scope="session", autouse=True)
-def migrated_database() -> None:
+def migrated_database() -> Iterator[None]:
     """Build the test schema by running the real migrations.
 
     Alembic runs as a subprocess with DATABASE_URL pointed at the test database.
@@ -155,6 +155,16 @@ def migrated_database() -> None:
         asyncio.run(reset.dispose())
 
     subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], **common)
+
+    yield
+
+    # _reset_app_db_pool() rebuilds app_db.engine before every test but only
+    # disposes the *previous* one, so the last engine of the run is still
+    # holding open connections when the process exits unless we close it here.
+    import app.db as app_db
+
+    if hasattr(app_db, "engine"):
+        asyncio.run(app_db.engine.dispose())
 
 
 async def _clear_stale_connections(engine) -> None:
@@ -222,7 +232,19 @@ async def _reset_app_db_pool() -> None:
     if hasattr(app_db, "SessionLocal") and getattr(app_db.SessionLocal, "bind", None) is not None:
         await app_db.SessionLocal.bind.dispose()
 
-    app_db.engine = create_async_engine(TEST_DATABASE_URL, echo=False, pool_pre_ping=True)
+    # Bounded and small on purpose. This engine is rebuilt before every test,
+    # so the default pool (5 + 10 overflow) accumulates one full pool's worth
+    # of idle connections per test that never got closed -- across a full
+    # suite that is enough backends to make Postgres itself start queueing
+    # new connect() calls, which surfaces as the whole run hanging with no
+    # error. A couple of connections is all any single test needs.
+    app_db.engine = create_async_engine(
+        TEST_DATABASE_URL,
+        echo=False,
+        pool_pre_ping=True,
+        pool_size=2,
+        max_overflow=2,
+    )
     app_db.SessionLocal = async_sessionmaker(
         app_db.engine,
         class_=AsyncSession,
