@@ -27,6 +27,7 @@ import re
 import subprocess
 import sys
 from collections.abc import AsyncIterator, Iterator
+from contextlib import suppress
 from pathlib import Path
 
 import pytest
@@ -342,10 +343,8 @@ async def client(session_factory) -> AsyncIterator[AsyncClient]:
             try:
                 yield db
             except Exception:
-                try:
+                with suppress(Exception):
                     await db.rollback()
-                except Exception:
-                    pass
                 raise
 
     app.dependency_overrides[get_session] = _override_session
