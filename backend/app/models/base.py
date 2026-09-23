@@ -72,6 +72,6 @@ def new_uuid7() -> uuid.UUID:
         timestamp_ms = time.time_ns() // 1_000_000
         raw = bytearray(secrets.token_bytes(16))
         raw[0:6] = (timestamp_ms & ((1 << 48) - 1)).to_bytes(6, byteorder="big")
-        raw[6] = (0x70 | (raw[6] & 0x0F))
-        raw[8] = (0x80 | (raw[8] & 0x3F))
+        raw[6] = 0x70 | (raw[6] & 0x0F)
+        raw[8] = 0x80 | (raw[8] & 0x3F)
         return uuid.UUID(bytes=bytes(raw))

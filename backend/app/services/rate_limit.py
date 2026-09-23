@@ -167,8 +167,6 @@ async def prune_refresh_tokens(
     session_factory = session_factory or get_session_factory()
     cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(days=1)
     async with session_factory() as session:
-        result = await session.execute(
-            delete(RefreshToken).where(RefreshToken.expires_at < cutoff)
-        )
+        result = await session.execute(delete(RefreshToken).where(RefreshToken.expires_at < cutoff))
         await session.commit()
         return result.rowcount or 0

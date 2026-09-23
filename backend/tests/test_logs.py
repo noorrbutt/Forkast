@@ -242,7 +242,7 @@ async def test_a_slow_refine_does_not_overwrite_a_newer_serving_size_edit(
     release.set()
     await asyncio.sleep(0.05)
 
-    final = (await auth_client.get(f"{LOGS}/{created['id']}" )).json()
+    final = (await auth_client.get(f"{LOGS}/{created['id']}")).json()
     assert final["serving_size"] == "large"
     assert final["estimated_calories"] == updated["estimated_calories"]
 

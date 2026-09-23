@@ -146,6 +146,7 @@ def migrated_database() -> Iterator[None]:
     # previous test happened to leave behind.
     reset = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
     try:
+
         async def _reset_schema() -> None:
             async with reset.begin() as connection:
                 await connection.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))

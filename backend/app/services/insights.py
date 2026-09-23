@@ -58,7 +58,9 @@ def _local_day(user: User):
     return cast(func.timezone(user.timezone, FoodLog.created_at), Date)
 
 
-def _local_bounds(user: User, start_date: dt.date, end_date: dt.date) -> tuple[dt.datetime, dt.datetime]:
+def _local_bounds(
+    user: User, start_date: dt.date, end_date: dt.date
+) -> tuple[dt.datetime, dt.datetime]:
     tz = ZoneInfo(user.timezone)
     start = dt.datetime.combine(start_date, dt.time.min, tzinfo=tz).astimezone(dt.UTC)
     end = dt.datetime.combine(end_date, dt.time.min, tzinfo=tz).astimezone(dt.UTC)
@@ -105,7 +107,9 @@ async def build_dashboard(session: AsyncSession, user: User) -> DashboardOut:
 
     today = dt.datetime.now(ZoneInfo(user.timezone)).date()
     window_start = today - dt.timedelta(days=CHART_DAYS - 1)
-    window_start_utc, window_end_utc = _local_bounds(user, window_start, today + dt.timedelta(days=1))
+    window_start_utc, window_end_utc = _local_bounds(
+        user, window_start, today + dt.timedelta(days=1)
+    )
 
     if logs_count == 0 and total_burned == 0:
         return DashboardOut(
@@ -314,7 +318,9 @@ def _streak_message(current: int, has_any_logs: bool) -> str:
 async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
     today = dt.datetime.now(ZoneInfo(user.timezone)).date()
     window_start = today - dt.timedelta(days=STREAK_WINDOW_DAYS)
-    window_start_utc, window_end_utc = _local_bounds(user, window_start, today + dt.timedelta(days=1))
+    window_start_utc, window_end_utc = _local_bounds(
+        user, window_start, today + dt.timedelta(days=1)
+    )
 
     junk_days = set(
         (
@@ -374,7 +380,9 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
     # one that ended the day still broken.
     last_junk_dish = None
     if last_junk_date is not None:
-        start_utc, end_utc = _local_bounds(user, last_junk_date, last_junk_date + dt.timedelta(days=1))
+        start_utc, end_utc = _local_bounds(
+            user, last_junk_date, last_junk_date + dt.timedelta(days=1)
+        )
         last_junk_dish = await session.scalar(
             select(FoodLog.dish_name)
             .join(FoodCategory, FoodCategory.id == FoodLog.category_id)

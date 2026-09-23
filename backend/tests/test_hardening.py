@@ -43,7 +43,9 @@ LOGS = "/api/v1/logs"
         ),
     ],
 )
-def test_database_urls_are_rewritten_for_asyncpg_and_psycopg(raw: str, expected_async: str, expected_sync: str) -> None:
+def test_database_urls_are_rewritten_for_asyncpg_and_psycopg(
+    raw: str, expected_async: str, expected_sync: str
+) -> None:
     assert _rewrite_database_url(raw, async_driver=True) == expected_async
     assert _rewrite_database_url(raw, async_driver=False) == expected_sync
 
@@ -276,7 +278,9 @@ def test_production_requires_an_explicit_trust_proxy_flag(monkeypatch: pytest.Mo
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.delenv("TRUST_PROXY_HEADERS", raising=False)
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://user:pass@localhost:5432/forkast")
-    monkeypatch.setenv("TEST_DATABASE_URL", "postgresql+asyncpg://user:pass@localhost:5432/forkast_test")
+    monkeypatch.setenv(
+        "TEST_DATABASE_URL", "postgresql+asyncpg://user:pass@localhost:5432/forkast_test"
+    )
     monkeypatch.setenv("JWT_SECRET", "a-very-long-secret-that-is-matching-the-required-minimum")
 
     with pytest.raises(ValueError, match="TRUST_PROXY_HEADERS"):
@@ -302,8 +306,7 @@ async def test_refresh_allows_more_than_the_login_peer_window(client: AsyncClien
         tokens.append(user["refresh_token"])
 
     statuses = [
-        (await client.post(REFRESH, json={"refresh_token": token})).status_code
-        for token in tokens
+        (await client.post(REFRESH, json={"refresh_token": token})).status_code for token in tokens
     ]
 
     assert 429 not in statuses, statuses

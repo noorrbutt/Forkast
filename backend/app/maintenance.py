@@ -44,7 +44,9 @@ async def _refine_backfill(limit: int = 100) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run background maintenance tasks.")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("prune", help="Delete stale rate-limit counters and expired refresh tokens.")
+    subparsers.add_parser(
+        "prune", help="Delete stale rate-limit counters and expired refresh tokens."
+    )
     refine_parser = subparsers.add_parser(
         "refine-backfill", help="Retry stale log estimates whose refinement never landed."
     )

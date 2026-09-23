@@ -280,7 +280,9 @@ async def create_log(
 
     if payload.client_id is not None:
         existing = await session.scalar(
-            select(FoodLog).where(FoodLog.user_id == user.id, FoodLog.client_id == payload.client_id)
+            select(FoodLog).where(
+                FoodLog.user_id == user.id, FoodLog.client_id == payload.client_id
+            )
         )
         if existing is not None:
             response.status_code = status.HTTP_200_OK
@@ -313,7 +315,9 @@ async def create_log(
         await session.rollback()
         if payload.client_id is not None:
             existing = await session.scalar(
-                select(FoodLog).where(FoodLog.user_id == user.id, FoodLog.client_id == payload.client_id)
+                select(FoodLog).where(
+                    FoodLog.user_id == user.id, FoodLog.client_id == payload.client_id
+                )
             )
             if existing is not None:
                 response.status_code = status.HTTP_200_OK
