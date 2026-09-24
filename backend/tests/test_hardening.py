@@ -26,7 +26,7 @@ LOGS = "/api/v1/logs"
 
 def test_environment_is_required_without_an_env_file(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ENVIRONMENT", raising=False)
-    with pytest.raises(ValidationError, match="(?i)environment"):
+    with pytest.raises(ValidationError, match=r"(?i)environment"):
         Settings(
             _env_file=None,
             DATABASE_URL="postgresql+asyncpg://u:p@localhost:5432/forkast",
