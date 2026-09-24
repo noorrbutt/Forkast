@@ -45,3 +45,5 @@ mobile/.playwright-cli/
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+*.log
+pytest_*out.txt
