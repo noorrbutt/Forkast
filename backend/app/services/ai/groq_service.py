@@ -261,17 +261,24 @@ class GroqAIService:
         self._model = model
 
     async def probe(self) -> None:
-        """Fail fast if the configured Groq model is unavailable."""
+        """Fail fast if the configured Groq model is unavailable.
+
+        Deliberately uses ``models.list()`` and not ``models.retrieve(id)``.
+        ``retrieve`` puts the model id straight into the URL path
+        (``GET /openai/v1/models/{id}``), and any model id containing a
+        literal ``/`` (every ``openai/gpt-oss-*`` model does) gets percent
+        encoded to ``%2F`` by the SDK before the request goes out. Groq's
+        routing does not decode that back to a real slash, so it looks up
+        the literal string ``openai%2Fgpt-oss-20b``, finds nothing, and
+        returns a 404 model_not_found even though the model exists and
+        works fine for chat completions. ``list()`` has no id-in-path
+        problem, so membership-check against it instead.
+        """
         try:
-            models = self._client.models
-            if hasattr(models, "retrieve"):
-                await models.retrieve(self._model)
-                return
-            if hasattr(models, "list"):
-                listed = await models.list()
-                names = {item.id for item in listed.data}
-                if self._model not in names:
-                    raise GroqResponseError(f"Groq model {self._model} is not available")
+            listed = await self._client.models.list()
+            names = {item.id for item in listed.data}
+            if self._model not in names:
+                raise GroqResponseError(f"Groq model {self._model} is not available")
         except Exception as exc:
             raise GroqResponseError(f"Groq model probe failed for {self._model}: {exc}") from exc
 
