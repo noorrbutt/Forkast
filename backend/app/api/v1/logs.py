@@ -37,7 +37,7 @@ from app.models.enums import ServingSize
 from app.schemas.insights import TrendOut
 from app.schemas.logs import FoodLogCreate, FoodLogOut, FoodLogPage, FoodLogUpdate
 from app.services.ai.base import AIService
-from app.services.ai.deps import get_ai_service
+from app.services.ai.deps import EstimateSource, get_ai_service, get_estimate_source
 from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import CalorieAdjustRequest
 from app.services.calories import finalise_estimate
@@ -52,6 +52,7 @@ trend_router = APIRouter(tags=["insights"])
 router = APIRouter()
 
 AIDep = Annotated[AIService, Depends(get_ai_service)]
+EstimateSourceDep = Annotated[EstimateSource, Depends(get_estimate_source)]
 
 # Injected rather than imported, for the reason get_session_factory's own
 # docstring gives: it is a dependency precisely so tests can point it at the
@@ -60,6 +61,11 @@ AIDep = Annotated[AIService, Depends(get_ai_service)]
 SessionFactoryDep = Annotated["async_sessionmaker[AsyncSession]", Depends(get_session_factory)]
 
 logger = logging.getLogger(__name__)
+
+
+def _food_log_out(log: FoodLog, estimate_source: EstimateSource) -> FoodLogOut:
+    output = FoodLogOut.model_validate(log)
+    return output.model_copy(update={"estimate_source": estimate_source})
 
 
 def _provisional_estimate(category: FoodCategory, serving_size: ServingSize) -> int:
@@ -247,6 +253,7 @@ async def create_log(
     session: SessionDep,
     user: CurrentUser,
     ai: AIDep,
+    estimate_source: EstimateSourceDep,
     factory: SessionFactoryDep,
     background: BackgroundTasks,
     limiter: RateLimiterDep,
@@ -286,7 +293,7 @@ async def create_log(
         )
         if existing is not None:
             response.status_code = status.HTTP_200_OK
-            return await _load_log(session, user.id, existing.id)
+            return _food_log_out(await _load_log(session, user.id, existing.id), estimate_source)
 
     # Saved with a figure that needs nobody's permission, and refined behind
     # the response. See _provisional_estimate.
@@ -321,20 +328,21 @@ async def create_log(
             )
             if existing is not None:
                 response.status_code = status.HTTP_200_OK
-                return await _load_log(session, user.id, existing.id)
+                return _food_log_out(await _load_log(session, user.id, existing.id), estimate_source)
         raise
     created = await _load_log(session, user.id, log.id)
     await session.commit()
     # After the commit, so the row is certainly there when the task opens its
     # own session, and after the response is built, so nobody waits for it.
     background.add_task(_refine_estimate, created.id, created.category_id, ai, factory)
-    return created
+    return _food_log_out(created, estimate_source)
 
 
 @logs_router.get("", response_model=FoodLogPage)
 async def list_logs(
     session: SessionDep,
     user: CurrentUser,
+    estimate_source: EstimateSourceDep,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> FoodLogPage:
@@ -350,14 +358,16 @@ async def list_logs(
         .options(selectinload(FoodLog.category), selectinload(FoodLog.restaurant))
     )
     return FoodLogPage(
-        items=[FoodLogOut.model_validate(row) for row in rows],
+        items=[_food_log_out(row, estimate_source) for row in rows],
         total=total or 0,
     )
 
 
 @logs_router.get("/{log_id}", response_model=FoodLogOut)
-async def get_log(log_id: uuid.UUID, session: SessionDep, user: CurrentUser) -> FoodLog:
-    return await _load_log(session, user.id, log_id)
+async def get_log(
+    log_id: uuid.UUID, session: SessionDep, user: CurrentUser, estimate_source: EstimateSourceDep
+) -> FoodLogOut:
+    return _food_log_out(await _load_log(session, user.id, log_id), estimate_source)
 
 
 @logs_router.patch("/{log_id}", response_model=FoodLogOut)
@@ -367,6 +377,7 @@ async def update_log(
     session: SessionDep,
     user: CurrentUser,
     ai: AIDep,
+    estimate_source: EstimateSourceDep,
     factory: SessionFactoryDep,
     background: BackgroundTasks,
     limiter: RateLimiterDep,
@@ -407,7 +418,7 @@ async def update_log(
                 raise
         else:
             background.add_task(_refine_estimate, updated.id, updated.category_id, ai, factory)
-    return updated
+    return _food_log_out(updated, estimate_source)
 
 
 @logs_router.delete("/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -425,6 +436,7 @@ async def repeat_log(
     log_id: uuid.UUID,
     session: SessionDep,
     user: CurrentUser,
+    estimate_source: EstimateSourceDep,
     limiter: RateLimiterDep,
 ) -> FoodLog:
     """Log the same thing again, now, without retyping any of it.
@@ -499,7 +511,7 @@ async def repeat_log(
 
     created = await _load_log(session, user.id, repeated.id)
     await session.commit()
-    return created
+    return _food_log_out(created, estimate_source)
 
 
 # What a phone camera and an image picker actually produce. Checked by magic
@@ -534,6 +546,7 @@ async def set_photo(
     log_id: uuid.UUID,
     session: SessionDep,
     user: CurrentUser,
+    estimate_source: EstimateSourceDep,
     file: Annotated[UploadFile, File()],
     limiter: RateLimiterDep,
 ) -> FoodLog:
@@ -590,7 +603,7 @@ async def set_photo(
         existing.data = data
 
     await session.commit()
-    return await _load_log(session, user.id, log_id)
+    return _food_log_out(await _load_log(session, user.id, log_id), estimate_source)
 
 
 @logs_router.get("/{log_id}/photo")

@@ -57,7 +57,7 @@ from app.schemas.auth import (
 )
 from app.schemas.insights import DashboardOut, PlanCreate, PlanOut, StreaksOut
 from app.services.ai.base import AIService
-from app.services.ai.deps import get_ai_service
+from app.services.ai.deps import EstimateSource, get_ai_service, get_estimate_source
 from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import PlanContext, PlanLogSummary, PlanRequest
 from app.services.google import GoogleAuthError, verify_google_id_token
@@ -73,6 +73,12 @@ router = APIRouter(tags=["insights"])
 logger = logging.getLogger(__name__)
 
 AIDep = Annotated[AIService, Depends(get_ai_service)]
+EstimateSourceDep = Annotated[EstimateSource, Depends(get_estimate_source)]
+
+
+def _plan_out(plan: AIPlan, estimate_source: EstimateSource) -> PlanOut:
+    output = PlanOut.model_validate(plan)
+    return output.model_copy(update={"estimate_source": estimate_source})
 CallerToken = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)]
 
 # How many recent logs to hand the planner. Enough to spot a pattern, small
@@ -461,6 +467,7 @@ async def create_plan(
     session: SessionDep,
     user: CurrentUser,
     ai: AIDep,
+    estimate_source: EstimateSourceDep,
     limiter: RateLimiterDep,
 ) -> AIPlan:
     # The only route that costs real money once Groq is behind it, and the only
@@ -566,23 +573,30 @@ async def create_plan(
             detail="Plan generation is unavailable, try again shortly.",
         ) from exc
 
+    generated_plan = result.model_dump(mode="json", exclude={"model"})
+    for day in generated_plan["days"]:
+        for meal in day["meals"]:
+            meal["estimate_source"] = estimate_source
+
     plan = AIPlan(
         user_id=user.id,
         goal=goal,
-        generated_plan=result.model_dump(mode="json", exclude={"model"}),
+        generated_plan=generated_plan,
         model=result.model,
     )
     session.add(plan)
     await session.commit()
-    return plan
+    return _plan_out(plan, estimate_source)
 
 
 @router.get("/plans", response_model=list[PlanOut])
-async def list_plans(session: SessionDep, user: CurrentUser) -> list[AIPlan]:
+async def list_plans(
+    session: SessionDep, user: CurrentUser, estimate_source: EstimateSourceDep
+) -> list[PlanOut]:
     rows = await session.scalars(
         select(AIPlan).where(AIPlan.user_id == user.id).order_by(AIPlan.created_at.desc()).limit(20)
     )
-    return list(rows)
+    return [_plan_out(plan, estimate_source) for plan in rows]
 
 
 async def _load_plan(session: SessionDep, user: CurrentUser, plan_id: uuid.UUID) -> AIPlan:
@@ -597,8 +611,10 @@ async def _load_plan(session: SessionDep, user: CurrentUser, plan_id: uuid.UUID)
 
 
 @router.get("/plans/{plan_id}", response_model=PlanOut)
-async def get_plan(plan_id: uuid.UUID, session: SessionDep, user: CurrentUser) -> AIPlan:
-    return await _load_plan(session, user, plan_id)
+async def get_plan(
+    plan_id: uuid.UUID, session: SessionDep, user: CurrentUser, estimate_source: EstimateSourceDep
+) -> PlanOut:
+    return _plan_out(await _load_plan(session, user, plan_id), estimate_source)
 
 
 @router.delete("/plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)

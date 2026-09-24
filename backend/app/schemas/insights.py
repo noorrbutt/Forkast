@@ -15,6 +15,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import Goal
+from app.services.ai.deps import EstimateSource
 
 
 class CaloriesByDay(BaseModel):
@@ -151,5 +152,6 @@ class PlanOut(BaseModel):
     id: uuid.UUID
     goal: Goal
     generated_plan: dict[str, Any]
+    estimate_source: EstimateSource = "local"
     model: str | None = None
     created_at: dt.datetime

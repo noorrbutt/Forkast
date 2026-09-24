@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from app.config import AIProvider, get_settings
 from app.services.ai.base import AIService
 from app.services.ai.fake import DeterministicAIService
 from app.services.ai.groq_service import GroqAIService
+
+EstimateSource = Literal["ai", "local"]
+
+
+def get_estimate_source() -> EstimateSource:
+    """Expose how calorie estimates are produced by the active provider."""
+    return "ai" if get_settings().ai_provider is AIProvider.groq else "local"
 
 
 @lru_cache

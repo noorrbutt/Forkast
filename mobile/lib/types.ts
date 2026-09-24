@@ -11,6 +11,7 @@ export type Uuid = string;
 export type Goal = 'cut' | 'maintain' | 'bulk';
 export type ServingSize = 'small' | 'medium' | 'large';
 export type FriendScale = 'solo' | 'small_group' | 'squad';
+export type EstimateSource = 'ai' | 'local';
 
 export const GOALS: Goal[] = ['cut', 'maintain', 'bulk'];
 export const SERVING_SIZES: ServingSize[] = ['small', 'medium', 'large'];
@@ -104,6 +105,7 @@ export type FoodLog = {
   friend_scale: FriendScale | null;
   serving_size: ServingSize;
   estimated_calories: number;
+  estimate_source: EstimateSource;
   created_at: string;
   /** Joined in by the backend so a log row renders without a second request. */
   category: Category | null;
@@ -245,6 +247,7 @@ export type PlanMeal = {
   slot: string;
   suggestion: string;
   approx_calories: number;
+  estimate_source: EstimateSource;
 };
 
 export type PlanDay = {
@@ -262,6 +265,7 @@ export type Plan = {
   id: Uuid;
   goal: Goal;
   generated_plan: GeneratedPlan;
+  estimate_source: EstimateSource;
   /** Which model produced it. "stub" while the Groq integration is a TODO. */
   model: string | null;
   created_at: string;

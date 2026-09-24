@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.models.enums import FriendScale, ServingSize
 from app.schemas.catalog import SMALLINT_MAX, CategoryOut, RestaurantOut
 from app.schemas.text import optional_text_field, text_field
+from app.services.ai.deps import EstimateSource
 
 
 class FoodLogCreate(BaseModel):
@@ -114,6 +115,7 @@ class FoodLogOut(BaseModel):
     friend_scale: FriendScale | None = None
     serving_size: ServingSize
     estimated_calories: int
+    estimate_source: EstimateSource = "local"
     # Computed by the database as part of the same SELECT, so a list of logs
     # never loads a byte of image data to answer it.
     has_photo: bool = False

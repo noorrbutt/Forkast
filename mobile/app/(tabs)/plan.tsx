@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { Button, Card, Chip, ErrorState, Hero, Loading, Screen } from '../../components/ui';
+import { Button, Card, Chip, ErrorState, EstimateBadge, Hero, Loading, Screen } from '../../components/ui';
 import { useMe } from '../../hooks/useAuth';
 import { useGeneratePlan, usePlans } from '../../hooks/usePlans';
 import { describeError } from '../../lib/api';
@@ -175,6 +175,7 @@ export default function PlanRoute() {
                   value={formatNumber(perDay)}
                   caption={`kcal a day, across ${days.length} ${days.length === 1 ? 'day' : 'days'}`}
                 />
+                {plan.estimate_source === 'local' ? <EstimateBadge /> : null}
               </View>
             ) : null}
 
@@ -201,9 +202,12 @@ export default function PlanRoute() {
                       {/* The unit sits once at the top of the column the meal
                           numbers align into, the way a table does it, rather than
                           being repeated on all nine rows. */}
-                      <Text style={[type.caption, { color: colors.muted }]}>
-                        {formatNumber(dayTotals[dayIndex])} kcal
-                      </Text>
+                      <View style={{ alignItems: 'flex-end', gap: spacing.xs }}>
+                        <Text style={[type.caption, { color: colors.muted }]}>
+                          {formatNumber(dayTotals[dayIndex])} kcal
+                        </Text>
+                        {plan.estimate_source === 'local' ? <EstimateBadge /> : null}
+                      </View>
                     </View>
 
                     <View style={{ gap: spacing.lg }}>
@@ -232,6 +236,7 @@ export default function PlanRoute() {
                           >
                             {formatNumber(meal.approx_calories)}
                           </Text>
+                          {meal.estimate_source === 'local' ? <EstimateBadge /> : null}
                         </View>
                       ))}
                     </View>

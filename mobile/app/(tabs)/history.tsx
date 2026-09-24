@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, Pressable, RefreshControl, Text, View } from 'react-native';
 
-import { Button, Dialog, Empty, ErrorState, FormError, Icon, initialsOf, ListGroup, Loading, Screen, useScreenInsets } from '../../components/ui';
+import { Button, Dialog, Empty, ErrorState, EstimateBadge, FormError, Icon, initialsOf, ListGroup, Loading, Screen, useScreenInsets } from '../../components/ui';
 import { useInfiniteLogs, useRepeatLog } from '../../hooks/useLogs';
 import { usePhotoSource } from '../../hooks/usePhoto';
 import { describeError } from '../../lib/api';
@@ -266,6 +266,7 @@ function MealRowBase({ log, last, onOpen, onRepeat, sending, confirmed, error }:
           >
             {formatNumber(log.estimated_calories)}
           </Text>
+          {log.estimate_source === 'local' ? <EstimateBadge /> : null}
           {/* The row is the way in to the meal, which nothing else here says
               out loud. */}
           <Icon name="forward" size={18} />

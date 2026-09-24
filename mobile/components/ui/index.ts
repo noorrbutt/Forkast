@@ -18,6 +18,7 @@ export { Select, type SelectOption } from './Select';
 export { Hero } from './Hero';
 export { Ring } from './Ring';
 export { HeroWash } from './HeroWash';
+export { EstimateBadge } from './EstimateBadge';
 export { ArchHero } from './ArchHero';
 export { Mark } from './Mark';
 export { TextLink } from './TextLink';

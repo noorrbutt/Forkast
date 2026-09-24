@@ -116,6 +116,7 @@ const SAVED = {
   friend_scale: null,
   serving_size: 'medium',
   estimated_calories: 820,
+  estimate_source: 'local',
   created_at: '2026-09-17T19:00:00Z',
   category: CATEGORIES[3],
   restaurant: null,
@@ -196,6 +197,17 @@ describe('choosing a category', () => {
     fireEvent.press(screen.getByText('Pizza'));
 
     await waitFor(() => expect(screen.getByText(/Usually 400 to 900 kcal/)).toBeTruthy());
+  });
+});
+
+describe('the saved estimate', () => {
+  it('shows the local estimate badge', async () => {
+    const screen = render(<LogScreen />, { wrapper });
+    await fillTheMinimum(screen);
+
+    fireEvent.press(screen.getByText('Log it'));
+
+    await waitFor(() => expect(screen.getByText('Estimated')).toBeTruthy());
   });
 });
 

@@ -5,7 +5,7 @@ import { Text, View } from 'react-native';
 
 import { MealPhoto } from '../../components/MealPhoto';
 import { StarRating } from '../../components/StarRating';
-import { Button, Card, Chip, ControlLabel, ErrorState, Field, FormError, Hero, Loading, Screen, Select, type SelectOption } from '../../components/ui';
+import { Button, Card, Chip, ControlLabel, ErrorState, EstimateBadge, Field, FormError, Hero, Loading, Screen, Select, type SelectOption } from '../../components/ui';
 import { useCategories, useCuisines, useSearch } from '../../hooks/useCatalog';
 import { useCreateLog } from '../../hooks/useLogs';
 import { useSetPhoto, type PickedPhoto } from '../../hooks/usePhoto';
@@ -381,6 +381,7 @@ export default function LogScreen() {
                 }`}
               align="center"
             />
+            {saved.estimate_source === 'local' ? <EstimateBadge /> : null}
           </View>
 
           <Text style={[type.body, { color: colors.muted }]}>

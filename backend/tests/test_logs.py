@@ -35,6 +35,7 @@ async def test_creating_a_log_stores_it_and_estimates_calories(auth_client: Asyn
     body = response.json()
     assert body["dish_name"] == "chicken biryani"
     assert body["friend_scale"] == "squad"
+    assert body["estimate_source"] == "local"
     # A medium serving is a 1.0 multiplier, so the estimate must land inside the
     # category's own range.
     assert (
