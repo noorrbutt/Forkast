@@ -71,7 +71,7 @@ os.environ.setdefault("LOGIN_TIMING_PAD_SECONDS", "0.03")
 from app.config import get_settings  # noqa: E402
 from app.db import get_session, get_session_factory  # noqa: E402
 from app.main import app  # noqa: E402
-from app.services.ai.deps import get_ai_service  # noqa: E402
+from app.services.ai.deps import get_ai_service, get_estimate_source  # noqa: E402
 from app.services.ai.fake import DeterministicAIService  # noqa: E402
 
 TEST_DATABASE_URL = get_settings().test_database_url
@@ -418,7 +418,9 @@ def deterministic_ai() -> AsyncIterator[None]:
     different implementation overrides this one for its own duration.
     """
     app.dependency_overrides[get_ai_service] = DeterministicAIService
+    app.dependency_overrides[get_estimate_source] = lambda: "local"
     try:
         yield
     finally:
         app.dependency_overrides.pop(get_ai_service, None)
+        app.dependency_overrides.pop(get_estimate_source, None)

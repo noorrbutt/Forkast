@@ -24,8 +24,9 @@ REFRESH = "/api/v1/auth/refresh"
 LOGS = "/api/v1/logs"
 
 
-def test_environment_is_required_without_an_env_file() -> None:
-    with pytest.raises(ValidationError, match="environment"):
+def test_environment_is_required_without_an_env_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    with pytest.raises(ValidationError, match="(?i)environment"):
         Settings(
             _env_file=None,
             DATABASE_URL="postgresql+asyncpg://u:p@localhost:5432/forkast",

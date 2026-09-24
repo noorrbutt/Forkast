@@ -328,7 +328,9 @@ async def create_log(
             )
             if existing is not None:
                 response.status_code = status.HTTP_200_OK
-                return _food_log_out(await _load_log(session, user.id, existing.id), estimate_source)
+                return _food_log_out(
+                    await _load_log(session, user.id, existing.id), estimate_source
+                )
         raise
     created = await _load_log(session, user.id, log.id)
     await session.commit()

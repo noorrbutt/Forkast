@@ -79,6 +79,8 @@ EstimateSourceDep = Annotated[EstimateSource, Depends(get_estimate_source)]
 def _plan_out(plan: AIPlan, estimate_source: EstimateSource) -> PlanOut:
     output = PlanOut.model_validate(plan)
     return output.model_copy(update={"estimate_source": estimate_source})
+
+
 CallerToken = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)]
 
 # How many recent logs to hand the planner. Enough to spot a pattern, small
