@@ -56,6 +56,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 # the tests exercise the exact same hash-and-verify logic production does.
 # setdefault, not assignment, so a developer can still override these from the
 # environment (e.g. to reproduce a timing-sensitive bug at real cost).
+os.environ.setdefault("ENVIRONMENT", "dev")
 os.environ.setdefault("ARGON2_TIME_COST", "1")
 os.environ.setdefault("ARGON2_MEMORY_COST", "8192")
 os.environ.setdefault("ARGON2_PARALLELISM", "1")

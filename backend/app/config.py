@@ -61,7 +61,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    environment: Environment = Field(default=Environment.dev, alias="ENVIRONMENT")
+    environment: Environment = Field(alias="ENVIRONMENT")
 
     database_url: str = Field(alias="DATABASE_URL")
     test_database_url: str = Field(alias="TEST_DATABASE_URL")

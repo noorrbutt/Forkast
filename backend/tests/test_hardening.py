@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 from httpx import AsyncClient
+from pydantic import ValidationError
 
 from app.config import Settings, _rewrite_database_url, get_settings
 from app.db import get_session
@@ -21,6 +22,17 @@ LOGIN = "/api/v1/auth/login"
 LOGOUT = "/api/v1/auth/logout"
 REFRESH = "/api/v1/auth/refresh"
 LOGS = "/api/v1/logs"
+
+
+def test_environment_is_required_without_an_env_file() -> None:
+    with pytest.raises(ValidationError, match="environment"):
+        Settings(
+            _env_file=None,
+            DATABASE_URL="postgresql+asyncpg://u:p@localhost:5432/forkast",
+            TEST_DATABASE_URL="postgresql+asyncpg://u:p@localhost:5432/forkast_test",
+            JWT_SECRET="0" * 64,
+            AI_PROVIDER="fake",
+        )
 
 
 @pytest.mark.parametrize(
