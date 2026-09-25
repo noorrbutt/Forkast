@@ -15,6 +15,7 @@ from httpx import AsyncClient
 
 DASHBOARD = "/api/v1/dashboard"
 STREAKS = "/api/v1/streaks"
+REMINDER_SIGNAL = "/api/v1/insights/reminder-signal"
 LOGS = "/api/v1/logs"
 
 
@@ -74,6 +75,35 @@ async def test_junk_ratio_counts_junk_categories(auth_client: AsyncClient) -> No
 
     assert body["logs_count"] == 4
     assert body["junk_ratio"] == pytest.approx(0.25)
+
+
+async def test_reminder_signal_tracks_slots_and_junk_streak(
+    auth_client: AsyncClient,
+) -> None:
+    empty = (await auth_client.get(REMINDER_SIGNAL)).json()
+    assert empty == {
+        "hours_since_last_log": None,
+        "current_streak": 0,
+        "todays_meals_logged": [],
+        "is_on_junk_streak": False,
+    }
+
+    categories = await _categories(auth_client)
+    timezone = ZoneInfo("Asia/Karachi")
+    today = dt.datetime.now(timezone).date()
+    await _log(
+        auth_client,
+        categories["biryani"],
+        when=dt.datetime.combine(today, dt.time(8), tzinfo=timezone),
+    )
+    breakfast = (await auth_client.get(REMINDER_SIGNAL)).json()
+    assert breakfast["todays_meals_logged"] == ["breakfast"]
+    assert breakfast["is_on_junk_streak"] is False
+
+    await _log(auth_client, categories["fries"], when=dt.datetime.now(timezone))
+    junk = (await auth_client.get(REMINDER_SIGNAL)).json()
+    assert junk["current_streak"] == 0
+    assert junk["is_on_junk_streak"] is True
 
 
 async def test_total_calories_is_the_sum_of_the_logs(auth_client: AsyncClient) -> None:

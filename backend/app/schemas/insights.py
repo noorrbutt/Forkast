@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -105,6 +105,15 @@ class StreaksOut(BaseModel):
     last_junk_dish: str | None = None
     # Soft recovery wording rather than a punitive tone, per the product brief.
     message: str
+
+
+class ReminderSignalOut(BaseModel):
+    hours_since_last_log: int | None = None
+    current_streak: int
+    todays_meals_logged: list[Literal["breakfast", "lunch", "dinner"]] = Field(
+        default_factory=list
+    )
+    is_on_junk_streak: bool
 
 
 class TrendPeriod(BaseModel):

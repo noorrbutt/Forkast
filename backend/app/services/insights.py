@@ -31,6 +31,7 @@ from app.schemas.insights import (
     CaloriesByDay,
     DashboardOut,
     FunMeal,
+    ReminderSignalOut,
     StreaksOut,
     TodayOut,
     TopCategory,
@@ -402,6 +403,55 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
         last_junk_date=last_junk_date,
         last_junk_dish=last_junk_dish,
         message=_streak_message(current_streak, has_any_logs=True),
+    )
+
+
+async def build_reminder_signal(
+    session: AsyncSession, user: User
+) -> ReminderSignalOut:
+    streaks = await compute_streaks(session, user)
+    now = dt.datetime.now(ZoneInfo(user.timezone))
+    today = now.date()
+    start_utc, end_utc = _local_bounds(user, today, today + dt.timedelta(days=1))
+
+    logs = list(
+        await session.scalars(
+            select(FoodLog)
+            .where(
+                FoodLog.user_id == user.id,
+                FoodLog.created_at >= start_utc,
+                FoodLog.created_at < end_utc,
+            )
+            .order_by(FoodLog.created_at)
+        )
+    )
+    slots = set()
+    for log in logs:
+        hour = log.created_at.astimezone(ZoneInfo(user.timezone)).hour
+        if 5 <= hour < 11:
+            slots.add("breakfast")
+        elif 11 <= hour < 16:
+            slots.add("lunch")
+        elif 16 <= hour < 24:
+            slots.add("dinner")
+
+    latest = await session.scalar(
+        select(FoodLog.created_at)
+        .where(FoodLog.user_id == user.id)
+        .order_by(FoodLog.created_at.desc())
+        .limit(1)
+    )
+    hours_since_last_log = (
+        None
+        if latest is None
+        else max(0, int((now - latest.astimezone(ZoneInfo(user.timezone))).total_seconds() // 3600))
+    )
+
+    return ReminderSignalOut(
+        hours_since_last_log=hours_since_last_log,
+        current_streak=streaks.current_streak,
+        todays_meals_logged=[slot for slot in ("breakfast", "lunch", "dinner") if slot in slots],
+        is_on_junk_streak=streaks.current_streak == 0 and streaks.last_junk_date == today,
     )
 
 
