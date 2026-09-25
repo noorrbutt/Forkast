@@ -145,6 +145,11 @@ class DataExport(BaseModel):
     plans: list[ExportPlan]
 
 
+class ExportOut(BaseModel):
+    food_logs: list[ExportLog]
+    burn_logs: list[ExportBurnLog]
+
+
 class AccountDelete(BaseModel):
     """Deleting an account asks the holder to prove themselves again.
 

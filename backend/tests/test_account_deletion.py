@@ -10,6 +10,7 @@ from __future__ import annotations
 from httpx import AsyncClient
 
 ME = "/api/v1/me"
+EXPORT = "/api/v1/me/export"
 
 
 async def _eat(client: AsyncClient) -> None:
@@ -24,6 +25,77 @@ async def _eat(client: AsyncClient) -> None:
         },
     )
     assert response.status_code == 201, response.text
+
+
+async def test_export_is_json_or_csv_and_only_contains_the_callers_data(
+    client: AsyncClient,
+) -> None:
+    first = (
+        await client.post(
+            "/api/v1/auth/register",
+            json={
+                "first_name": "First",
+                "last_name": "User",
+                "email": "export-first@forkast.app",
+                "password": "password123",
+            },
+        )
+    ).json()
+    second = (
+        await client.post(
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Second",
+                "last_name": "User",
+                "email": "export-second@forkast.app",
+                "password": "password123",
+            },
+        )
+    ).json()
+    first_headers = {"Authorization": f"Bearer {first['access_token']}"}
+    second_headers = {"Authorization": f"Bearer {second['access_token']}"}
+
+    categories = {
+        c["slug"]: c for c in (await client.get("/api/v1/categories", headers=first_headers)).json()
+    }
+    await client.post(
+        "/api/v1/logs",
+        headers=first_headers,
+        json={
+            "dish_name": "first meal",
+            "category_id": categories["biryani"]["id"],
+            "rating": 4,
+            "serving_size": "medium",
+        },
+    )
+    await client.post(
+        "/api/v1/logs",
+        headers=second_headers,
+        json={
+            "dish_name": "second meal",
+            "category_id": categories["fries"]["id"],
+            "rating": 4,
+            "serving_size": "medium",
+        },
+    )
+    await client.put("/api/v1/burn", headers=first_headers, json={"calories": 200})
+    await client.put("/api/v1/burn", headers=second_headers, json={"calories": 300})
+
+    json_response = await client.get(EXPORT, headers=first_headers)
+    assert json_response.status_code == 200
+    assert json_response.headers["content-disposition"].endswith('.json"')
+    exported = json_response.json()
+    assert [log["dish_name"] for log in exported["food_logs"]] == ["first meal"]
+    assert [log["calories"] for log in exported["burn_logs"]] == [200]
+    assert "second meal" not in json_response.text
+
+    csv_response = await client.get(EXPORT, headers=first_headers, params={"format": "csv"})
+    assert csv_response.status_code == 200
+    assert csv_response.headers["content-type"].startswith("text/csv")
+    assert csv_response.headers["content-disposition"].endswith('.csv"')
+    assert "first meal" in csv_response.text
+    assert "second meal" not in csv_response.text
+    assert "burn_logs" in csv_response.text
 
 
 async def test_the_account_and_its_data_go(auth_client: AsyncClient) -> None:

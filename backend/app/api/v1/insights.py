@@ -11,15 +11,19 @@ changing the password, the profile picture, and closing the account.
 
 from __future__ import annotations
 
+import csv
+import datetime as dt
+import io
 import logging
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import (
     APIRouter,
     Depends,
     File,
     HTTPException,
+    Query,
     Response,
     UploadFile,
     status,
@@ -27,6 +31,7 @@ from fastapi import (
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
+from starlette.responses import StreamingResponse
 
 from app.api.deps import CurrentUser, RateLimiterDep, SessionDep, bearer_scheme
 
@@ -47,10 +52,9 @@ from app.models import (
 )
 from app.schemas.auth import (
     AccountDelete,
-    DataExport,
     ExportBurnLog,
     ExportLog,
-    ExportPlan,
+    ExportOut,
     PasswordChange,
     UserOut,
     UserUpdate,
@@ -93,8 +97,13 @@ async def read_me(user: CurrentUser) -> User:
     return user
 
 
-@router.get("/me/export", response_model=DataExport)
-async def export_me(session: SessionDep, user: CurrentUser, limiter: RateLimiterDep) -> DataExport:
+@router.get("/me/export")
+async def export_me(
+    session: SessionDep,
+    user: CurrentUser,
+    limiter: RateLimiterDep,
+    format: Literal["json", "csv"] = Query(default="json"),
+) -> Response:
     """Return the caller's account and content as a JSON attachment.
 
     The response is deliberately a plain file download rather than a webpage, so
@@ -124,7 +133,6 @@ async def export_me(session: SessionDep, user: CurrentUser, limiter: RateLimiter
             restaurant_name=getattr(log.restaurant, "name", None),
             estimated_calories=getattr(log, "estimated_calories", None),
             created_at=log.created_at,
-            has_photo=bool(getattr(log, "photo", None) is not None),
         )
         for log in log_rows
     ]
@@ -142,25 +150,48 @@ async def export_me(session: SessionDep, user: CurrentUser, limiter: RateLimiter
         for burn in burn_rows
     ]
 
-    plan_rows = await session.scalars(
-        select(AIPlan).where(AIPlan.user_id == user.id).order_by(AIPlan.created_at.desc())
-    )
-    plans = [
-        ExportPlan(
-            id=plan.id,
-            goal=getattr(plan, "goal", None),
-            created_at=plan.created_at,
-            model=getattr(plan, "model", None),
-            generated_plan=getattr(plan, "generated_plan", {}) or {},
+    export = ExportOut(food_logs=logs, burn_logs=burn_logs)
+    filename = f"forkast-export-{dt.date.today().isoformat()}"
+    if format == "json":
+        return Response(
+            content=export.model_dump_json(indent=2),
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}.json"'},
         )
-        for plan in plan_rows
-    ]
 
-    export = DataExport(user=user, logs=logs, burn_logs=burn_logs, plans=plans)
-    return Response(
-        content=export.model_dump_json(indent=2),
-        media_type="application/json",
-        headers={"Content-Disposition": 'attachment; filename="forkast-export.json"'},
+    stream = io.StringIO(newline="")
+    writer = csv.writer(stream)
+    writer.writerow(["food_logs"])
+    writer.writerow(
+        ["id", "dish_name", "category_name", "restaurant_name", "estimated_calories", "created_at"]
+    )
+    for log in export.food_logs:
+        writer.writerow(
+            [
+                log.id,
+                log.dish_name,
+                log.category_name,
+                log.restaurant_name,
+                log.estimated_calories,
+                log.created_at.isoformat(),
+            ]
+        )
+    writer.writerow([])
+    writer.writerow(["burn_logs"])
+    writer.writerow(["id", "calories", "created_at", "note"])
+    for burn in export.burn_logs:
+        writer.writerow(
+            [
+                burn.id,
+                burn.calories,
+                burn.created_at.isoformat() if burn.created_at else "",
+                burn.note or "",
+            ]
+        )
+    return StreamingResponse(
+        iter([stream.getvalue().encode("utf-8")]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}.csv"'},
     )
 
 
