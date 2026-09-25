@@ -243,6 +243,13 @@ export type Streaks = {
   message: string;
 };
 
+export type ReminderSignal = {
+  hours_since_last_log: number | null;
+  current_streak: number;
+  todays_meals_logged: ('breakfast' | 'lunch' | 'dinner')[];
+  is_on_junk_streak: boolean;
+};
+
 export type PlanMeal = {
   slot: string;
   suggestion: string;

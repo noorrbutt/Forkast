@@ -406,9 +406,7 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
     )
 
 
-async def build_reminder_signal(
-    session: AsyncSession, user: User
-) -> ReminderSignalOut:
+async def build_reminder_signal(session: AsyncSession, user: User) -> ReminderSignalOut:
     streaks = await compute_streaks(session, user)
     now = dt.datetime.now(ZoneInfo(user.timezone))
     today = now.date()

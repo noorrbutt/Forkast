@@ -110,9 +110,7 @@ class StreaksOut(BaseModel):
 class ReminderSignalOut(BaseModel):
     hours_since_last_log: int | None = None
     current_streak: int
-    todays_meals_logged: list[Literal["breakfast", "lunch", "dinner"]] = Field(
-        default_factory=list
-    )
+    todays_meals_logged: list[Literal["breakfast", "lunch", "dinner"]] = Field(default_factory=list)
     is_on_junk_streak: bool
 
 

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../lib/api';
 import { useAuth } from './useAuth';
-import type { Dashboard, Streaks, Trend } from '../lib/types';
+import type { Dashboard, ReminderSignal, Streaks, Trend } from '../lib/types';
 
 export function useDashboard() {
   const { signedIn } = useAuth();
@@ -23,6 +23,18 @@ export function useStreaks() {
     enabled: signedIn,
     queryFn: async () => {
       const response = await api.get<Streaks>('/streaks');
+      return response.data;
+    },
+  });
+}
+
+export function useReminderSignal() {
+  const { signedIn } = useAuth();
+  return useQuery({
+    queryKey: ['reminder-signal'],
+    enabled: signedIn,
+    queryFn: async () => {
+      const response = await api.get<ReminderSignal>('/insights/reminder-signal');
       return response.data;
     },
   });

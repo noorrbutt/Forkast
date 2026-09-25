@@ -1,6 +1,8 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+import type { ReminderSignal } from './types';
+
 type NotificationsModule = typeof import('expo-notifications');
 
 /**
@@ -154,7 +156,24 @@ type ReminderState = {
   /** ISO timestamp of the most recent log, or null if there are none. */
   lastLoggedAt: string | null;
   currentStreak: number;
+  signal?: ReminderSignal;
 };
+
+const FALLBACK_INACTIVITY_COPY = 'It has been a while. A quick log keeps your estimates honest.';
+const FALLBACK_STREAK_COPY = 'Still going. Log tonight and it keeps running.';
+
+function inactivityCopy(signal: ReminderSignal | undefined): string {
+  if (!signal) return FALLBACK_INACTIVITY_COPY;
+  if (signal.is_on_junk_streak) return 'A junk streak is on today. Want to break it?';
+
+  const logged = new Set(signal.todays_meals_logged);
+  if (logged.has('dinner')) return "You haven't logged since dinner.";
+  if (logged.has('lunch') && !logged.has('dinner')) return "You haven't logged since lunch.";
+  if (logged.has('breakfast') && !logged.has('lunch')) {
+    return "You haven't logged since breakfast.";
+  }
+  return FALLBACK_INACTIVITY_COPY;
+}
 
 /**
  * Rewrite both reminders from scratch to match the current state.
@@ -183,7 +202,7 @@ export async function syncReminders(state: ReminderState): Promise<void> {
       identifier: INACTIVITY_ID,
       content: {
         title: 'What did you eat?',
-        body: 'It has been a while. A quick log keeps your estimates honest.',
+        body: inactivityCopy(state.signal),
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
@@ -200,7 +219,7 @@ export async function syncReminders(state: ReminderState): Promise<void> {
         identifier: STREAK_ID,
         content: {
           title: `${state.currentStreak} clean ${state.currentStreak === 1 ? 'day' : 'days'}`,
-          body: 'Still going. Log tonight and it keeps running.',
+          body: state.signal?.is_on_junk_streak ? 'A junk streak is on today. Want to break it?' : FALLBACK_STREAK_COPY,
         },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.DAILY,

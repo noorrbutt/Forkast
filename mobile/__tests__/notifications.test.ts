@@ -32,6 +32,48 @@ beforeEach(() => {
 });
 
 describe('scheduling', () => {
+  it('uses the existing generic copy when the signal is unavailable', async () => {
+    await syncReminders({ lastLoggedAt: new Date().toISOString(), currentStreak: 0 });
+
+    expect(scheduledWithId('forkast.inactivity')?.content.body).toBe(
+      'It has been a while. A quick log keeps your estimates honest.',
+    );
+  });
+
+  it('uses the breakfast gap from the backend signal', async () => {
+    await syncReminders({
+      lastLoggedAt: new Date().toISOString(),
+      currentStreak: 0,
+      signal: {
+        hours_since_last_log: 8,
+        current_streak: 0,
+        todays_meals_logged: ['breakfast'],
+        is_on_junk_streak: false,
+      },
+    });
+
+    expect(scheduledWithId('forkast.inactivity')?.content.body).toBe(
+      "You haven't logged since breakfast.",
+    );
+  });
+
+  it('uses the junk streak warning from the backend signal', async () => {
+    await syncReminders({
+      lastLoggedAt: new Date().toISOString(),
+      currentStreak: 0,
+      signal: {
+        hours_since_last_log: 2,
+        current_streak: 0,
+        todays_meals_logged: ['lunch'],
+        is_on_junk_streak: true,
+      },
+    });
+
+    expect(scheduledWithId('forkast.inactivity')?.content.body).toBe(
+      'A junk streak is on today. Want to break it?',
+    );
+  });
+
   it('cancels both reminders before scheduling, so a reschedule replaces rather than stacks', async () => {
     await syncReminders({ lastLoggedAt: new Date().toISOString(), currentStreak: 3 });
 
