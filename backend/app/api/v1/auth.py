@@ -22,7 +22,7 @@ import uuid
 from typing import Annotated
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -46,7 +46,7 @@ from app.schemas.auth import (
 from app.services.email import send_password_reset_email, send_verification_email
 from app.services.google import GoogleAuthError, GoogleIdentity, verify_google_id_token
 from app.services.password_check import is_password_breached
-from app.services.rate_limit import client_identity, prune_refresh_tokens
+from app.services.rate_limit import account_identity, client_identity, prune_refresh_tokens
 from app.services.security import (
     create_access_token,
     create_refresh_token,
@@ -70,6 +70,32 @@ async def _reject_breached_password(password: str) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This password has appeared in a data breach — please choose another.",
         )
+
+
+async def _throttle_token_route(limiter: RateLimiterDep, request: Request, route: str) -> None:
+    """Cap unauthenticated one-time-token routes per peer.
+
+    The tokens themselves are unguessable; this bounds request volume, and on
+    reset-password the outbound HIBP call each request makes.
+    """
+    settings = get_settings()
+    await limiter.hit(
+        route,
+        client_identity(request),
+        limit=settings.login_peer_rate_limit,
+        window_seconds=settings.login_rate_window_seconds,
+    )
+
+
+async def _throttle_sessions(limiter: RateLimiterDep, user: User) -> None:
+    """One per-account bucket shared by the session list and revoke routes."""
+    settings = get_settings()
+    await limiter.hit(
+        "sessions",
+        account_identity(user.id),
+        limit=settings.refresh_rate_limit,
+        window_seconds=settings.login_rate_window_seconds,
+    )
 
 
 async def _prune_if_due(limiter: RateLimiterDep) -> None:
@@ -254,7 +280,10 @@ async def register(
 
 
 @router.post("/verify-email")
-async def verify_email(payload: VerifyEmailRequest, session: SessionDep) -> dict[str, str]:
+async def verify_email(
+    payload: VerifyEmailRequest, session: SessionDep, request: Request, limiter: RateLimiterDep
+) -> dict[str, str]:
+    await _throttle_token_route(limiter, request, "verify-email")
     now = dt.datetime.now(dt.UTC)
     user_id = await session.scalar(
         update(EmailVerificationToken)
@@ -293,6 +322,7 @@ async def verify_email(payload: VerifyEmailRequest, session: SessionDep) -> dict
 
 @router.post("/resend-verification", status_code=status.HTTP_202_ACCEPTED)
 async def resend_verification(
+    background_tasks: BackgroundTasks,
     payload: ResendVerificationRequest,
     session: SessionDep,
     request: Request,
@@ -317,7 +347,9 @@ async def resend_verification(
     if user is not None and not user.email_verified:
         raw_token = await _issue_email_verification_token(session, user)
         await session.commit()
-        await _send_verification_email_safely(user, raw_token)
+        # After the response, so an unverified account answers as fast as an
+        # unknown address and the delay does not reveal which one this is.
+        background_tasks.add_task(_send_verification_email_safely, user, raw_token)
 
     return Response(status_code=status.HTTP_202_ACCEPTED)
 
@@ -327,7 +359,9 @@ async def list_sessions(
     session: SessionDep,
     user: CurrentUser,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    limiter: RateLimiterDep,
 ) -> list[SessionOut]:
+    await _throttle_sessions(limiter, user)
     claims = decode_access_token(credentials.credentials) if credentials is not None else None
     current_session_id = claims.session_id if claims is not None else None
     now = dt.datetime.now(dt.UTC)
@@ -357,7 +391,9 @@ async def revoke_session(
     session_id: uuid.UUID,
     session: SessionDep,
     user: CurrentUser,
+    limiter: RateLimiterDep,
 ) -> Response:
+    await _throttle_sessions(limiter, user)
     result = await session.execute(
         delete(RefreshToken)
         .where(RefreshToken.user_id == user.id, RefreshToken.session_id == session_id)
@@ -374,8 +410,10 @@ async def revoke_session(
 async def revoke_other_sessions(
     session: SessionDep,
     user: CurrentUser,
+    limiter: RateLimiterDep,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
 ) -> Response:
+    await _throttle_sessions(limiter, user)
     claims = decode_access_token(credentials.credentials) if credentials is not None else None
     if claims is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
@@ -392,6 +430,7 @@ async def revoke_other_sessions(
 
 @router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
 async def forgot_password(
+    background_tasks: BackgroundTasks,
     payload: ForgotPasswordRequest,
     session: SessionDep,
     request: Request,
@@ -416,13 +455,17 @@ async def forgot_password(
     if user is not None and user.email_verified and user.password_hash is not None:
         raw_token = await _issue_password_reset_token(session, user)
         await session.commit()
-        await _send_password_reset_email_safely(user, raw_token)
+        # After the response, for the same enumeration reason as resend.
+        background_tasks.add_task(_send_password_reset_email_safely, user, raw_token)
 
     return Response(status_code=status.HTTP_202_ACCEPTED)
 
 
 @router.post("/reset-password")
-async def reset_password(payload: ResetPasswordRequest, session: SessionDep) -> dict[str, str]:
+async def reset_password(
+    payload: ResetPasswordRequest, session: SessionDep, request: Request, limiter: RateLimiterDep
+) -> dict[str, str]:
+    await _throttle_token_route(limiter, request, "reset-password")
     # Before the token is consumed, so a refused password leaves the link usable.
     await _reject_breached_password(payload.new_password)
     now = dt.datetime.now(dt.UTC)
