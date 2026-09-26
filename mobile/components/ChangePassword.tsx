@@ -150,6 +150,7 @@ export function ChangePassword({ last = false }: { last?: boolean }) {
             autoCapitalize="none"
             autoCorrect={false}
             secureTextEntry
+            reveal
             textContentType="newPassword"
             editable={!change.isPending}
           />

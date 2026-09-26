@@ -156,6 +156,7 @@ export default function LoginScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             secureTextEntry
+            reveal
             textContentType="password"
             returnKeyType="go"
             onSubmitEditing={submit}
