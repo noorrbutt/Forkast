@@ -92,12 +92,19 @@ async def test_forgot_password_returns_202_for_unknown_and_unverified_emails(
     assert unknown.status_code == 202
     assert unverified.status_code == 202
     assert already_verified.status_code == 202
-    assert send.call_count == 0
+    assert send.call_count == 1
+    assert send.call_args.args[0]["to"] == [verified.email]
     assert (
         await session.scalar(
             select(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
         )
         is None
+    )
+    assert (
+        await session.scalar(
+            select(PasswordResetToken).where(PasswordResetToken.user_id == verified.id)
+        )
+        is not None
     )
 
 

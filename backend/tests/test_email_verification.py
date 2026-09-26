@@ -78,7 +78,7 @@ async def test_registration_sends_a_hashed_verification_token(
     params = send.call_args.args[0]
     assert params["from"] == "Forkast <noreply@example.test>"
     assert params["to"] == ["verify@forkast.app"]
-    assert "forkast://verify-email?token=" in params["text"]
+    assert "forkast://check-email?token=" in params["text"]
 
     user = await session.scalar(select(User).where(User.email == "verify@forkast.app"))
     assert user is not None
