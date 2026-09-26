@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { Platform, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Platform, Pressable, Text, View } from 'react-native';
 
 import { MAPS_UNAVAILABLE, MapView, Marker, PROVIDER_DEFAULT } from './MapCanvas';
 
@@ -9,7 +9,7 @@ import { describeError } from '../lib/api';
 import { formatNumber } from '../lib/format';
 import type { FoodLog, Restaurant } from '../lib/types';
 import { useTheme } from '../theme';
-import { Empty, ErrorState, ListGroup, ListRow, Loading } from './ui';
+import { Empty, ErrorState, Icon, ListGroup, ListRow, Loading } from './ui';
 
 const UNLISTED = 'Area not set';
 
@@ -159,6 +159,7 @@ function regionFor(pins: Pin[]) {
  */
 export function MapScreen() {
   const { colors, layout, radius, spacing, type } = useTheme();
+  const [noticeDismissed, setNoticeDismissed] = useState(false);
   const restaurants = useVisitedRestaurants();
   const logs = useLogs(100, 0);
 
@@ -245,16 +246,48 @@ export function MapScreen() {
         </View>
       ) : null}
 
+      {MAPS_UNAVAILABLE && Platform.OS === 'android' && !noticeDismissed ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.sm,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: radius.card,
+            backgroundColor: colors.surfaceAlt,
+            paddingLeft: spacing.md,
+            paddingRight: spacing.xs,
+          }}
+        >
+          <Text
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            style={[type.caption, { color: colors.muted, flex: 1 }]}
+          >
+            Pins and map are unavailable in this build on this device.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss map availability notice"
+            onPress={() => setNoticeDismissed(true)}
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Icon name="close" size={16} />
+          </Pressable>
+        </View>
+      ) : null}
+
       {/* Two different reasons the map is missing, and they need different
           sentences. Naming Android and Expo Go to someone in a browser points
           at a cause that has nothing to do with them. */}
-      <Text style={[type.caption, { color: colors.muted }]}>
-        {!MAPS_UNAVAILABLE
-          ? 'Grouped by area, with counts. Places without coordinates do not get a pin yet.'
-          : Platform.OS === 'web'
-            ? 'Grouped by area. The map itself is native only, so it does not draw in a browser.'
-            : 'Grouped by area. The map needs a development build on Android, since Expo Go cannot draw one.'}
-      </Text>
+      {!MAPS_UNAVAILABLE || Platform.OS === 'web' ? (
+        <Text style={[type.caption, { color: colors.muted }]}>
+          {!MAPS_UNAVAILABLE
+            ? 'Grouped by area, with counts. Places without coordinates do not get a pin yet.'
+            : 'Grouped by area. The map itself is native only, so it does not draw in a browser.'}
+        </Text>
+      ) : null}
 
       {/* One group per area, exactly as the diary does one per day.
 

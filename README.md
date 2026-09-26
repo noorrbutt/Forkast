@@ -228,7 +228,6 @@ native build.
 To get it on Android, build a development client:
 
 ```bash
-cd mobile
 npx expo login
 eas env:create --environment development --name GOOGLE_MAPS_API_KEY --value "AIza..." --visibility secret
 eas build --profile development --platform android
@@ -240,11 +239,9 @@ build` is the shape that looks obviously right and silently produces a build wit
 no key in it, and on PowerShell it is not even valid syntax.
 
 The key ships inside the APK either way, so restrict it by package name and SHA-1
-in the Google Cloud console rather than treating secrecy as the control. Enable
-Maps SDK for Android when creating the key.
+in the Google Cloud console rather than treating secrecy as the control.
 
-For a local build, put `GOOGLE_MAPS_API_KEY` in `mobile/.env.local` and run
-`npx expo run:android` from `mobile/` with the Android SDK configured.
+To build locally instead, `eas build --local` does read your shell environment.
 
 ## Continue with Google
 
