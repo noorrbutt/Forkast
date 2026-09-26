@@ -53,7 +53,11 @@ function RootNavigator() {
   useEffect(() => {
     if (!ready) return;
     const inAuthGroup = segments[0] === '(auth)';
-    const inCheckEmail = inAuthGroup && pathname.endsWith('/check-email');
+    const isRecoveryRoute =
+      inAuthGroup &&
+      ['/check-email', '/forgot-password', '/reset-password', '/reset-confirmation'].some(
+        (route) => pathname.endsWith(route),
+      );
 
     const inSetup = segments[0] === 'setup';
 
@@ -61,12 +65,12 @@ function RootNavigator() {
       // The welcome screen, not the form. Someone who has never used
       // Forkast should be told what it is before being asked who they are.
       router.replace('/welcome');
-    } else if (signedIn && needsSetup && !inSetup && !inCheckEmail) {
+    } else if (signedIn && needsSetup && !inSetup && !isRecoveryRoute) {
       // A brand new account has the server's default timezone, which decides
       // which day every meal and streak lands in. Asking now costs one screen;
       // finding out later costs days that cannot be re-bucketed.
       router.replace('/setup');
-    } else if (signedIn && !needsSetup && (inAuthGroup || inSetup) && !inCheckEmail) {
+    } else if (signedIn && !needsSetup && (inAuthGroup || inSetup) && !isRecoveryRoute) {
       router.replace('/');
     }
   }, [ready, signedIn, needsSetup, segments, pathname, router]);

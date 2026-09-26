@@ -173,6 +173,14 @@ export default function LoginScreen() {
             disabled={google.busy}
           />
 
+          <TextLink
+            prompt="Need access?"
+            label="Forgot password?"
+            onPress={() => router.push('/forgot-password')}
+            disabled={busy}
+            accessibilityHint="Request a password reset link"
+          />
+
           {/* Hidden, not disabled, in a build with no Google client id. The
               sign up screen carries the reasoning. */}
           {google.ready ? (

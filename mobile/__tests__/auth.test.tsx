@@ -394,6 +394,15 @@ describe('finding the way in', () => {
     expect(getByText(/Enter your password/)).toBeTruthy();
   });
 
+  it('links to password recovery', async () => {
+    const { getByRole } = render(<LoginScreen />, { wrapper });
+    await waitFor(() => expect(getByRole('link', { name: 'Forgot password?' })).toBeTruthy());
+
+    fireEvent.press(getByRole('link', { name: 'Forgot password?' }));
+
+    expect(mockPush).toHaveBeenCalledWith('/forgot-password');
+  });
+
   it('signs in with what was typed', async () => {
     const { getByRole, getByPlaceholderText } = render(<LoginScreen />, { wrapper });
     await waitFor(() => expect(getByPlaceholderText('you@example.com')).toBeTruthy());

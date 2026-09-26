@@ -117,6 +117,7 @@ MUTABLE_TABLES = (
     "food_logs",
     "ai_plans",
     "email_verification_tokens",
+    "password_reset_tokens",
     "refresh_tokens",
     "restaurants",
     "users",

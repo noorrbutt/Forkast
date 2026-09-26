@@ -206,6 +206,33 @@ class EmailVerificationToken(Base):
     )
 
 
+class PasswordResetToken(Base):
+    """One-time password reset links. Only the SHA-256 hash is persisted."""
+
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=new_uuid7,
+        server_default=text("uuidv7()"),
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ux_password_reset_tokens_token_hash", "token_hash", unique=True),
+        Index("ix_password_reset_tokens_user_id", "user_id"),
+    )
+
+
 # 512 KiB. Deliberately under Starlette's 1 MiB request body ceiling, which
 # rejects the upload before the route ever runs, so a larger number here would
 # never be reachable and the friendlier message on the route would never be

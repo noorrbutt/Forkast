@@ -22,23 +22,25 @@ import uuid
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import RateLimiterDep, SessionDep
 from app.config import get_settings
-from app.models import EmailVerificationToken, RefreshToken, User
+from app.models import EmailVerificationToken, PasswordResetToken, RefreshToken, User
 from app.schemas.auth import (
+    ForgotPasswordRequest,
     GoogleAuthRequest,
     LoginRequest,
     RefreshRequest,
     RegisterRequest,
     ResendVerificationRequest,
+    ResetPasswordRequest,
     TokenPair,
     VerifyEmailRequest,
 )
-from app.services.email import send_verification_email
+from app.services.email import send_password_reset_email, send_verification_email
 from app.services.google import GoogleAuthError, GoogleIdentity, verify_google_id_token
 from app.services.rate_limit import client_identity, prune_refresh_tokens
 from app.services.security import (
@@ -53,6 +55,7 @@ from app.services.security import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 EMAIL_VERIFICATION_TTL = dt.timedelta(hours=24)
+PASSWORD_RESET_TTL = dt.timedelta(minutes=45)
 
 
 async def _prune_if_due(limiter: RateLimiterDep) -> None:
@@ -148,6 +151,36 @@ async def _send_verification_email_safely(user: User, raw_token: str) -> None:
         await run_in_threadpool(send_verification_email, user.email, link)
     except Exception:
         logger.exception("Verification email delivery failed for user_id=%s", user.id)
+
+
+async def _issue_password_reset_token(session: SessionDep, user: User) -> str:
+    now = dt.datetime.now(dt.UTC)
+    await session.execute(
+        update(PasswordResetToken)
+        .where(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.used_at.is_(None),
+        )
+        .values(used_at=now)
+    )
+    raw_token = secrets.token_urlsafe(32)
+    session.add(
+        PasswordResetToken(
+            user_id=user.id,
+            token_hash=hash_refresh_token(raw_token),
+            expires_at=now + PASSWORD_RESET_TTL,
+        )
+    )
+    await session.flush()
+    return raw_token
+
+
+async def _send_password_reset_email_safely(user: User, raw_token: str) -> None:
+    link = f"forkast://reset-password?token={quote(raw_token, safe='')}"
+    try:
+        await run_in_threadpool(send_password_reset_email, user.email, link)
+    except Exception:
+        logger.exception("Password reset email delivery failed for user_id=%s", user.id)
 
 
 @router.post("/register", response_model=TokenPair, status_code=status.HTTP_201_CREATED)
@@ -271,6 +304,77 @@ async def resend_verification(
         await _send_verification_email_safely(user, raw_token)
 
     return Response(status_code=status.HTTP_202_ACCEPTED)
+
+
+@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    session: SessionDep,
+    request: Request,
+    limiter: RateLimiterDep,
+) -> Response:
+    email = str(payload.email).strip().lower()
+    settings = get_settings()
+    await limiter.hit(
+        "forgot-password-account",
+        f"email:{hashlib.sha256(email.encode('utf-8')).hexdigest()}",
+        limit=settings.login_rate_limit,
+        window_seconds=settings.login_rate_window_seconds,
+    )
+    await limiter.hit(
+        "forgot-password-peer",
+        client_identity(request),
+        limit=settings.login_peer_rate_limit,
+        window_seconds=settings.login_rate_window_seconds,
+    )
+
+    user = await session.scalar(select(User).where(func.lower(User.email) == email))
+    if user is not None and user.email_verified and user.password_hash is not None:
+        raw_token = await _issue_password_reset_token(session, user)
+        await session.commit()
+        await _send_password_reset_email_safely(user, raw_token)
+
+    return Response(status_code=status.HTTP_202_ACCEPTED)
+
+
+@router.post("/reset-password")
+async def reset_password(payload: ResetPasswordRequest, session: SessionDep) -> dict[str, str]:
+    now = dt.datetime.now(dt.UTC)
+    user_id = await session.scalar(
+        update(PasswordResetToken)
+        .where(
+            PasswordResetToken.token_hash == hash_refresh_token(payload.token),
+            PasswordResetToken.used_at.is_(None),
+            PasswordResetToken.expires_at > now,
+        )
+        .values(used_at=now)
+        .returning(PasswordResetToken.user_id)
+    )
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password reset link is invalid or expired.",
+        )
+
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password reset link is invalid or expired.",
+        )
+
+    user.password_hash = await hash_password_async(payload.new_password)
+    await session.execute(
+        update(PasswordResetToken)
+        .where(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.used_at.is_(None),
+        )
+        .values(used_at=now)
+    )
+    await session.execute(delete(RefreshToken).where(RefreshToken.user_id == user.id))
+    await session.commit()
+    return {"detail": "Password reset."}
 
 
 @router.post("/login", response_model=TokenPair)
