@@ -546,14 +546,14 @@ describe('finding the way in', () => {
     expect(screen.getByRole('button', { name: 'Hide password' })).toBeTruthy();
   });
 
-  it('puts no eye on the sign in password', async () => {
-    // Sign in asks someone to reproduce a password they already know, so there
-    // is nothing to check their typing against and a reveal there only offers
-    // the person behind them in the queue a look.
+  it('lets someone reveal their sign in password', async () => {
     const screen = render(<LoginScreen />, { wrapper });
     await waitFor(() => expect(screen.getByPlaceholderText('Your password')).toBeTruthy());
 
-    expect(screen.queryByRole('button', { name: 'Show password' })).toBeNull();
+    expect(screen.getByPlaceholderText('Your password').props.secureTextEntry).toBe(true);
+    fireEvent.press(screen.getByRole('button', { name: 'Show password' }));
+    expect(screen.getByPlaceholderText('Your password').props.secureTextEntry).toBe(false);
+    expect(screen.getByRole('button', { name: 'Hide password' })).toBeTruthy();
   });
 });
 
