@@ -103,9 +103,7 @@ async def test_registration_succeeds_when_resend_raises(
     assert response.status_code == 201
     assert response.json()["access_token"]
     assert send.call_count == 1
-    user = await session.scalar(
-        select(User).where(User.email == "delivery-failure@forkast.app")
-    )
+    user = await session.scalar(select(User).where(User.email == "delivery-failure@forkast.app"))
     assert user is not None
     assert user.email_verified is False
 
@@ -144,9 +142,7 @@ async def test_resend_is_enumeration_safe_for_unknown_and_verified_accounts(
 ) -> None:
     send = _mock_resend(monkeypatch)
     user = User(email="resend@forkast.app", password_hash="test-hash")
-    verified = User(
-        email="verified@forkast.app", password_hash="test-hash", email_verified=True
-    )
+    verified = User(email="verified@forkast.app", password_hash="test-hash", email_verified=True)
     session.add_all([user, verified])
     await session.commit()
 

@@ -60,8 +60,10 @@ async def test_forgot_password_returns_202_when_resend_raises(
         select(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
     )
     assert stored is not None
-    assert dt.timedelta(minutes=30) <= stored.expires_at - stored.created_at <= dt.timedelta(
-        minutes=60
+    assert (
+        dt.timedelta(minutes=30)
+        <= stored.expires_at - stored.created_at
+        <= dt.timedelta(minutes=60)
     )
     raw_token = parse_qs(urlsplit(params["text"].split(": ", 1)[1]).query)["token"][0]
     assert stored.token_hash == hash_refresh_token(raw_token)
