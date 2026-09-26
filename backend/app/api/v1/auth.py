@@ -340,6 +340,44 @@ async def list_sessions(
     ]
 
 
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_session(
+    session_id: uuid.UUID,
+    session: SessionDep,
+    user: CurrentUser,
+) -> Response:
+    result = await session.execute(
+        delete(RefreshToken)
+        .where(RefreshToken.user_id == user.id, RefreshToken.session_id == session_id)
+        .returning(RefreshToken.id)
+    )
+    if result.first() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found.")
+
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/sessions/revoke-others", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_other_sessions(
+    session: SessionDep,
+    user: CurrentUser,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+) -> Response:
+    claims = decode_access_token(credentials.credentials) if credentials is not None else None
+    if claims is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    await session.execute(
+        delete(RefreshToken).where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.session_id != claims.session_id,
+        )
+    )
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
 async def forgot_password(
     payload: ForgotPasswordRequest,
