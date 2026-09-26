@@ -5,6 +5,7 @@ import { ActivityIndicator, Switch, Text, View } from 'react-native';
 import { ChangePassword } from '../../components/ChangePassword';
 import { DeleteAccount } from '../../components/DeleteAccount';
 import { ProfileAvatar } from '../../components/ProfileAvatar';
+import { SessionManagement } from '../../components/SessionManagement';
 import { Chip, Dialog, ErrorState, Field, FormError, ListGroup, ListRow, Loading, Screen } from '../../components/ui';
 import { useAuth, useMe } from '../../hooks/useAuth';
 import { hasAvatar } from '../../hooks/useAvatar';
@@ -577,6 +578,7 @@ export default function ProfileScreen() {
             </ListGroup>
 
             <RemindersSection />
+            <SessionManagement />
 
             {/* Signing out sits in a group with everything else rather than
                 floating under the page as a lone pill, which is what made it and

@@ -27,7 +27,7 @@ jest.mock('../lib/api', () => {
   const actual = jest.requireActual('../lib/api');
   return {
     ...actual,
-    api: { get: jest.fn(), post: jest.fn(), patch: jest.fn() },
+    api: { get: jest.fn(), post: jest.fn(), patch: jest.fn(), delete: jest.fn() },
     hydrateTokens: jest.fn(),
     clearTokens: jest.fn().mockResolvedValue(undefined),
     setTokens: jest.fn().mockResolvedValue(undefined),
@@ -38,7 +38,12 @@ jest.mock('../lib/api', () => {
 
 import { api, hydrateTokens } from '../lib/api';
 
-const mockedApi = api as unknown as { get: jest.Mock; post: jest.Mock; patch: jest.Mock };
+const mockedApi = api as unknown as {
+  get: jest.Mock;
+  post: jest.Mock;
+  patch: jest.Mock;
+  delete: jest.Mock;
+};
 const mockedHydrate = hydrateTokens as jest.Mock;
 
 /** An iPhone 14, so the safe area the screen lays out against is a real one. */
@@ -77,10 +82,14 @@ const user = (target: number | null) => ({
 });
 
 /** Sign the screen in, then answer /me with whatever target this test needs. */
-function signedInWith(target: number | null) {
+function signedInWith(
+  target: number | null,
+  sessions: { session_id: string; created_at: string; is_current: boolean }[] = [],
+) {
   mockedHydrate.mockResolvedValue({ access_token: 'a', refresh_token: 'r' });
   mockedApi.get.mockImplementation(async (url: string) => {
     if (url === '/me') return { data: user(target) };
+    if (url === '/auth/sessions') return { data: sessions };
     // The reminders hook reads logs and streaks off the same screen.
     if (url.startsWith('/logs')) return { data: { items: [], total: 0 } };
     if (url.startsWith('/streaks')) return { data: { current_streak: 0, longest_streak: 0 } };
@@ -270,5 +279,52 @@ describe('with a target already stored', () => {
     await waitFor(() => expect(screen.getByText('Not set')).toBeTruthy());
     const reopened = await openTarget(screen);
     expect(reopened.props.value).toBe('');
+  });
+});
+
+describe('session management', () => {
+  beforeEach(() => {
+    signedInWith(null, [
+      {
+        session_id: 'current-session',
+        created_at: '2026-09-20T11:30:00Z',
+        is_current: true,
+      },
+      {
+        session_id: 'other-session',
+        created_at: '2026-09-19T09:15:00Z',
+        is_current: false,
+      },
+    ]);
+    mockedApi.delete.mockResolvedValue({ data: undefined });
+    mockedApi.post.mockResolvedValue({ data: undefined });
+  });
+
+  it('shows the current badge and only offers per-session sign out for other sessions', async () => {
+    const screen = render(<ProfileScreen />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText('Devices')).toBeTruthy());
+    expect(screen.getByText('Current')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Sign out session' })).toHaveLength(1);
+    expect(mockedApi.get).toHaveBeenCalledWith('/auth/sessions');
+
+    fireEvent.press(screen.getByRole('button', { name: 'Sign out session' }));
+
+    await waitFor(() =>
+      expect(mockedApi.delete).toHaveBeenCalledWith('/auth/sessions/other-session'),
+    );
+  });
+
+  it('confirms and calls revoke-others while the current row stays non-revocable', async () => {
+    const screen = render(<ProfileScreen />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText('Devices')).toBeTruthy());
+    fireEvent.press(screen.getByRole('button', { name: 'Sign out of all other devices' }));
+    expect(screen.getByText('Sign out other devices?')).toBeTruthy();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Sign out other devices' }));
+
+    await waitFor(() => expect(mockedApi.post).toHaveBeenCalledWith('/auth/sessions/revoke-others'));
+    expect(screen.getByText('Current')).toBeTruthy();
   });
 });
