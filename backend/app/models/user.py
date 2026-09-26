@@ -6,6 +6,7 @@ import datetime as dt
 import uuid
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -67,11 +68,17 @@ class User(Base):
     # dashboard shows a plain total, while a number turns that total into
     # progress against it.
     daily_calorie_target: Mapped[int | None] = mapped_column(nullable=True)
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     refresh_tokens: Mapped[list[RefreshToken]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    email_verification_tokens: Mapped[list[EmailVerificationToken]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -167,6 +174,35 @@ class RefreshToken(Base):
             "session_id",
             postgresql_where=text("revoked_at IS NULL"),
         ),
+    )
+
+
+class EmailVerificationToken(Base):
+    """One-time verification links. Only the SHA-256 hash is persisted."""
+
+    __tablename__ = "email_verification_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=new_uuid7,
+        server_default=text("uuidv7()"),
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="email_verification_tokens")
+
+    __table_args__ = (
+        Index("ux_email_verification_tokens_token_hash", "token_hash", unique=True),
+        Index("ix_email_verification_tokens_user_id", "user_id"),
     )
 
 

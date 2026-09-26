@@ -126,14 +126,18 @@ export default function RegisterScreen() {
       return;
     }
     setProblem(null);
-    register.mutate({
-      // Trimmed here rather than on every keystroke, so somebody typing a
-      // double barrelled name never has a space eaten mid-word.
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-      email: email.trim(),
-      password,
-    });
+    register.mutate(
+      {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        email: email.trim(),
+        password,
+      },
+      {
+        onSuccess: () =>
+          router.replace({ pathname: '/check-email', params: { email: email.trim() } }),
+      },
+    );
   };
 
   // One line for the form's complaints, Google's and the server's. Three

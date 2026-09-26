@@ -55,6 +55,14 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=8, max_length=256)
 
 
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=256)
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=256)

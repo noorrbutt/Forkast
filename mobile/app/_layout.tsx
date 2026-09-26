@@ -7,7 +7,7 @@ import { Figtree_500Medium } from '@expo-google-fonts/figtree/500Medium';
 import { Figtree_600SemiBold } from '@expo-google-fonts/figtree/600SemiBold';
 import { useFonts } from 'expo-font';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, usePathname, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect } from 'react';
@@ -47,11 +47,13 @@ function RootNavigator() {
   const { ready, signedIn, needsSetup } = useAuth();
   const { colors, isDark } = useTheme();
   const segments = useSegments();
+  const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
     if (!ready) return;
     const inAuthGroup = segments[0] === '(auth)';
+    const inCheckEmail = inAuthGroup && pathname.endsWith('/check-email');
 
     const inSetup = segments[0] === 'setup';
 
@@ -59,15 +61,15 @@ function RootNavigator() {
       // The welcome screen, not the form. Someone who has never used
       // Forkast should be told what it is before being asked who they are.
       router.replace('/welcome');
-    } else if (signedIn && needsSetup && !inSetup) {
+    } else if (signedIn && needsSetup && !inSetup && !inCheckEmail) {
       // A brand new account has the server's default timezone, which decides
       // which day every meal and streak lands in. Asking now costs one screen;
       // finding out later costs days that cannot be re-bucketed.
       router.replace('/setup');
-    } else if (signedIn && !needsSetup && (inAuthGroup || inSetup)) {
+    } else if (signedIn && !needsSetup && (inAuthGroup || inSetup) && !inCheckEmail) {
       router.replace('/');
     }
-  }, [ready, signedIn, needsSetup, segments, router]);
+  }, [ready, signedIn, needsSetup, segments, pathname, router]);
 
   if (!ready) return <Bootstrapping />;
 

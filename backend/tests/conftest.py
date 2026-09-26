@@ -60,6 +60,10 @@ os.environ.setdefault("ENVIRONMENT", "dev")
 os.environ.setdefault("ARGON2_TIME_COST", "1")
 os.environ.setdefault("ARGON2_MEMORY_COST", "8192")
 os.environ.setdefault("ARGON2_PARALLELISM", "1")
+# Tests must never send real email, even if a developer has Resend credentials
+# in their shell or backend/.env. Service tests inject a mock SDK client.
+os.environ["RESEND_API_KEY"] = ""
+os.environ["RESEND_FROM_EMAIL"] = ""
 # The timing-equaliser pads every failed login to a fixed wall-clock cost
 # regardless of how fast Argon2 itself runs, so the brute-force tests -- which
 # fire off dozens of bad logins each -- pay this back to back. 250ms of real
@@ -112,6 +116,7 @@ if _database_identity(TEST_DATABASE_URL) == _database_identity(get_settings().da
 MUTABLE_TABLES = (
     "food_logs",
     "ai_plans",
+    "email_verification_tokens",
     "refresh_tokens",
     "restaurants",
     "users",

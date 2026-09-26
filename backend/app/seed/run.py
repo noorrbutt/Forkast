@@ -307,6 +307,7 @@ async def seed(reset_only: bool = False) -> None:
         user = User(
             email=DEMO_EMAIL,
             password_hash=hash_password(DEMO_PASSWORD),
+            email_verified=True,
             timezone=settings.default_timezone,
             goal=Goal.maintain,
         )

@@ -453,6 +453,10 @@ describe('finding the way in', () => {
         password: 'longenough',
       }),
     );
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/check-email',
+      params: { email: 'new@forkast.app' },
+    });
   });
 
   it('asks for a first and last name before anything else', async () => {

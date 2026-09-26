@@ -81,6 +81,8 @@ class Settings(BaseSettings):
     ai_provider: AIProvider = Field(default=AIProvider.fake, alias="AI_PROVIDER")
     groq_api_key: SecretStr | None = Field(default=None, alias="GROQ_API_KEY")
     groq_model: str = Field(default="openai/gpt-oss-20b", alias="GROQ_MODEL")
+    resend_api_key: SecretStr | None = Field(default=None, alias="RESEND_API_KEY")
+    resend_from_email: str = Field(default="", alias="RESEND_FROM_EMAIL")
 
     cors_origins: str = Field(default="*", alias="CORS_ORIGINS")
 
@@ -217,6 +219,13 @@ class Settings(BaseSettings):
                 "AI_PROVIDER=groq needs GROQ_API_KEY. Set it, or use "
                 "AI_PROVIDER=fake for the deterministic local estimator."
             )
+
+        has_resend_key = bool(
+            self.resend_api_key and self.resend_api_key.get_secret_value().strip()
+        )
+        has_resend_sender = bool(self.resend_from_email.strip())
+        if has_resend_key != has_resend_sender:
+            raise ValueError("RESEND_API_KEY and RESEND_FROM_EMAIL must be configured together.")
 
         if self.cors_origin_list == ["*"] and urlsplit(self.database_url).hostname not in {
             "localhost",

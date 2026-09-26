@@ -9,7 +9,7 @@ from app.models.photo import MAX_PHOTO_BYTES, FoodLogPhoto
 from app.models.rate_limit import RateLimitCounter
 from app.models.reference import Cuisine, FoodCategory
 from app.models.restaurant import Restaurant
-from app.models.user import MAX_AVATAR_BYTES, RefreshToken, User, UserAvatar
+from app.models.user import MAX_AVATAR_BYTES, EmailVerificationToken, RefreshToken, User, UserAvatar
 
 __all__ = [
     "MAX_AVATAR_BYTES",
@@ -18,6 +18,7 @@ __all__ = [
     "Base",
     "BurnLog",
     "Cuisine",
+    "EmailVerificationToken",
     "FoodCategory",
     "FoodLog",
     "FoodLogPhoto",

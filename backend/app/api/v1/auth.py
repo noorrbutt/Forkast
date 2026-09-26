@@ -14,23 +14,31 @@ can hammer for free, so they are the ones that are rate limited.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import logging
 import random
+import secrets
 import uuid
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
+from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import RateLimiterDep, SessionDep
 from app.config import get_settings
-from app.models import RefreshToken, User
+from app.models import EmailVerificationToken, RefreshToken, User
 from app.schemas.auth import (
     GoogleAuthRequest,
     LoginRequest,
     RefreshRequest,
     RegisterRequest,
+    ResendVerificationRequest,
     TokenPair,
+    VerifyEmailRequest,
 )
+from app.services.email import send_verification_email
 from app.services.google import GoogleAuthError, GoogleIdentity, verify_google_id_token
 from app.services.rate_limit import client_identity, prune_refresh_tokens
 from app.services.security import (
@@ -43,6 +51,8 @@ from app.services.security import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
+EMAIL_VERIFICATION_TTL = dt.timedelta(hours=24)
 
 
 async def _prune_if_due(limiter: RateLimiterDep) -> None:
@@ -107,6 +117,39 @@ async def _issue_tokens(
     return TokenPair(access_token=access_token, refresh_token=raw_refresh)
 
 
+async def _issue_email_verification_token(session: SessionDep, user: User) -> str:
+    now = dt.datetime.now(dt.UTC)
+    await session.execute(
+        update(EmailVerificationToken)
+        .where(
+            EmailVerificationToken.user_id == user.id,
+            EmailVerificationToken.used_at.is_(None),
+        )
+        .values(used_at=now)
+    )
+    raw_token = secrets.token_urlsafe(32)
+    session.add(
+        EmailVerificationToken(
+            user_id=user.id,
+            token_hash=hash_refresh_token(raw_token),
+            expires_at=now + EMAIL_VERIFICATION_TTL,
+        )
+    )
+    await session.flush()
+    return raw_token
+
+
+async def _send_verification_email_safely(user: User, raw_token: str) -> None:
+    link = (
+        f"forkast://check-email?token={quote(raw_token, safe='')}"
+        f"&email={quote(user.email, safe='')}"
+    )
+    try:
+        await run_in_threadpool(send_verification_email, user.email, link)
+    except Exception:
+        logger.exception("Verification email delivery failed for user_id=%s", user.id)
+
+
 @router.post("/register", response_model=TokenPair, status_code=status.HTTP_201_CREATED)
 async def register(
     payload: RegisterRequest, session: SessionDep, request: Request, limiter: RateLimiterDep
@@ -155,7 +198,79 @@ async def register(
             detail="An account with that email already exists",
         ) from exc
 
-    return await _issue_tokens(session, user)
+    verification_token = await _issue_email_verification_token(session, user)
+    tokens = await _issue_tokens(session, user)
+    await _send_verification_email_safely(user, verification_token)
+    return tokens
+
+
+@router.post("/verify-email")
+async def verify_email(payload: VerifyEmailRequest, session: SessionDep) -> dict[str, str]:
+    now = dt.datetime.now(dt.UTC)
+    user_id = await session.scalar(
+        update(EmailVerificationToken)
+        .where(
+            EmailVerificationToken.token_hash == hash_refresh_token(payload.token),
+            EmailVerificationToken.used_at.is_(None),
+            EmailVerificationToken.expires_at > now,
+        )
+        .values(used_at=now)
+        .returning(EmailVerificationToken.user_id)
+    )
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification link is invalid or expired.",
+        )
+
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification link is invalid or expired.",
+        )
+    user.email_verified = True
+    await session.execute(
+        update(EmailVerificationToken)
+        .where(
+            EmailVerificationToken.user_id == user.id,
+            EmailVerificationToken.used_at.is_(None),
+        )
+        .values(used_at=now)
+    )
+    await session.commit()
+    return {"detail": "Email verified."}
+
+
+@router.post("/resend-verification", status_code=status.HTTP_202_ACCEPTED)
+async def resend_verification(
+    payload: ResendVerificationRequest,
+    session: SessionDep,
+    request: Request,
+    limiter: RateLimiterDep,
+) -> Response:
+    email = str(payload.email).strip().lower()
+    settings = get_settings()
+    await limiter.hit(
+        "resend-verification-account",
+        f"email:{hashlib.sha256(email.encode('utf-8')).hexdigest()}",
+        limit=settings.login_rate_limit,
+        window_seconds=settings.login_rate_window_seconds,
+    )
+    await limiter.hit(
+        "resend-verification-peer",
+        client_identity(request),
+        limit=settings.login_peer_rate_limit,
+        window_seconds=settings.login_rate_window_seconds,
+    )
+
+    user = await session.scalar(select(User).where(func.lower(User.email) == email))
+    if user is not None and not user.email_verified:
+        raw_token = await _issue_email_verification_token(session, user)
+        await session.commit()
+        await _send_verification_email_safely(user, raw_token)
+
+    return Response(status_code=status.HTTP_202_ACCEPTED)
 
 
 @router.post("/login", response_model=TokenPair)
