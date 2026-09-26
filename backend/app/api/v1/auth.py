@@ -19,14 +19,16 @@ import logging
 import random
 import secrets
 import uuid
+from typing import Annotated
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from starlette.concurrency import run_in_threadpool
 
-from app.api.deps import RateLimiterDep, SessionDep
+from app.api.deps import CurrentUser, RateLimiterDep, SessionDep, bearer_scheme
 from app.config import get_settings
 from app.models import EmailVerificationToken, PasswordResetToken, RefreshToken, User
 from app.schemas.auth import (
@@ -37,6 +39,7 @@ from app.schemas.auth import (
     RegisterRequest,
     ResendVerificationRequest,
     ResetPasswordRequest,
+    SessionOut,
     TokenPair,
     VerifyEmailRequest,
 )
@@ -46,6 +49,7 @@ from app.services.rate_limit import client_identity, prune_refresh_tokens
 from app.services.security import (
     create_access_token,
     create_refresh_token,
+    decode_access_token,
     hash_password_async,
     hash_refresh_token,
     verify_password_async,
@@ -304,6 +308,36 @@ async def resend_verification(
         await _send_verification_email_safely(user, raw_token)
 
     return Response(status_code=status.HTTP_202_ACCEPTED)
+
+
+@router.get("/sessions", response_model=list[SessionOut])
+async def list_sessions(
+    session: SessionDep,
+    user: CurrentUser,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+) -> list[SessionOut]:
+    claims = decode_access_token(credentials.credentials) if credentials is not None else None
+    current_session_id = claims.session_id if claims is not None else None
+    now = dt.datetime.now(dt.UTC)
+    first_created = func.min(RefreshToken.created_at).label("created_at")
+    rows = await session.execute(
+        select(RefreshToken.session_id, first_created)
+        .where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.revoked_at.is_(None),
+            RefreshToken.expires_at > now,
+        )
+        .group_by(RefreshToken.session_id)
+        .order_by(first_created.desc())
+    )
+    return [
+        SessionOut(
+            session_id=session_id,
+            created_at=created_at,
+            is_current=session_id == current_session_id,
+        )
+        for session_id, created_at in rows
+    ]
 
 
 @router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)

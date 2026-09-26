@@ -99,6 +99,12 @@ class TokenPair(BaseModel):
     token_type: str = "bearer"
 
 
+class SessionOut(BaseModel):
+    session_id: uuid.UUID
+    created_at: dt.datetime
+    is_current: bool
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
