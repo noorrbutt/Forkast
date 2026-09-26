@@ -6,6 +6,7 @@ import asyncio
 import datetime as dt
 import uuid
 
+import httpx
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -582,3 +583,47 @@ async def test_an_unrelated_account_is_not_logged_out_by_someone_elses_replay(
 
     still_fine = await client.post(REFRESH, json={"refresh_token": bystander["refresh_token"]})
     assert still_fine.status_code == 200
+
+
+async def test_register_rejects_a_breached_password(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("app.api.v1.auth.is_password_breached", lambda _password: True)
+
+    response = await client.post(
+        REGISTER,
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "breached@forkast.app",
+            "password": "password123",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "data breach" in response.json()["detail"]
+
+
+async def test_register_succeeds_when_the_hibp_call_fails(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.services import password_check
+
+    def boom(*_args: object, **_kwargs: object) -> None:
+        raise httpx.ConnectError("HIBP unreachable")
+
+    # Use the real check, with its HTTP call failing underneath it.
+    monkeypatch.setattr("app.api.v1.auth.is_password_breached", password_check.is_password_breached)
+    monkeypatch.setattr(password_check.httpx, "get", boom)
+
+    response = await client.post(
+        REGISTER,
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": "failopen@forkast.app",
+            "password": "password123",
+        },
+    )
+
+    assert response.status_code == 201

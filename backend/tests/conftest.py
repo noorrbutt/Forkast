@@ -430,3 +430,14 @@ def deterministic_ai() -> AsyncIterator[None]:
     finally:
         app.dependency_overrides.pop(get_ai_service, None)
         app.dependency_overrides.pop(get_estimate_source, None)
+
+
+@pytest.fixture(autouse=True)
+def hibp_offline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Treat every password as unbreached unless a test says otherwise.
+
+    Registration and reset call the HIBP range API; without this the suite
+    would depend on the network, and common fixtures like "password123" are
+    genuinely breached and would be refused.
+    """
+    monkeypatch.setattr("app.api.v1.auth.is_password_breached", lambda _password: False)

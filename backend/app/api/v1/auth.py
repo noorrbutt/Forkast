@@ -45,6 +45,7 @@ from app.schemas.auth import (
 )
 from app.services.email import send_password_reset_email, send_verification_email
 from app.services.google import GoogleAuthError, GoogleIdentity, verify_google_id_token
+from app.services.password_check import is_password_breached
 from app.services.rate_limit import client_identity, prune_refresh_tokens
 from app.services.security import (
     create_access_token,
@@ -60,6 +61,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 EMAIL_VERIFICATION_TTL = dt.timedelta(hours=24)
 PASSWORD_RESET_TTL = dt.timedelta(minutes=45)
+
+
+async def _reject_breached_password(password: str) -> None:
+    """Refuse a new password HIBP knows; the check itself fails open."""
+    if await run_in_threadpool(is_password_breached, password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This password has appeared in a data breach — please choose another.",
+        )
 
 
 async def _prune_if_due(limiter: RateLimiterDep) -> None:
@@ -214,6 +224,8 @@ async def register(
             status_code=status.HTTP_409_CONFLICT,
             detail="An account with that email already exists",
         )
+
+    await _reject_breached_password(payload.password)
 
     user = User(
         email=email,
@@ -411,6 +423,8 @@ async def forgot_password(
 
 @router.post("/reset-password")
 async def reset_password(payload: ResetPasswordRequest, session: SessionDep) -> dict[str, str]:
+    # Before the token is consumed, so a refused password leaves the link usable.
+    await _reject_breached_password(payload.new_password)
     now = dt.datetime.now(dt.UTC)
     user_id = await session.scalar(
         update(PasswordResetToken)
