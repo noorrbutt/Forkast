@@ -31,7 +31,7 @@ export const api = axios.create({
 });
 
 /** Requests that must never carry a bearer token or trigger a refresh. */
-const PUBLIC_PATHS = ['/auth/login', '/auth/register', '/auth/refresh'];
+const PUBLIC_PATHS = ['/auth/login', '/auth/register', '/auth/refresh', '/health'];
 
 function isPublicPath(url?: string): boolean {
   if (!url) return false;

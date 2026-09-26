@@ -132,6 +132,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockedHydrate.mockResolvedValue({ access_token: 'a', refresh_token: 'r' });
   mockedApi.get.mockImplementation(async (url: string) => {
+    if (url.endsWith('/health')) return { data: { status: 'ok', ai_provider: 'fake' } };
     if (url === '/cuisines') return { data: CUISINES };
     if (url === '/categories') return { data: CATEGORIES };
     if (url === '/restaurants') return { data: [] };
@@ -201,13 +202,14 @@ describe('choosing a category', () => {
 });
 
 describe('the saved estimate', () => {
-  it('shows the local estimate badge', async () => {
+  it('shows the estimator reported by health beside the saved estimate', async () => {
     const screen = render(<LogScreen />, { wrapper });
     await fillTheMinimum(screen);
 
     fireEvent.press(screen.getByText('Log it'));
 
-    await waitFor(() => expect(screen.getByText('Estimated')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Estimate: local')).toBeTruthy());
+    expect(mockedApi.get.mock.calls.filter(([url]) => url.endsWith('/health'))).toHaveLength(1);
   });
 });
 

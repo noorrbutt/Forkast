@@ -147,6 +147,7 @@ beforeEach(() => {
   detail = NIHARI;
   mockedHydrate.mockResolvedValue({ access_token: 'a', refresh_token: 'r' });
   mockedApi.get.mockImplementation(async (url: string) => {
+    if (url.endsWith('/health')) return { data: { status: 'ok', ai_provider: 'groq' } };
     if (url === '/me') {
       return {
         data: {
@@ -260,6 +261,12 @@ describe('the diary', () => {
 });
 
 describe('the meal', () => {
+  it('shows the AI source reported by health beside the estimate', async () => {
+    const { getByText } = render(<MealScreen />, { wrapper });
+
+    await waitFor(() => expect(getByText('Estimate: AI')).toBeTruthy());
+  });
+
   it('leads with the photograph when there is one', async () => {
     const { getByLabelText, queryByRole } = render(<MealScreen />, { wrapper });
 

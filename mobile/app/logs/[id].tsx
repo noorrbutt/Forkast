@@ -3,8 +3,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Text, View } from 'react-native';
 
 import { StarRating } from '../../components/StarRating';
-import { Button, Chip, ControlLabel, Dialog, ErrorState, EstimateBadge, Field, FormError, Hero, HeroWash, Loading, Screen, Select, type SelectOption } from '../../components/ui';
+import { Button, Chip, ControlLabel, Dialog, ErrorState, EstimateSourceLabel, Field, FormError, Hero, HeroWash, Loading, Screen, Select, type SelectOption } from '../../components/ui';
 import { useCategories, useCuisines } from '../../hooks/useCatalog';
+import { useEstimatorSource } from '../../hooks/useHealth';
 import { useDeleteLog, useLog, useRepeatLog, useUpdateLog } from '../../hooks/useLogs';
 import {
   usePhotoPicker,
@@ -111,6 +112,7 @@ export default function MealScreen() {
   const { colors, layout, radius, spacing, type } = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const estimatorSource = useEstimatorSource();
 
   const log = useLog(id ?? null);
   const updateLog = useUpdateLog();
@@ -384,7 +386,7 @@ export default function MealScreen() {
                   picture is the answer on this screen and the figure supports
                   it, which is the other way round from a meal with no photo. */}
               <Text style={[type.displaySm, { color: colors.text }]}>{calories}</Text>
-              {meal.estimate_source === 'local' ? <EstimateBadge /> : null}
+              <EstimateSourceLabel source={estimatorSource.data} />
               <Text style={[type.caption, { color: colors.muted }]}>{estimate}</Text>
               <Text style={[type.caption, { color: colors.muted }]}>{when}</Text>
             </View>
@@ -400,7 +402,7 @@ export default function MealScreen() {
                 considered. */}
             <View style={{ paddingTop: spacing.xl, paddingBottom: spacing.xxxl }}>
               <Hero value={calories} caption={estimate} />
-              {meal.estimate_source === 'local' ? <EstimateBadge /> : null}
+              <EstimateSourceLabel source={estimatorSource.data} />
             </View>
             <Text style={[type.caption, { color: colors.muted }]}>{when}</Text>
           </HeroWash>

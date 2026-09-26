@@ -5,8 +5,9 @@ import { Text, View } from 'react-native';
 
 import { MealPhoto } from '../../components/MealPhoto';
 import { StarRating } from '../../components/StarRating';
-import { Button, Card, Chip, ControlLabel, ErrorState, EstimateBadge, Field, FormError, Hero, Loading, Screen, Select, type SelectOption } from '../../components/ui';
+import { Button, Card, Chip, ControlLabel, ErrorState, EstimateSourceLabel, Field, FormError, Hero, Loading, Screen, Select, type SelectOption } from '../../components/ui';
 import { useCategories, useCuisines, useSearch } from '../../hooks/useCatalog';
+import { useEstimatorSource } from '../../hooks/useHealth';
 import { useCreateLog } from '../../hooks/useLogs';
 import { useSetPhoto, type PickedPhoto } from '../../hooks/usePhoto';
 import { useRestaurants } from '../../hooks/useRestaurants';
@@ -138,6 +139,7 @@ type PhotoStatus = 'none' | 'uploading' | 'attached' | 'failed';
 export default function LogScreen() {
   const { colors, layout, spacing, type } = useTheme();
   const router = useRouter();
+  const estimatorSource = useEstimatorSource();
 
   const [query, setQuery] = useState('');
   const [cuisineId, setCuisineId] = useState<RefId | null>(null);
@@ -381,7 +383,7 @@ export default function LogScreen() {
                 }`}
               align="center"
             />
-            {saved.estimate_source === 'local' ? <EstimateBadge /> : null}
+            <EstimateSourceLabel source={estimatorSource.data} />
           </View>
 
           <Text style={[type.body, { color: colors.muted }]}>
