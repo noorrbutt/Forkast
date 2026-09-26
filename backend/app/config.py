@@ -218,6 +218,15 @@ class Settings(BaseSettings):
                 "AI_PROVIDER=fake for the deterministic local estimator."
             )
 
+        if self.cors_origin_list == ["*"] and urlsplit(self.database_url).hostname not in {
+            "localhost",
+            "127.0.0.1",
+        }:
+            raise ValueError(
+                "CORS_ORIGINS cannot be '*' when DATABASE_URL points to a non-local database. "
+                "Set CORS_ORIGINS to explicit origins."
+            )
+
         if self.environment is Environment.production:
             if "trust_proxy_headers" not in self.model_fields_set:
                 raise ValueError(

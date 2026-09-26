@@ -300,6 +300,19 @@ def test_production_requires_an_explicit_trust_proxy_flag(monkeypatch: pytest.Mo
         Settings()
 
 
+def test_wildcard_cors_is_rejected_for_a_nonlocal_database() -> None:
+    with pytest.raises(ValueError, match="CORS_ORIGINS"):
+        Settings(
+            _env_file=None,
+            ENVIRONMENT="dev",
+            DATABASE_URL="postgresql+asyncpg://user:pass@db.example:5432/forkast",
+            TEST_DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/forkast_test",
+            JWT_SECRET="a-very-long-secret-that-is-matching-the-required-minimum",
+            CORS_ORIGINS="*",
+            AI_PROVIDER="fake",
+        )
+
+
 async def test_refresh_allows_more_than_the_login_peer_window(client: AsyncClient) -> None:
     """Refresh calls are a different bucket from login attempts, because a CGNAT
     or a corporate proxy can share one peer across many users."""
