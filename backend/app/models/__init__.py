@@ -9,6 +9,7 @@ from app.models.photo import MAX_PHOTO_BYTES, FoodLogPhoto
 from app.models.rate_limit import RateLimitCounter
 from app.models.reference import Cuisine, FoodCategory
 from app.models.restaurant import Restaurant
+from app.models.streak_freeze import StreakFreeze
 from app.models.user import (
     MAX_AVATAR_BYTES,
     EmailVerificationToken,
@@ -36,6 +37,7 @@ __all__ = [
     "RefreshToken",
     "Restaurant",
     "ServingSize",
+    "StreakFreeze",
     "User",
     "UserAvatar",
 ]

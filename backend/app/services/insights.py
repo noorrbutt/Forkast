@@ -23,15 +23,17 @@ import datetime as dt
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import Date, case, cast, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import BurnLog, FoodCategory, FoodLog, Restaurant, User
+from app.models import BurnLog, FoodCategory, FoodLog, Restaurant, StreakFreeze, User
 from app.schemas.insights import (
     BurnEquivalents,
     CaloriesByDay,
     DashboardOut,
     FunMeal,
     ReminderSignalOut,
+    StreakMilestone,
     StreaksOut,
     TodayOut,
     TopCategory,
@@ -53,6 +55,11 @@ CHART_DAYS = 14
 # How far back to look when hunting for the longest streak. Without a bound this
 # would walk every day since the account was created.
 STREAK_WINDOW_DAYS = 365
+
+# Streak lengths that earn a freeze. Chosen close together at first and
+# further apart later, so an early streak is rewarded before it has had a
+# chance to lapse and a long one still has something ahead of it.
+MILESTONE_DAYS = (3, 5, 7, 10, 14, 30)
 
 # The last 7 local days, today included, for the weekly digest reminder.
 WEEKLY_DIGEST_WINDOW_DAYS = 7
@@ -352,19 +359,45 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
             current_streak=0,
             longest_streak=0,
             last_junk_date=None,
+            available_freezes=0,
+            milestone=None,
             message=_streak_message(0, has_any_logs=False),
         )
 
     earliest = max(first_logged_day, window_start)
 
+    # Oldest first, so a streak with several bad days behind it spends its
+    # longest-banked freeze first rather than an order that happens to leave a
+    # more recently earned one sitting unused.
+    available_freezes = list(
+        await session.scalars(
+            select(StreakFreeze)
+            .where(StreakFreeze.user_id == user.id, StreakFreeze.used_on_date.is_(None))
+            .order_by(StreakFreeze.created_at)
+        )
+    )
+    freeze_queue = iter(available_freezes)
+    next_freeze = next(freeze_queue, None)
+    spent: list[tuple[StreakFreeze, dt.date]] = []
+
     # A streak is a sequence of days without a junk log, not a sequence of days
     # with a clean meal. Empty days still count as clean until the next junk day
-    # resets the run.
+    # resets the run. A junk day no longer ends the run outright if a freeze is
+    # still on hand: it is spent on that exact day and the walk continues past
+    # it, oldest freeze first.
     current_streak = 0
     cursor = today
-    while cursor >= earliest and cursor not in junk_days:
+    while cursor >= earliest:
+        if cursor in junk_days:
+            if next_freeze is None:
+                break
+            spent.append((next_freeze, cursor))
+            next_freeze = next(freeze_queue, None)
         current_streak += 1
         cursor -= dt.timedelta(days=1)
+
+    for freeze, protected_day in spent:
+        freeze.used_on_date = protected_day
 
     longest_streak = 0
     run = 0
@@ -401,11 +434,40 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
             .limit(1)
         )
 
+    milestone = StreakMilestone(day=current_streak) if current_streak in MILESTONE_DAYS else None
+    if milestone is not None:
+        # ON CONFLICT DO NOTHING rather than a query-then-insert: the unique
+        # index on (user_id, milestone_day) is the actual guard, so a second
+        # request landing on the same streak length -- the same day, or a
+        # retried one -- grants nothing a second time, with no read needed to
+        # know that in advance.
+        await session.execute(
+            pg_insert(StreakFreeze)
+            .values(user_id=user.id, milestone_day=current_streak)
+            .on_conflict_do_nothing(index_elements=["user_id", "milestone_day"])
+        )
+
+    remaining_freezes = await session.scalar(
+        select(func.count())
+        .select_from(StreakFreeze)
+        .where(StreakFreeze.user_id == user.id, StreakFreeze.used_on_date.is_(None))
+    )
+
+    # Spending a freeze and granting a milestone are both real writes, and
+    # compute_streaks runs on every GET of this data, so this is the one
+    # streak fact that is not read-only. Safe to commit here: everything above
+    # is either a plain read or a change to streak_freezes alone, so there is
+    # nothing else pending to lose if a caller further up the request never
+    # reaches its own commit.
+    await session.commit()
+
     return StreaksOut(
         current_streak=current_streak,
         longest_streak=longest_streak,
         last_junk_date=last_junk_date,
         last_junk_dish=last_junk_dish,
+        available_freezes=int(remaining_freezes or 0),
+        milestone=milestone,
         message=_streak_message(current_streak, has_any_logs=True),
     )
 

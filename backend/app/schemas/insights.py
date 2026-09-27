@@ -94,6 +94,21 @@ class DashboardOut(BaseModel):
     burn_equivalents: BurnEquivalents
 
 
+class StreakMilestone(BaseModel):
+    """A milestone the current streak has just reached.
+
+    Sent every time current_streak equals one of the milestone lengths, not
+    only the first time -- the server has no idea whether the client has shown
+    the celebration for this crossing yet, so it says the fact and leaves the
+    one-time gating to the client's own "seen" flag. The reward itself is
+    granted at most once per (user, day) regardless of how many times this is
+    sent; see MILESTONE_DAYS in services/insights.py.
+    """
+
+    day: int
+    reward: Literal["freeze"] = "freeze"
+
+
 class StreaksOut(BaseModel):
     current_streak: int
     longest_streak: int
@@ -103,6 +118,12 @@ class StreaksOut(BaseModel):
     # would want to know and the only part that is actionable. Null whenever
     # last_junk_date is null, and null if the meal has since been deleted.
     last_junk_dish: str | None = None
+    # How many streak freezes are banked and unspent. Earned at milestones,
+    # spent automatically the next time a junk day would otherwise break the
+    # run, which is why this can drop between two reads with no action taken
+    # by the caller.
+    available_freezes: int = 0
+    milestone: StreakMilestone | None = None
     # Soft recovery wording rather than a punitive tone, per the product brief.
     message: str
 
