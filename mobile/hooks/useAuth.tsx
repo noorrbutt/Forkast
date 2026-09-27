@@ -34,6 +34,15 @@ type AuthValue = {
    */
   needsSetup: boolean;
   completeSetup: () => void;
+  /**
+   * True between creating an account and answering (or skipping) the
+   * onboarding quiz, and checked before needsSetup: the quiz asks a couple of
+   * short questions that steer the plan generator's tone, and it runs ahead of
+   * setup rather than after it so the first thing a new account sees is not
+   * an empty dashboard.
+   */
+  needsOnboarding: boolean;
+  completeOnboarding: () => void;
   signIn: (creds: Credentials) => Promise<void>;
   signUp: (registration: Registration) => Promise<void>;
   /**
@@ -59,6 +68,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // reinstall that restores a token belongs straight in the app, not back
   // through a setup screen for an account that has already been configured.
   const [needsSetup, setNeedsSetup] = useState(false);
+  // Same reasoning and same lifetime as needsSetup: not persisted, cleared on
+  // every sign in, and only ever true for the account that just registered in
+  // this session.
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -114,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // nobody signed in, and the router gate reads it the moment anyone signs
       // back in. See signIn for what that looked like.
       setNeedsSetup(false);
+      setNeedsOnboarding(false);
       queryClient.clear();
     });
     return () => setAuthFailureHandler(null);
@@ -143,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
        * account that just registered in this session.
        */
       setNeedsSetup(false);
+      setNeedsOnboarding(false);
     },
     [adopt],
   );
@@ -152,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await api.post<TokenPair>('/auth/register', registration);
       await adopt(response.data);
       setNeedsSetup(true);
+      setNeedsOnboarding(true);
     },
     [adopt],
   );
@@ -172,6 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
        * its first week of meals lands in the wrong days and cannot be moved.
        */
       setNeedsSetup(response.status === 201);
+      setNeedsOnboarding(response.status === 201);
     },
     [adopt],
   );
@@ -188,10 +205,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await clearTokens();
     setToken(null);
     setNeedsSetup(false);
+    setNeedsOnboarding(false);
     queryClient.clear();
   }, [queryClient]);
 
   const completeSetup = useCallback(() => setNeedsSetup(false), []);
+  const completeOnboarding = useCallback(() => setNeedsOnboarding(false), []);
 
   const value = useMemo<AuthValue>(
     () => ({
@@ -199,12 +218,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signedIn: token !== null,
       needsSetup,
       completeSetup,
+      needsOnboarding,
+      completeOnboarding,
       signIn,
       signUp,
       signInWithGoogle,
       signOut,
     }),
-    [ready, token, needsSetup, completeSetup, signIn, signUp, signInWithGoogle, signOut],
+    [
+      ready,
+      token,
+      needsSetup,
+      completeSetup,
+      needsOnboarding,
+      completeOnboarding,
+      signIn,
+      signUp,
+      signInWithGoogle,
+      signOut,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,12 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '../lib/api';
-import type { Goal, User } from '../lib/types';
+import type { BiggestStruggle, EatingOutFrequency, Goal, User } from '../lib/types';
 
 type ProfilePatch = {
   goal?: Goal;
   timezone?: string;
   daily_calorie_target?: number | null;
+  eating_out_frequency?: EatingOutFrequency | null;
+  biggest_struggle?: BiggestStruggle | null;
 };
 
 export function useUpdateProfile() {

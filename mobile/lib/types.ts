@@ -45,6 +45,10 @@ export type User = {
   /** Null until someone sets one. Null and zero mean different things here:
    *  null is "no target", and there is no way to store a zero one. */
   daily_calorie_target: number | null;
+  /** Both null until the onboarding quiz is answered, and null forever for
+   * anyone who skips it. Neither ever gates a route. */
+  eating_out_frequency: EatingOutFrequency | null;
+  biggest_struggle: BiggestStruggle | null;
   created_at: string;
 };
 
@@ -233,6 +237,15 @@ export type BurnEntry = {
   calories: number;
   updated_at: string;
 };
+
+export type EatingOutFrequency = 'rarely' | 'sometimes' | 'often';
+
+export type BiggestStruggle =
+  | 'cravings'
+  | 'portion_size'
+  | 'eating_out'
+  | 'consistency'
+  | 'knowledge';
 
 export type StreakMilestone = {
   day: number;

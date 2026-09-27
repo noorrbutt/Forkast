@@ -44,7 +44,7 @@ function Bootstrapping() {
 }
 
 function RootNavigator() {
-  const { ready, signedIn, needsSetup } = useAuth();
+  const { ready, signedIn, needsSetup, needsOnboarding } = useAuth();
   const { colors, isDark } = useTheme();
   const segments = useSegments();
   const pathname = usePathname();
@@ -60,20 +60,32 @@ function RootNavigator() {
       );
 
     const inSetup = segments[0] === 'setup';
+    const inOnboarding = segments[0] === 'onboarding';
 
     if (!signedIn && !inAuthGroup) {
       // The welcome screen, not the form. Someone who has never used
       // Forkast should be told what it is before being asked who they are.
       router.replace('/welcome');
-    } else if (signedIn && needsSetup && !inSetup && !isRecoveryRoute) {
+    } else if (signedIn && needsOnboarding && !inOnboarding && !isRecoveryRoute) {
+      // Ahead of setup, deliberately: a couple of quick questions that give
+      // the plan generator something to go on from the first log, rather than
+      // a new account's first screen being an empty dashboard.
+      router.replace('/onboarding');
+    } else if (signedIn && needsSetup && !needsOnboarding && !inSetup && !isRecoveryRoute) {
       // A brand new account has the server's default timezone, which decides
       // which day every meal and streak lands in. Asking now costs one screen;
       // finding out later costs days that cannot be re-bucketed.
       router.replace('/setup');
-    } else if (signedIn && !needsSetup && (inAuthGroup || inSetup) && !isRecoveryRoute) {
+    } else if (
+      signedIn &&
+      !needsSetup &&
+      !needsOnboarding &&
+      (inAuthGroup || inSetup || inOnboarding) &&
+      !isRecoveryRoute
+    ) {
       router.replace('/');
     }
-  }, [ready, signedIn, needsSetup, segments, pathname, router]);
+  }, [ready, signedIn, needsSetup, needsOnboarding, segments, pathname, router]);
 
   if (!ready) return <Bootstrapping />;
 
@@ -88,6 +100,7 @@ function RootNavigator() {
       >
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="onboarding" />
         <Stack.Screen name="setup" />
         <Stack.Screen name="map" />
         <Stack.Screen name="logs/[id]" />
