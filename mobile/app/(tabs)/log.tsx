@@ -1,7 +1,8 @@
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { MealPhoto } from '../../components/MealPhoto';
 import { StarRating } from '../../components/StarRating';
@@ -19,6 +20,7 @@ import {
   FUN_LEVELS,
   SERVING_LABELS,
   formatNumber,
+  saveReaction,
 } from '../../lib/format';
 import {
   FRIEND_SCALES,
@@ -31,6 +33,7 @@ import {
   type ServingSize,
 } from '../../lib/types';
 import { useTheme } from '../../theme';
+import { motion } from '../../theme/motion';
 
 /**
  * Logging a meal, and the one screen state that follows it.
@@ -155,6 +158,19 @@ export default function LogScreen() {
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
   const [photoStatus, setPhotoStatus] = useState<PhotoStatus>('none');
   const [saved, setSaved] = useState<FoodLog | null>(null);
+  // The one entrance this screen ever plays. Keyed on the saved log's id
+  // rather than firing from onSuccess directly, so it also fires correctly if
+  // this state is ever restored rather than only just set, and so it cannot
+  // replay on an unrelated re-render while the hero is already on screen.
+  const heroScale = useSharedValue(0);
+  useEffect(() => {
+    if (!saved) return;
+    heroScale.value = 0;
+    heroScale.value = withSpring(1, motion.celebrate);
+  }, [saved, heroScale]);
+  const heroAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: heroScale.value }],
+  }));
   const clientIdRef = useRef<string | null>(null);
   const ensureClientId = () => {
     if (clientIdRef.current === null) {
@@ -368,14 +384,17 @@ export default function LogScreen() {
       // would eat the top third the hero is meant to own.
       <Screen>
         <View style={column}>
-          <View
-            style={{
-              alignItems: 'center',
-              // The only xxxl in this file. That reservation is what makes this
-              // read as the hero before its size is even considered.
-              paddingTop: spacing.xxl,
-              paddingBottom: spacing.xxxl,
-            }}
+          <Animated.View
+            style={[
+              {
+                alignItems: 'center',
+                // The only xxxl in this file. That reservation is what makes this
+                // read as the hero before its size is even considered.
+                paddingTop: spacing.xxl,
+                paddingBottom: spacing.xxxl,
+              },
+              heroAnimatedStyle,
+            ]}
           >
             <Hero
               value={formatNumber(saved.estimated_calories)}
@@ -384,7 +403,9 @@ export default function LogScreen() {
               align="center"
             />
             <EstimateSourceLabel source={estimatorSource.data} />
-          </View>
+          </Animated.View>
+
+          <Text style={[type.body, { color: colors.text }]}>{saveReaction(saved.category)}</Text>
 
           <Text style={[type.body, { color: colors.muted }]}>
             Your dashboard and your streak have already moved.

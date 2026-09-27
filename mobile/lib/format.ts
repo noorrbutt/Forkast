@@ -1,4 +1,4 @@
-import type { FriendScale, Goal, ServingSize, User } from './types';
+import type { Category, FriendScale, Goal, ServingSize, User } from './types';
 
 /**
  * The account holder's name as one string, or null if there is no name to give.
@@ -180,3 +180,40 @@ export const GOAL_BLURBS: Record<Goal, string> = {
   maintain: `Suggests a daily target of ${formatNumber(suggestedTarget('maintain'))} kcal, roughly an average adult day. Yours to change.`,
   bulk: `Suggests a daily target of ${formatNumber(suggestedTarget('bulk'))} kcal, a small surplus to build on. Yours to change.`,
 };
+
+/**
+ * Categories light enough that saving one is worth naming as a good sign, not
+ * just a neutral entry. A short, deliberately small set rather than a guess
+ * from the calorie range: base_calorie_min already varies a lot inside a
+ * cuisine, and a range-based guess would call a small portion of karahi
+ * "light" the moment someone picked a small serving.
+ */
+const LIGHT_CATEGORY_SLUGS = new Set([
+  'salad',
+  'soup',
+  'grilled_seafood',
+  'steak',
+  'sushi',
+  'hummus_mezze',
+  'tea_coffee',
+]);
+
+/**
+ * The one line under the save hero, reacting to what was actually logged.
+ *
+ * Three tones, never a fourth: a light meal gets a small nod, a junk one gets
+ * the same soft, non-punitive wording the streak message already uses rather
+ * than anything that reads as a scold, and everything else gets a plain
+ * acknowledgement. No category on the log (an old export, or a category since
+ * removed) falls back to the plainest of the three.
+ */
+export function saveReaction(category: Pick<Category, 'name' | 'slug' | 'is_junk'> | null): string {
+  if (!category) return 'Logged. On the board.';
+  if (LIGHT_CATEGORY_SLUGS.has(category.slug)) {
+    return `Nice, that's ${category.name.toLowerCase()} — lighter one today.`;
+  }
+  if (category.is_junk) {
+    return 'Logged. Everything counts, even this one.';
+  }
+  return `Nice, ${category.name.toLowerCase()} is on the board.`;
+}

@@ -211,6 +211,17 @@ describe('the saved estimate', () => {
     await waitFor(() => expect(screen.getByText('Estimate: local')).toBeTruthy());
     expect(mockedApi.get.mock.calls.filter(([url]) => url.endsWith('/health'))).toHaveLength(1);
   });
+
+  it('reacts to the category actually logged, not a generic success line', async () => {
+    const screen = render(<LogScreen />, { wrapper });
+    await fillTheMinimum(screen);
+
+    fireEvent.press(screen.getByText('Log it'));
+
+    // SAVED carries the Pizza category, which is neither junk nor one of the
+    // light categories in this fixture, so it gets the plain acknowledgement.
+    await waitFor(() => expect(screen.getByText('Nice, pizza is on the board.')).toBeTruthy());
+  });
 });
 
 describe('a photo picked before there is a meal to put it on', () => {
