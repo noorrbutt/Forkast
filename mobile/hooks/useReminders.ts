@@ -6,7 +6,7 @@ import {
   requestReminderPermission,
   syncReminders,
 } from '../lib/notifications';
-import { useReminderSignal, useStreaks } from './useInsights';
+import { useReminderSignal, useStreaks, useWeeklyDigest } from './useInsights';
 import { useLogs } from './useLogs';
 
 /**
@@ -24,6 +24,7 @@ export function useReminders() {
   const logs = useLogs(1, 0);
   const streaks = useStreaks();
   const reminderSignal = useReminderSignal();
+  const weeklyDigest = useWeeklyDigest();
 
   useEffect(() => {
     let active = true;
@@ -40,23 +41,26 @@ export function useReminders() {
   const signal = reminderSignal.isSuccess && !reminderSignal.isFetching
     ? reminderSignal.data
     : undefined;
+  const digest = weeklyDigest.isSuccess && !weeklyDigest.isFetching
+    ? weeklyDigest.data
+    : undefined;
 
   useEffect(() => {
     if (enabled !== true) return;
     // Wait until both queries have answered, or the first sync would schedule
     // from "no logs, no streak" and immediately be replaced.
     if (!logs.data || !streaks.data) return;
-    void syncReminders({ lastLoggedAt, currentStreak, signal });
-  }, [enabled, logs.data, streaks.data, lastLoggedAt, currentStreak, signal]);
+    void syncReminders({ lastLoggedAt, currentStreak, signal, digest });
+  }, [enabled, logs.data, streaks.data, lastLoggedAt, currentStreak, signal, digest]);
 
   const enable = useCallback(async () => {
     const granted = await requestReminderPermission();
     setEnabled(granted);
     if (granted) {
-      await syncReminders({ lastLoggedAt, currentStreak, signal });
+      await syncReminders({ lastLoggedAt, currentStreak, signal, digest });
     }
     return granted;
-  }, [lastLoggedAt, currentStreak, signal]);
+  }, [lastLoggedAt, currentStreak, signal, digest]);
 
   const disable = useCallback(async () => {
     await cancelAllReminders();

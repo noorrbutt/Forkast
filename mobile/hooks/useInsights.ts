@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../lib/api';
 import { useAuth } from './useAuth';
-import type { Dashboard, ReminderSignal, Streaks, Trend } from '../lib/types';
+import type { Dashboard, ReminderSignal, Streaks, Trend, WeeklyDigest } from '../lib/types';
 
 export function useDashboard() {
   const { signedIn } = useAuth();
@@ -35,6 +35,18 @@ export function useReminderSignal() {
     enabled: signedIn,
     queryFn: async () => {
       const response = await api.get<ReminderSignal>('/insights/reminder-signal');
+      return response.data;
+    },
+  });
+}
+
+export function useWeeklyDigest() {
+  const { signedIn } = useAuth();
+  return useQuery({
+    queryKey: ['weekly-digest'],
+    enabled: signedIn,
+    queryFn: async () => {
+      const response = await api.get<WeeklyDigest>('/insights/weekly-digest');
       return response.data;
     },
   });

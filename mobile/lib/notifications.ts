@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-import type { ReminderSignal } from './types';
+import type { ReminderSignal, WeeklyDigest } from './types';
 
 type NotificationsModule = typeof import('expo-notifications');
 
@@ -68,6 +68,7 @@ function load(): NotificationsModule | null {
 
 const INACTIVITY_ID = 'forkast.inactivity';
 const STREAK_ID = 'forkast.streak';
+const DIGEST_ID = 'forkast.weekly-digest';
 
 /** How long a gap counts as "you have stopped logging". */
 const INACTIVITY_HOURS = 30;
@@ -75,6 +76,13 @@ const INACTIVITY_HOURS = 30;
 /** Evening local hour for the streak reminder, late enough to be actionable. */
 const STREAK_HOUR = 20;
 const STREAK_MINUTE = 30;
+
+/** Sunday evening: the week is effectively over, and there is still time to log
+ * one more meal before the count resets. expo-notifications numbers weekday 1-7
+ * with Sunday as 1, matching the platform calendar convention. */
+const DIGEST_WEEKDAY = 1;
+const DIGEST_HOUR = 18;
+const DIGEST_MINUTE = 0;
 
 let handlerInstalled = false;
 
@@ -150,6 +158,7 @@ async function cancel(identifier: string): Promise<void> {
 export async function cancelAllReminders(): Promise<void> {
   await cancel(INACTIVITY_ID);
   await cancel(STREAK_ID);
+  await cancel(DIGEST_ID);
 }
 
 type ReminderState = {
@@ -157,6 +166,7 @@ type ReminderState = {
   lastLoggedAt: string | null;
   currentStreak: number;
   signal?: ReminderSignal;
+  digest?: WeeklyDigest;
 };
 
 const FALLBACK_INACTIVITY_COPY = 'It has been a while. A quick log keeps your estimates honest.';
@@ -175,13 +185,26 @@ function inactivityCopy(signal: ReminderSignal | undefined): string {
   return FALLBACK_INACTIVITY_COPY;
 }
 
+const FALLBACK_DIGEST_COPY = 'Your week is ready to look back on.';
+
+function digestCopy(digest: WeeklyDigest | undefined): string {
+  if (!digest) return FALLBACK_DIGEST_COPY;
+  return digest.message;
+}
+
 /**
- * Rewrite both reminders from scratch to match the current state.
+ * Rewrite all three reminders from scratch to match the current state.
  *
- * Cancel-then-schedule rather than reconcile: there are two reminders and the
- * inactivity one moves every time anything is logged, so working out what
- * changed would cost more than redoing it. Both use fixed identifiers, so a
- * reschedule replaces rather than accumulating a new reminder per log.
+ * Cancel-then-schedule rather than reconcile: there are three reminders and
+ * the inactivity one moves every time anything is logged, so working out what
+ * changed would cost more than redoing it. All three use fixed identifiers, so
+ * a reschedule replaces rather than accumulating a new reminder per log.
+ *
+ * The digest reminder's copy is baked in at schedule time rather than computed
+ * when it fires, since a local notification cannot run code on delivery. It is
+ * rescheduled every time this function runs -- same as the other two -- so the
+ * numbers it carries are only ever as stale as the last time the app synced
+ * reminders, which in practice is every app open during the week.
  */
 export async function syncReminders(state: ReminderState): Promise<void> {
   try {
@@ -229,6 +252,21 @@ export async function syncReminders(state: ReminderState): Promise<void> {
         },
       });
     }
+
+    await Notifications.scheduleNotificationAsync({
+      identifier: DIGEST_ID,
+      content: {
+        title: 'Your week, at a glance',
+        body: digestCopy(state.digest),
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+        weekday: DIGEST_WEEKDAY,
+        hour: DIGEST_HOUR,
+        minute: DIGEST_MINUTE,
+        channelId,
+      },
+    });
   } catch {
     // No reminders is an acceptable outcome. A crashed screen is not.
   }

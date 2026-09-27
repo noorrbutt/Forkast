@@ -59,13 +59,25 @@ from app.schemas.auth import (
     UserOut,
     UserUpdate,
 )
-from app.schemas.insights import DashboardOut, PlanCreate, PlanOut, ReminderSignalOut, StreaksOut
+from app.schemas.insights import (
+    DashboardOut,
+    PlanCreate,
+    PlanOut,
+    ReminderSignalOut,
+    StreaksOut,
+    WeeklyDigestOut,
+)
 from app.services.ai.base import AIService
 from app.services.ai.deps import EstimateSource, get_ai_service, get_estimate_source
 from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import PlanContext, PlanLogSummary, PlanRequest
 from app.services.google import GoogleAuthError, verify_google_id_token
-from app.services.insights import build_dashboard, build_reminder_signal, compute_streaks
+from app.services.insights import (
+    build_dashboard,
+    build_reminder_signal,
+    build_weekly_digest,
+    compute_streaks,
+)
 from app.services.rate_limit import account_identity
 from app.services.security import (
     decode_access_token,
@@ -497,6 +509,11 @@ async def streaks(session: SessionDep, user: CurrentUser) -> StreaksOut:
 @router.get("/insights/reminder-signal", response_model=ReminderSignalOut)
 async def reminder_signal(session: SessionDep, user: CurrentUser) -> ReminderSignalOut:
     return await build_reminder_signal(session, user)
+
+
+@router.get("/insights/weekly-digest", response_model=WeeklyDigestOut)
+async def weekly_digest(session: SessionDep, user: CurrentUser) -> WeeklyDigestOut:
+    return await build_weekly_digest(session, user)
 
 
 @router.post("/plans", response_model=PlanOut, status_code=status.HTTP_201_CREATED)

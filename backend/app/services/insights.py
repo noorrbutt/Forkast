@@ -39,6 +39,7 @@ from app.schemas.insights import (
     TrendChange,
     TrendOut,
     TrendPeriod,
+    WeeklyDigestOut,
 )
 
 # Roughly how many kcal a 70kg adult burns per minute, from standard MET values.
@@ -52,6 +53,9 @@ CHART_DAYS = 14
 # How far back to look when hunting for the longest streak. Without a bound this
 # would walk every day since the account was created.
 STREAK_WINDOW_DAYS = 365
+
+# The last 7 local days, today included, for the weekly digest reminder.
+WEEKLY_DIGEST_WINDOW_DAYS = 7
 
 
 def _local_day(user: User):
@@ -557,4 +561,76 @@ async def build_trend(session: AsyncSession, user: User) -> TrendOut:
                 this_month.avg_calories_per_day - last_month.avg_calories_per_day, 1
             ),
         ),
+    )
+
+
+async def build_weekly_digest(session: AsyncSession, user: User) -> WeeklyDigestOut:
+    """The last 7 local days, as the one sentence the weekly reminder shows.
+
+    A day counts toward junk_free_days on the same rule the streak uses: no
+    junk-flagged log that day, logged or not. meals_logged/junk_free_meals are
+    the pair the headline sentence actually needs and are counted across the
+    whole window rather than per day, since the sentence is about meals, not
+    about which days they landed on.
+    """
+    today = today_for(user)
+    window_start = today - dt.timedelta(days=WEEKLY_DIGEST_WINDOW_DAYS - 1)
+    window_start_utc, window_end_utc = _local_bounds(
+        user, window_start, today + dt.timedelta(days=1)
+    )
+
+    # The day expression goes in a subquery, same as the dashboard's daily
+    # totals: the timezone name is a bind parameter, so the copy in SELECT and
+    # the copy in GROUP BY compile to different placeholders and PostgreSQL
+    # refuses to treat them as the same expression if grouped by directly.
+    daily = (
+        select(
+            _local_day(user).label("day"),
+            case((FoodCategory.is_junk, 1), else_=0).label("junk"),
+        )
+        .select_from(FoodLog)
+        .join(FoodCategory, FoodCategory.id == FoodLog.category_id)
+        .where(
+            FoodLog.user_id == user.id,
+            FoodLog.created_at >= window_start_utc,
+            FoodLog.created_at < window_end_utc,
+        )
+        .subquery()
+    )
+    rows = (
+        await session.execute(
+            select(
+                daily.c.day,
+                func.count().label("meals"),
+                func.coalesce(func.sum(daily.c.junk), 0).label("junk"),
+            ).group_by(daily.c.day)
+        )
+    ).all()
+
+    meals_by_day = {row.day: int(row.meals) for row in rows}
+    junk_by_day = {row.day: int(row.junk) for row in rows}
+
+    meals_logged = sum(meals_by_day.values())
+    junk_meals = sum(junk_by_day.values())
+    junk_free_meals = meals_logged - junk_meals
+    days_logged = len(meals_by_day)
+    junk_free_days = sum(
+        1
+        for offset in range(WEEKLY_DIGEST_WINDOW_DAYS)
+        if junk_by_day.get(window_start + dt.timedelta(days=offset), 0) == 0
+    )
+
+    if meals_logged == 0:
+        message = "No meals logged this week yet. A single log gets the week started."
+    elif junk_free_meals == meals_logged:
+        message = f"All {meals_logged} meals logged junk-free this week. Quietly impressive."
+    else:
+        message = f"You logged {junk_free_meals} of {meals_logged} meals junk-free this week."
+
+    return WeeklyDigestOut(
+        meals_logged=meals_logged,
+        junk_free_meals=junk_free_meals,
+        junk_free_days=junk_free_days,
+        days_logged=days_logged,
+        message=message,
     )

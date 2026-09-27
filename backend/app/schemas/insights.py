@@ -149,6 +149,23 @@ class TrendOut(BaseModel):
     change: TrendChange
 
 
+class WeeklyDigestOut(BaseModel):
+    """The last 7 local days, summarised for the weekly reminder.
+
+    Meant to be read as one sentence ("18 of 21 meals junk-free this week"),
+    so the two counts that sentence needs are the only ones that matter:
+    meals_logged is the denominator and junk_free_meals is the numerator.
+    junk_free_days and days_logged back a shorter fallback line for a week
+    with too few meals logged to make the meal-level count feel meaningful.
+    """
+
+    meals_logged: int
+    junk_free_meals: int
+    junk_free_days: int
+    days_logged: int
+    message: str
+
+
 class PlanCreate(BaseModel):
     goal: Goal | None = None
 

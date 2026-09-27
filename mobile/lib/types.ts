@@ -250,6 +250,14 @@ export type ReminderSignal = {
   is_on_junk_streak: boolean;
 };
 
+export type WeeklyDigest = {
+  meals_logged: number;
+  junk_free_meals: number;
+  junk_free_days: number;
+  days_logged: number;
+  message: string;
+};
+
 export type PlanMeal = {
   slot: string;
   suggestion: string;
