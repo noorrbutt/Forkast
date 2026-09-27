@@ -34,9 +34,20 @@ export const press: WithSpringConfig = {
   reduceMotion: ReduceMotion.System,
 };
 
+/** A milestone landing. Looser than press on purpose: this fires once in a
+ * matter of days, not hundreds of times an hour, so it is allowed to
+ * overshoot and settle rather than snap into place. */
+export const celebrate: WithSpringConfig = {
+  damping: 11,
+  stiffness: 140,
+  mass: 0.8,
+  reduceMotion: ReduceMotion.System,
+};
+
 export const motion = {
   quick,
   press,
+  celebrate,
   /** How far a pressable scales down when held. */
   pressScale: 0.965,
 } as const;

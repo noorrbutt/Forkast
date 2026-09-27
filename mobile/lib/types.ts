@@ -234,12 +234,23 @@ export type BurnEntry = {
   updated_at: string;
 };
 
+export type StreakMilestone = {
+  day: number;
+  reward: 'freeze';
+};
+
 export type Streaks = {
   current_streak: number;
   longest_streak: number;
   last_junk_date: string | null;
   /** The dish that ended the run, so the screen can name it rather than only dating it. */
   last_junk_dish: string | null;
+  /** Banked and unspent. Spent automatically, so this can drop with no action taken. */
+  available_freezes: number;
+  /** Sent every time current_streak matches a milestone length, not only the
+   * first time -- the server has no notion of whether this has been shown
+   * yet, so the client gates the one-time celebration itself. */
+  milestone: StreakMilestone | null;
   message: string;
 };
 

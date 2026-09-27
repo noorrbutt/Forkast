@@ -1,11 +1,79 @@
 import { useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { RefreshControl, Text, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
-import { Button, Card, ErrorState, Hero, Loading, Screen } from '../../components/ui';
+import { Button, Card, Dialog, ErrorState, Hero, Loading, Screen } from '../../components/ui';
 import { useStreaks } from '../../hooks/useInsights';
 import { describeError } from '../../lib/api';
 import { formatDate } from '../../lib/format';
+import { haptics } from '../../lib/haptics';
+import { hasSeenMilestone, markMilestoneSeen } from '../../lib/milestoneStore';
+import type { StreakMilestone } from '../../lib/types';
 import { useTheme } from '../../theme';
+import { motion } from '../../theme/motion';
+
+/** One line naming what the freeze actually does, so the celebration is about
+ * the reward rather than only the number. */
+function rewardCopy(milestone: StreakMilestone): string {
+  return `${milestone.day} days without junk. You've earned a streak freeze - it'll cover you automatically the next time a slip would otherwise reset the count.`;
+}
+
+/**
+ * The one-time celebration for a milestone crossing.
+ *
+ * The server reports the same milestone on every read while current_streak
+ * sits on it, so the one-time gate lives here: milestoneStore remembers which
+ * days have already had their moment, and this only opens for a day it has
+ * not seen yet. The reward icon scales in with motion.celebrate rather than
+ * the ordinary press spring, since this is the one moment on the app that is
+ * allowed to overshoot.
+ */
+function MilestoneCelebration({ milestone }: { milestone: StreakMilestone | null }) {
+  const { colors, spacing, type } = useTheme();
+  const [visible, setVisible] = useState(false);
+  const shown = useRef<number | null>(null);
+  const scale = useSharedValue(0);
+
+  useEffect(() => {
+    if (!milestone) return;
+    if (shown.current === milestone.day) return;
+    let active = true;
+    void hasSeenMilestone(milestone.day).then((seen) => {
+      if (!active || seen) return;
+      shown.current = milestone.day;
+      void markMilestoneSeen(milestone.day);
+      scale.value = 0;
+      setVisible(true);
+      haptics.success();
+      scale.value = withSpring(1, motion.celebrate);
+    });
+    return () => {
+      active = false;
+    };
+  }, [milestone, scale]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  if (!milestone) return null;
+
+  return (
+    <Dialog
+      visible={visible}
+      onDismiss={() => setVisible(false)}
+      title={`${milestone.day} days`}
+      message={rewardCopy(milestone)}
+      actions={[{ label: 'Keep going', onPress: () => setVisible(false) }]}
+    >
+      <Animated.View style={[{ alignItems: 'center', paddingVertical: spacing.md }, animatedStyle]}>
+        <Text style={[type.hero, { color: colors.success, fontSize: 44 }]}>+1</Text>
+        <Text style={[type.caption, { color: colors.muted }]}>freeze banked</Text>
+      </Animated.View>
+    </Dialog>
+  );
+}
 
 /** Encouraging on every branch. A streak at zero is a starting line, not a failure. */
 function supportiveCopy(current: number, longest: number): string {
@@ -75,6 +143,8 @@ export default function StreaksScreen() {
         />
       }
     >
+      <MilestoneCelebration milestone={data?.milestone ?? null} />
+
       <View style={column}>
         {/* isPending rather than isLoading, because the query is disabled until
             the stored token has been read back from the keystore and a disabled
@@ -140,6 +210,21 @@ export default function StreaksScreen() {
                 </View>
 
                 <View style={{ height: layout.hairline, backgroundColor: colors.border }} />
+
+                {data.available_freezes > 0 ? (
+                  <>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.lg }}>
+                      <Text style={[type.body, { color: colors.muted, flex: 1 }]}>
+                        {data.available_freezes === 1 ? 'Streak freeze' : 'Streak freezes'}
+                      </Text>
+                      <Text style={[type.displaySm, { color: colors.text }]}>
+                        {data.available_freezes}
+                      </Text>
+                    </View>
+
+                    <View style={{ height: layout.hairline, backgroundColor: colors.border }} />
+                  </>
+                ) : null}
 
                 {/* The dish under the date. A date on its own says a run ended
                     and leaves the reader to remember which meal did it, which
