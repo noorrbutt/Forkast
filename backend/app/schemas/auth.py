@@ -17,7 +17,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.models.enums import Goal
+from app.models.enums import BiggestStruggle, EatingOutFrequency, Goal
 
 
 def _required_name(value: str) -> str:
@@ -119,6 +119,11 @@ class UserOut(BaseModel):
     timezone: str
     goal: Goal
     daily_calorie_target: int | None = None
+    # Both null until the onboarding quiz is answered, and null forever for
+    # anyone who skips it -- neither ever gates a route, they only sharpen the
+    # plan generator's tone when present.
+    eating_out_frequency: EatingOutFrequency | None = None
+    biggest_struggle: BiggestStruggle | None = None
     # Computed by the database as part of the same SELECT, so reading a profile
     # never loads a byte of image data to answer it.
     has_avatar: bool = False
@@ -227,6 +232,8 @@ class UserUpdate(BaseModel):
     # with a 422 rather than a 500 from the database. The floor is 0 rather
     # than a guessed minimum: see the constraint in models/user.py.
     daily_calorie_target: int | None = Field(default=None, ge=0, le=10_000)
+    eating_out_frequency: EatingOutFrequency | None = None
+    biggest_struggle: BiggestStruggle | None = None
 
     @model_validator(mode="after")
     def _null_only_where_the_column_is_nullable(self) -> UserUpdate:

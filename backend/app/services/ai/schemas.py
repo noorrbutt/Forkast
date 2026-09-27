@@ -10,7 +10,7 @@ import datetime as dt
 
 from pydantic import BaseModel, Field
 
-from app.models.enums import Goal, ServingSize
+from app.models.enums import BiggestStruggle, EatingOutFrequency, Goal, ServingSize
 
 
 class CalorieAdjustRequest(BaseModel):
@@ -63,6 +63,11 @@ class PlanContext(BaseModel):
     current_streak: int
     longest_streak: int
     top_category: str | None = None
+    # Self-reported at onboarding, not computed. These shape tone rather than
+    # any number in the plan: cravings and "never know what to cook" call for
+    # different coaching even at the same junk ratio.
+    eating_out_frequency: EatingOutFrequency | None = None
+    biggest_struggle: BiggestStruggle | None = None
 
 
 class PlanRequest(BaseModel):

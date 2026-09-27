@@ -593,6 +593,8 @@ async def create_plan(
         current_streak=streak.current_streak,
         longest_streak=streak.longest_streak,
         top_category=dashboard.top_category.name if dashboard.top_category else None,
+        eating_out_frequency=user.eating_out_frequency,
+        biggest_struggle=user.biggest_struggle,
     )
 
     # Let go of the database before asking the model anything.

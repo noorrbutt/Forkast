@@ -239,6 +239,22 @@ def _plan_prompt(req: PlanRequest) -> str:
             + "\n"
         )
 
+        # Self-reported at onboarding, not calculated -- kept separate from the
+        # figures above and framed as tone guidance rather than another fact to
+        # repeat back, since these are two different answers about two very
+        # different people and the plan should not read the same for both.
+        if c.eating_out_frequency or c.biggest_struggle:
+            facts += "What they told us about themselves when they joined:\n"
+            if c.eating_out_frequency:
+                facts += f"- How often they eat out: {c.eating_out_frequency.value}\n"
+            if c.biggest_struggle:
+                facts += f"- Their biggest struggle, in their own words: {c.biggest_struggle.value}\n"
+            facts += (
+                "Let this shape tone and suggestions, not the numbers: cravings "
+                "calls for smaller, more frequent wins; eating out calls for "
+                "restaurant-friendly swaps rather than home cooking.\n\n"
+            )
+
     return (
         f"Goal: {req.goal.value}\n"
         f"Their timezone: {req.timezone}\n\n"

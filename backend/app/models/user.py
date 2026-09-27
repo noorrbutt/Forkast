@@ -23,7 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 
 from app.models.base import Base, new_uuid7, str_enum
-from app.models.enums import Goal
+from app.models.enums import BiggestStruggle, EatingOutFrequency, Goal
 
 
 class User(Base):
@@ -68,6 +68,16 @@ class User(Base):
     # dashboard shows a plain total, while a number turns that total into
     # progress against it.
     daily_calorie_target: Mapped[int | None] = mapped_column(nullable=True)
+    # Both asked once, on the onboarding quiz shown before setup. Null for
+    # every account that predates it and for anyone who skipped it: neither
+    # ever blocks a route, they only ever sharpen the plan generator's tone
+    # when they are present.
+    eating_out_frequency: Mapped[EatingOutFrequency | None] = mapped_column(
+        str_enum(EatingOutFrequency, "eating_out_frequency", length=16), nullable=True
+    )
+    biggest_struggle: Mapped[BiggestStruggle | None] = mapped_column(
+        str_enum(BiggestStruggle, "biggest_struggle", length=16), nullable=True
+    )
     email_verified: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
