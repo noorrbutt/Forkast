@@ -58,6 +58,8 @@ def _photo_reply(**overrides) -> str:
         "carbs_g": 70.0,
         "fat_g": 22.0,
         "confidence": "high",
+        "portion_ambiguous": False,
+        "portion_options": [],
         "reasoning": "full plate, visible rice and meat",
     }
     body.update(overrides)
@@ -107,6 +109,33 @@ async def test_the_stub_ignores_the_declared_content_type() -> None:
     jpeg_labelled = await ai.estimate_from_photo(PNG, "image/jpeg")
 
     assert png_labelled == jpeg_labelled
+
+
+async def test_the_stub_sometimes_returns_ambiguous_portions() -> None:
+    """The mobile chip path has to be exercisable without a live Groq call, so
+    the fake needs to actually produce this shape sometimes, not just accept
+    it in its type signature."""
+    ai = DeterministicAIService()
+
+    results = [await ai.estimate_from_photo(PNG + bytes([i]), "image/png") for i in range(30)]
+
+    ambiguous = [r for r in results if r.portion_ambiguous]
+    assert ambiguous, "no photo in the sample came back portion_ambiguous"
+    assert any(not r.portion_ambiguous for r in results), "every photo came back ambiguous"
+    for result in ambiguous:
+        assert 2 <= len(result.portion_options) <= 3
+        calories = [o.calories for o in result.portion_options]
+        assert calories == sorted(calories), "portion options should run smallest first"
+
+
+async def test_the_stub_never_offers_options_when_not_ambiguous() -> None:
+    ai = DeterministicAIService()
+
+    results = [await ai.estimate_from_photo(PNG + bytes([i]), "image/png") for i in range(30)]
+
+    for result in results:
+        if not result.portion_ambiguous:
+            assert result.portion_options == []
 
 
 async def test_the_stub_and_the_groq_client_stay_interchangeable() -> None:
@@ -201,6 +230,133 @@ async def test_an_unrecognised_confidence_value_falls_back_to_low() -> None:
     result = await service.estimate_from_photo(PNG, "image/png")
 
     assert result.confidence == "low"
+
+
+async def test_portion_options_are_parsed_when_ambiguous() -> None:
+    client = _FakeClient(
+        _photo_reply(
+            portion_ambiguous=True,
+            portion_options=[
+                {"label": "small", "calories": 350},
+                {"label": "medium", "calories": 550},
+                {"label": "large", "calories": 750},
+            ],
+        )
+    )
+    service = GroqAIService(client, model="openai/gpt-oss-20b")
+
+    result = await service.estimate_from_photo(PNG, "image/png")
+
+    assert result.portion_ambiguous is True
+    assert [o.label for o in result.portion_options] == ["small", "medium", "large"]
+    assert [o.calories for o in result.portion_options] == [350, 550, 750]
+    # The single best-guess figure is still filled either way, so a caller
+    # that ignores portion_options entirely still gets a usable estimate.
+    assert result.calories == 650
+
+
+async def test_confidence_and_portion_ambiguous_are_independent() -> None:
+    """A dish can be unmistakable and still have no size reference in frame."""
+    client = _FakeClient(
+        _photo_reply(
+            confidence="high",
+            portion_ambiguous=True,
+            portion_options=[
+                {"label": "small", "calories": 300},
+                {"label": "large", "calories": 600},
+            ],
+        )
+    )
+    service = GroqAIService(client, model="openai/gpt-oss-20b")
+
+    result = await service.estimate_from_photo(PNG, "image/png")
+
+    assert result.confidence == "high"
+    assert result.portion_ambiguous is True
+
+
+async def test_portion_options_are_empty_when_not_ambiguous() -> None:
+    client = _FakeClient(_photo_reply(portion_ambiguous=False, portion_options=[]))
+    service = GroqAIService(client, model="openai/gpt-oss-20b")
+
+    result = await service.estimate_from_photo(PNG, "image/png")
+
+    assert result.portion_ambiguous is False
+    assert result.portion_options == []
+
+
+async def test_a_lone_portion_option_is_not_treated_as_a_choice() -> None:
+    """One option is not a decision to offer, so this degrades to the plain
+    single-number path rather than showing a single, pointless chip."""
+    client = _FakeClient(
+        _photo_reply(
+            portion_ambiguous=True,
+            portion_options=[{"label": "medium", "calories": 550}],
+        )
+    )
+    service = GroqAIService(client, model="openai/gpt-oss-20b")
+
+    result = await service.estimate_from_photo(PNG, "image/png")
+
+    assert result.portion_ambiguous is False
+    assert result.portion_options == []
+
+
+async def test_malformed_options_are_dropped_rather_than_raising() -> None:
+    client = _FakeClient(
+        _photo_reply(
+            portion_ambiguous=True,
+            portion_options=[
+                {"label": "small", "calories": 300},
+                {"label": "", "calories": 500},  # blank label
+                {"label": "large", "calories": -100},  # non-positive
+                {"label": "huge"},  # missing calories
+                {"label": "medium", "calories": 550},
+            ],
+        )
+    )
+    service = GroqAIService(client, model="openai/gpt-oss-20b")
+
+    result = await service.estimate_from_photo(PNG, "image/png")
+
+    assert [o.label for o in result.portion_options] == ["small", "medium"]
+
+
+async def test_more_than_three_options_is_trimmed_to_three() -> None:
+    client = _FakeClient(
+        _photo_reply(
+            portion_ambiguous=True,
+            portion_options=[
+                {"label": "small", "calories": 300},
+                {"label": "medium", "calories": 500},
+                {"label": "large", "calories": 700},
+                {"label": "extra large", "calories": 900},
+            ],
+        )
+    )
+    service = GroqAIService(client, model="openai/gpt-oss-20b")
+
+    result = await service.estimate_from_photo(PNG, "image/png")
+
+    assert len(result.portion_options) == 3
+
+
+async def test_portion_option_labels_go_through_the_typography_filter() -> None:
+    em_dash = chr(0x2014)
+    client = _FakeClient(
+        _photo_reply(
+            portion_ambiguous=True,
+            portion_options=[
+                {"label": f"one{em_dash}slice", "calories": 300},
+                {"label": "two slices", "calories": 600},
+            ],
+        )
+    )
+    service = GroqAIService(client, model="openai/gpt-oss-20b")
+
+    result = await service.estimate_from_photo(PNG, "image/png")
+
+    assert result.portion_options[0].label == "one, slice"
 
 
 @pytest.mark.parametrize(

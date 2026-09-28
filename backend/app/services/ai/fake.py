@@ -18,6 +18,7 @@ from app.services.ai.schemas import (
     PlanMeal,
     PlanRequest,
     PlanResult,
+    PortionOption,
 )
 
 # Dish guesses the fake vision path cycles through. It cannot actually see the
@@ -118,6 +119,21 @@ class DeterministicAIService:
         # _stable_unit_interval biases a dish within its category range.
         calories = 350.0 + _stable_unit_interval(digest) * 550.0
 
+        # A separate slice of the hash, deliberately: portion ambiguity is not
+        # tied to confidence (see PhotoCalorieEstimate's own docstring on the
+        # two being different questions), so a "high confidence, ambiguous
+        # portion" photo has to be reachable in tests without also forcing low
+        # dish confidence. Roughly a third of photos land here, enough for the
+        # mobile chip path to be exercised without it dominating the fixture.
+        portion_ambiguous = int(digest[16:24], 16) % 3 == 0
+        portion_options: list[PortionOption] = []
+        if portion_ambiguous:
+            portion_options = [
+                PortionOption(label="small", calories=round(calories * 0.65)),
+                PortionOption(label="medium", calories=round(calories)),
+                PortionOption(label="large", calories=round(calories * 1.4)),
+            ]
+
         return PhotoCalorieEstimate(
             dish_guess=dish_guess,
             calories=round(calories),
@@ -127,6 +143,8 @@ class DeterministicAIService:
                 fat_g=round(calories * 0.30 / 9, 1),
             ),
             confidence=confidence,
+            portion_ambiguous=portion_ambiguous,
+            portion_options=portion_options,
             reasoning="[stub] deterministic photo estimate, no vision model called",
         )
 

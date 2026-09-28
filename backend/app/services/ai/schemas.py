@@ -77,6 +77,19 @@ class PhotoMacros(BaseModel):
     fat_g: float
 
 
+class PortionOption(BaseModel):
+    """One plausible serving, offered when the model cannot judge scale.
+
+    A label a person would actually tap, not a gram figure: "small", "medium",
+    "large", or something more specific like "one slice" when that reads
+    better for the dish. calories is that portion's whole estimate, already
+    complete, not a delta from the base guess.
+    """
+
+    label: str
+    calories: float
+
+
 class PhotoCalorieEstimate(BaseModel):
     """What a photo alone can tell us, before any category has been chosen.
 
@@ -86,12 +99,29 @@ class PhotoCalorieEstimate(BaseModel):
     pick a category, not the figure that ends up on the saved log. A log is
     still priced by the existing category-range flow once a category is
     chosen, so nothing here is ever written to food_logs.
+
+    `confidence` and `portion_ambiguous` answer two different questions and
+    are never collapsed into one flag: confidence is about recognising the
+    dish at all, portion_ambiguous is about judging its scale in this specific
+    photo. A photo can be a clear, unmistakable plate of fries shot from
+    straight above with nothing in frame to size it against -- confidence
+    "high", portion_ambiguous true.
     """
 
     dish_guess: str
     calories: float
     macros: PhotoMacros
     confidence: Literal["high", "medium", "low"]
+    # True only when scale genuinely cannot be judged from the photo -- no
+    # hand, utensil, or plate edge to size it against -- never a stand-in for
+    # low dish-recognition confidence, which `confidence` already covers.
+    portion_ambiguous: bool = False
+    # 2 or 3 entries when portion_ambiguous is true, matching the chips the
+    # confirm screen shows instead of the single number; empty otherwise.
+    # `calories` and `macros` above still carry the model's own best single
+    # guess either way, so a caller that ignores this list entirely still gets
+    # a usable estimate.
+    portion_options: list[PortionOption] = Field(default_factory=list)
     reasoning: str | None = None
 
 

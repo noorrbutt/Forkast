@@ -52,6 +52,7 @@ from app.services.ai.schemas import (
     PhotoMacros,
     PlanRequest,
     PlanResult,
+    PortionOption,
 )
 
 logger = logging.getLogger(__name__)
@@ -194,6 +195,24 @@ PHOTO_CALORIE_SCHEMA: dict[str, Any] = {
             "carbs_g": {"type": "number"},
             "fat_g": {"type": "number"},
             "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+            "portion_ambiguous": {
+                "type": "boolean",
+                "description": "True only if scale cannot be judged from the photo",
+            },
+            "portion_options": {
+                "type": "array",
+                "description": "2-3 tappable portions with their own calorie totals; "
+                "empty unless portion_ambiguous is true",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "label": {"type": "string"},
+                        "calories": {"type": "integer"},
+                    },
+                    "required": ["label", "calories"],
+                    "additionalProperties": False,
+                },
+            },
             "reasoning": {
                 "type": "string",
                 "description": "One short sentence on what drove the estimate",
@@ -206,6 +225,8 @@ PHOTO_CALORIE_SCHEMA: dict[str, Any] = {
             "carbs_g",
             "fat_g",
             "confidence",
+            "portion_ambiguous",
+            "portion_options",
             "reasoning",
         ],
         "additionalProperties": False,
@@ -541,6 +562,8 @@ class GroqAIService:
             )
             dish_guess = str(payload["dish_guess"])
             confidence = payload["confidence"]
+            portion_ambiguous = bool(payload["portion_ambiguous"])
+            raw_options = payload["portion_options"]
         except (KeyError, TypeError, ValueError) as exc:
             raise GroqResponseError(f"Groq photo reply had an unusable shape: {payload!r}") from exc
 
@@ -548,6 +571,29 @@ class GroqAIService:
             # The schema's enum should make this unreachable, but a value the
             # caller cannot render is worse than a conservative default.
             confidence = "low"
+
+        # Defensive on top of the schema, the same reasoning as the confidence
+        # check above: a model that returns the flag without honouring the
+        # shape of the list it implies should degrade to "no options" rather
+        # than hand the client something to tap that turns out unusable.
+        portion_options: list[PortionOption] = []
+        if portion_ambiguous and isinstance(raw_options, list):
+            for option in raw_options:
+                if len(portion_options) >= 3:
+                    break
+                try:
+                    label = normalise_text(str(option["label"]))
+                    option_calories = float(option["calories"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if not label or option_calories <= 0:
+                    continue
+                portion_options.append(PortionOption(label=label, calories=option_calories))
+        # Fewer than two usable options is not a choice, so it is not worth
+        # showing as one: the confirm screen falls back to the single number.
+        if len(portion_options) < 2:
+            portion_ambiguous = False
+            portion_options = []
 
         reasoning = payload.get("reasoning")
         return PhotoCalorieEstimate(
@@ -557,6 +603,8 @@ class GroqAIService:
             calories=max(0.0, calories),
             macros=macros,
             confidence=confidence,
+            portion_ambiguous=portion_ambiguous,
+            portion_options=portion_options,
             reasoning=normalise_text(reasoning) if reasoning else None,
         )
 
