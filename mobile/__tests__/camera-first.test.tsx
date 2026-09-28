@@ -64,7 +64,10 @@ function wrapper({ children }: { children: ReactNode }) {
   );
 }
 
-const CUISINES = [{ id: 2, slug: 'italian', name: 'Italian', emoji: '🍝', sort_order: 2 }];
+const CUISINES = [
+  { id: 2, slug: 'italian', name: 'Italian', emoji: '🍝', sort_order: 2 },
+  { id: 5, slug: 'continental', name: 'Continental', emoji: '🍽️', sort_order: 5 },
+];
 const PIZZA = {
   id: 21,
   cuisine_id: 2,
@@ -74,7 +77,19 @@ const PIZZA = {
   base_calorie_max: 900,
   is_junk: false,
 };
-const CATEGORIES = [PIZZA];
+// A category the search-against-the-guess fixture never matches, standing in
+// for a dish the catalogue has no obvious category for at all -- a banana is
+// the real example, this is its equivalent for the test.
+const FRUIT = {
+  id: 40,
+  cuisine_id: 5,
+  slug: 'fruit',
+  name: 'Fruit',
+  base_calorie_min: 70,
+  base_calorie_max: 140,
+  is_junk: false,
+};
+const CATEGORIES = [PIZZA, FRUIT];
 
 const ESTIMATE = {
   dish_guess: 'pepperoni pizza',
@@ -274,5 +289,87 @@ describe('a failed estimate that is not a rate limit', () => {
       expect(screen.getByText('The photo estimator is unavailable.')).toBeTruthy(),
     );
     expect(screen.getByText('Take a photo')).toBeTruthy();
+  });
+});
+
+describe('a dish the catalogue has no chip match for', () => {
+  it('can still be filed under a category, picked directly', async () => {
+    const screen = openLogScreen();
+    await takeAPhoto(screen);
+
+    // The search-against-the-guess fixture only ever matches Pizza, so Fruit
+    // never shows up as a quick-tap chip -- the whole point of this path.
+    fireEvent.press(screen.getByLabelText('Category'));
+    await waitFor(() => expect(screen.getByText('Fruit')).toBeTruthy());
+    fireEvent.press(screen.getByText('Fruit'));
+    fireEvent.press(screen.getByText('Log it'));
+
+    await waitFor(() =>
+      expect(mockedApi.post).toHaveBeenCalledWith(
+        '/logs',
+        expect.objectContaining({ category_id: 40 }),
+      ),
+    );
+  });
+});
+
+describe('removing the photo on the confirm screen', () => {
+  it('drops the photo but keeps whatever category was already resolved', async () => {
+    const screen = openLogScreen();
+    await takeAPhoto(screen);
+    await waitFor(() => expect(screen.getByText('Matches this dish')).toBeTruthy());
+    fireEvent.press(screen.getByText('pepperoni pizza'));
+
+    fireEvent.press(screen.getByText('Remove'));
+
+    // The photo and its Retake/Choose/Remove row are gone...
+    expect(screen.queryByText('Retake')).toBeNull();
+    // ...but the category picked before removing it is still good enough to save.
+    fireEvent.press(screen.getByText('Log it'));
+    await waitFor(() =>
+      expect(mockedApi.post).toHaveBeenCalledWith(
+        '/logs',
+        expect.objectContaining({ category_id: 21 }),
+      ),
+    );
+  });
+
+  it('asks for a fresh photo and a fresh estimate on retake', async () => {
+    const screen = openLogScreen();
+    await takeAPhoto(screen);
+    expect(picker.launchCameraAsync).toHaveBeenCalledTimes(1);
+    expect(mockedApi.post).toHaveBeenCalledTimes(1);
+
+    fireEvent.press(screen.getByText('Retake'));
+
+    await waitFor(() => expect(picker.launchCameraAsync).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(mockedApi.post.mock.calls.filter(([url]) => url === '/logs/estimate-photo')).toHaveLength(2),
+    );
+  });
+});
+
+describe('cancelling mid-log', () => {
+  it('goes back to the capture screen from confirm, and forgets the photo', async () => {
+    const screen = openLogScreen();
+    await takeAPhoto(screen);
+
+    fireEvent.press(screen.getByLabelText('Go back'));
+
+    expect(screen.getByText('What did you eat?')).toBeTruthy();
+    expect(screen.queryByText('Is this right?')).toBeNull();
+  });
+
+  it('goes back to the capture screen from the manual form too', () => {
+    const screen = openLogScreen();
+    fireEvent.press(screen.getByText('Type it in instead'));
+    fireEvent.changeText(screen.getByPlaceholderText('Chicken karahi'), 'Something typed');
+
+    fireEvent.press(screen.getByLabelText('Go back'));
+
+    expect(screen.getByText('What did you eat?')).toBeTruthy();
+    // Cancelling actually discards it, not just hides the form behind it.
+    fireEvent.press(screen.getByText('Type it in instead'));
+    expect(screen.getByPlaceholderText('Chicken karahi').props.value).toBe('');
   });
 });

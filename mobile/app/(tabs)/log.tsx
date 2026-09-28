@@ -601,8 +601,10 @@ export default function LogScreen() {
     // useful to match does not show an empty "Matches" heading over nothing.
     const guessResults = estimate.dish_guess.trim().length >= 2 ? guessSearch.data : undefined;
 
+    const photoBusy = estimatePhoto.isPending || photoPicker.preparing;
+
     return (
-      <Screen title="Log a meal">
+      <Screen title="Log a meal" onBack={resetForm}>
         <View style={column}>
           <View style={{ gap: spacing.sm, paddingBottom: spacing.sm }}>
             <Text style={[type.display, { color: colors.text }]}>Is this right?</Text>
@@ -613,20 +615,56 @@ export default function LogScreen() {
 
           <View style={group}>
             {photo ? (
-              <View
-                style={{
-                  borderRadius: radius.card,
-                  overflow: 'hidden',
-                  aspectRatio: 4 / 3,
-                  backgroundColor: colors.surfaceAlt,
-                }}
-              >
-                <Image
-                  source={{ uri: photo.uri }}
-                  style={{ width: '100%', height: '100%' }}
-                  resizeMode="cover"
-                  accessibilityIgnoresInvertColors
-                />
+              <View style={{ gap: spacing.sm }}>
+                <View
+                  style={{
+                    borderRadius: radius.card,
+                    overflow: 'hidden',
+                    aspectRatio: 4 / 3,
+                    backgroundColor: colors.surfaceAlt,
+                  }}
+                >
+                  <Image
+                    source={{ uri: photo.uri }}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="cover"
+                    accessibilityIgnoresInvertColors
+                  />
+                </View>
+                {/* Retake and Choose replace the photo (and ask for a fresh
+                    estimate); Remove just drops it. Nothing else on this
+                    screen depends on the photo bytes once a dish and a
+                    category are picked, so removing it does not reset any of
+                    that. */}
+                <View
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, flexWrap: 'wrap' }}
+                >
+                  <Button
+                    label="Retake"
+                    variant="secondary"
+                    compact
+                    disabled={photoBusy}
+                    loading={photoBusy}
+                    onPress={() => void captureAndEstimate(true)}
+                  />
+                  <Button
+                    label="Choose"
+                    variant="secondary"
+                    compact
+                    disabled={photoBusy}
+                    onPress={() => void captureAndEstimate(false)}
+                  />
+                  <Button
+                    label="Remove"
+                    variant="ghost"
+                    compact
+                    disabled={photoBusy}
+                    onPress={() => {
+                      setPhoto(null);
+                      setPhotoStatus('none');
+                    }}
+                  />
+                </View>
               </View>
             ) : null}
 
@@ -683,6 +721,40 @@ export default function LogScreen() {
                 </View>
               </View>
             ) : null}
+
+            {/* The chips above only ever cover what the guess happens to
+                match, which is nothing for a dish this catalogue has no
+                category for at all. This is the same Category field the
+                manual form uses, so a category can always be picked here
+                directly rather than only by bailing out to manual entry. */}
+            {categories.isError ? (
+              <ErrorState
+                title="Categories unavailable"
+                message={describeError(categories.error)}
+                onRetry={() => void categories.refetch()}
+              />
+            ) : (
+              <Select
+                label="Category"
+                value={categoryId === null ? null : String(categoryId)}
+                options={categoryOptions}
+                onChange={chooseCategory}
+                placeholder={
+                  categories.isLoading
+                    ? 'Loading categories'
+                    : `Search ${categoryOptions.length} categories`
+                }
+                hint={
+                  selectedCategory
+                    ? `Usually ${formatNumber(selectedCategory.base_calorie_min)} to ${formatNumber(
+                      selectedCategory.base_calorie_max,
+                    )} kcal${selectedCategory.is_junk ? ', counts as junk' : ''}.`
+                    : 'Nothing above matching? Search the full list.'
+                }
+                disabled={categoryOptions.length === 0}
+                emptyText="Nothing matches that. Try a cuisine, for example Continental."
+              />
+            )}
 
             <View style={{ gap: spacing.sm }}>
               <ControlLabel>Serving size</ControlLabel>
@@ -763,7 +835,7 @@ export default function LogScreen() {
     results !== undefined && results.dishes.length === 0 && results.categories.length === 0;
 
   return (
-    <Screen title="Log a meal">
+    <Screen title="Log a meal" onBack={resetForm}>
       <View style={column}>
         {/* The one thing. 48 against a next largest of 21, and 32 of space
             beneath it against 24 between everything else. */}
