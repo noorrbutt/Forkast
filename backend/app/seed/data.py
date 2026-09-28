@@ -123,6 +123,10 @@ FOOD_CATEGORIES: list[CategorySeed] = [
     # to one kitchen (a bowl of soup, a coffee, a slice of cake) lives here.
     CategorySeed("continental", "soup", "Soup", 140, 250, is_junk=False),
     CategorySeed("continental", "salad", "Salad", 200, 360, is_junk=False),
+    # Fresh, whole fruit, not a dessert. A banana or an apple has nowhere else
+    # to go: every other category here is a prepared dish, and the closest
+    # miscategorises the calories as much as the name misdescribes the food.
+    CategorySeed("continental", "fruit", "Fruit", 70, 140, is_junk=False),
     CategorySeed("continental", "steak", "Steak", 550, 900, is_junk=False),
     CategorySeed("continental", "grilled_seafood", "Grilled Seafood", 380, 650, is_junk=False),
     CategorySeed("continental", "breakfast", "Breakfast", 450, 780, is_junk=False),
@@ -386,6 +390,13 @@ DISH_NAMES: dict[str, list[str]] = {
         "russian salad",
         "grilled chicken salad",
         "garden salad",
+    ],
+    "fruit": [
+        "banana",
+        "apple",
+        "orange",
+        "fruit bowl",
+        "mixed fruit plate",
     ],
     "steak": [
         "grilled tenderloin steak",
