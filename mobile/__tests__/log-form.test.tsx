@@ -158,6 +158,17 @@ async function openCategories(screen: ReturnType<typeof render>) {
   await waitFor(() => expect(screen.getByText('Pizza')).toBeTruthy());
 }
 
+/**
+ * The camera is the first thing the log screen shows now. Every test below
+ * exercises the manual/text form specifically, so this reaches it the way a
+ * real person would: past the capture screen, by tapping the escape hatch.
+ */
+function renderManualForm(): ReturnType<typeof render> {
+  const initial = render(<LogScreen />, { wrapper });
+  fireEvent.press(initial.getByText('Type it in instead'));
+  return initial;
+}
+
 /** Fills in the two things the form refuses to be submitted without. */
 async function fillTheMinimum(screen: ReturnType<typeof render>) {
   fireEvent.changeText(screen.getByPlaceholderText('Chicken karahi'), 'Margherita');
@@ -168,7 +179,7 @@ async function fillTheMinimum(screen: ReturnType<typeof render>) {
 
 describe('choosing a category', () => {
   it('finds a cuisine by name, not only the category names under it', async () => {
-    const screen = render(<LogScreen />, { wrapper });
+    const screen = renderManualForm();
     await openCategories(screen);
 
     fireEvent.changeText(screen.getByPlaceholderText('Search'), 'italian');
@@ -180,7 +191,7 @@ describe('choosing a category', () => {
   });
 
   it('fills the cuisine in too, because picking one answers both', async () => {
-    const screen = render(<LogScreen />, { wrapper });
+    const screen = renderManualForm();
     await openCategories(screen);
 
     fireEvent.press(screen.getByText('Pizza'));
@@ -192,7 +203,7 @@ describe('choosing a category', () => {
   });
 
   it('says what the calorie estimate will be built from', async () => {
-    const screen = render(<LogScreen />, { wrapper });
+    const screen = renderManualForm();
     await openCategories(screen);
 
     fireEvent.press(screen.getByText('Pizza'));
@@ -203,7 +214,7 @@ describe('choosing a category', () => {
 
 describe('the saved estimate', () => {
   it('shows the estimator reported by health beside the saved estimate', async () => {
-    const screen = render(<LogScreen />, { wrapper });
+    const screen = renderManualForm();
     await fillTheMinimum(screen);
 
     fireEvent.press(screen.getByText('Log it'));
@@ -213,7 +224,7 @@ describe('the saved estimate', () => {
   });
 
   it('reacts to the category actually logged, not a generic success line', async () => {
-    const screen = render(<LogScreen />, { wrapper });
+    const screen = renderManualForm();
     await fillTheMinimum(screen);
 
     fireEvent.press(screen.getByText('Log it'));
@@ -234,7 +245,7 @@ describe('a photo picked before there is a meal to put it on', () => {
         }),
     );
 
-    const screen = render(<LogScreen />, { wrapper });
+    const screen = renderManualForm();
 
     fireEvent.press(screen.getByText('Take a photo'));
     await waitFor(() => expect(screen.getByText('Retake')).toBeTruthy());
@@ -264,7 +275,7 @@ describe('a photo picked before there is a meal to put it on', () => {
   });
 
   it('sends the shrunk copy, not the four thousand pixel original', async () => {
-    const screen = render(<LogScreen />, { wrapper });
+    const screen = renderManualForm();
 
     fireEvent.press(screen.getByText('Take a photo'));
     await waitFor(() => expect(screen.getByText('Retake')).toBeTruthy());
@@ -283,7 +294,7 @@ describe('a photo picked before there is a meal to put it on', () => {
   it('keeps the meal when the upload is refused, and says the photo missed', async () => {
     mockedApi.put.mockRejectedValue(new Error('Request failed with status 413'));
 
-    const screen = render(<LogScreen />, { wrapper });
+    const screen = renderManualForm();
 
     fireEvent.press(screen.getByText('Take a photo'));
     await waitFor(() => expect(screen.getByText('Retake')).toBeTruthy());
@@ -299,7 +310,7 @@ describe('a photo picked before there is a meal to put it on', () => {
   });
 
   it('submits without a photo, which is the ordinary case', async () => {
-    const screen = render(<LogScreen />, { wrapper });
+    const screen = renderManualForm();
 
     await fillTheMinimum(screen);
     fireEvent.press(screen.getByText('Log it'));

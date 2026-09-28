@@ -1,7 +1,8 @@
+import axios from 'axios';
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Image, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { MealPhoto } from '../../components/MealPhoto';
@@ -10,7 +11,7 @@ import { Button, Card, Chip, ControlLabel, ErrorState, EstimateSourceLabel, Fiel
 import { useCategories, useCuisines, useSearch } from '../../hooks/useCatalog';
 import { useEstimatorSource } from '../../hooks/useHealth';
 import { useCreateLog } from '../../hooks/useLogs';
-import { useSetPhoto, type PickedPhoto } from '../../hooks/usePhoto';
+import { useEstimatePhoto, useSetPhoto, usePhotoPicker, type PickedPhoto } from '../../hooks/usePhoto';
 import { useRestaurants } from '../../hooks/useRestaurants';
 import { describeError } from '../../lib/api';
 import { haptics } from '../../lib/haptics';
@@ -27,6 +28,7 @@ import {
   SERVING_SIZES,
   type FoodLog,
   type FriendScale,
+  type PhotoEstimate,
   type RefId,
   type Uuid,
   type LogInput,
@@ -100,6 +102,20 @@ import { motion } from '../../theme/motion';
  *    two `Empty` cards, replaced by a sentence and the one button that fixes
  *    the situation.
  *
+ * A third state, ahead of both of the above: the camera. This screen used to
+ * open directly on the form; it now opens on a capture screen instead, since a
+ * photo is the fastest way to log a meal and typing one in is the deliberate
+ * fallback rather than the default. The one thing there is the same question
+ * this screen has always asked, "What did you eat?", answered by a button
+ * instead of a field. A photo hands back a guess with no category attached to
+ * it yet, so it opens a fourth state, confirm, which is deliberately not a
+ * second copy of the form: it shows only what a photo can answer for itself
+ * (the dish, a portion, a calorie preview) plus the fastest way to pick a
+ * category, which is the same dish search the form already has, run against
+ * the guess instead of against what someone typed. Saving from there still
+ * goes through the exact same submit() and the exact same POST /logs the form
+ * uses, so a photo-confirmed meal and a typed one are priced identically.
+ *
  * Why the estimate is NOT a hero on the form.
  *
  * It was the obvious candidate and it is the wrong call twice over. The number
@@ -119,6 +135,13 @@ import { motion } from '../../theme/motion';
 
 /** Stands for "no cuisine filter". Never collides with an id, which is numeric. */
 const ANY_CUISINE = 'any';
+
+/** What the confirm screen says about how much to trust the guess. */
+const CONFIDENCE_COPY: Record<PhotoEstimate['confidence'], string> = {
+  high: 'Forkast is fairly sure about this one.',
+  medium: 'A decent guess, worth a glance before you log it.',
+  low: 'Not very sure about this one. Take a look before logging it.',
+};
 
 /**
  * How wide the form is allowed to get, and what centring it actually means.
@@ -140,7 +163,7 @@ const ANY_CUISINE = 'any';
 type PhotoStatus = 'none' | 'uploading' | 'attached' | 'failed';
 
 export default function LogScreen() {
-  const { colors, layout, spacing, type } = useTheme();
+  const { colors, layout, radius, spacing, type } = useTheme();
   const router = useRouter();
   const estimatorSource = useEstimatorSource();
 
@@ -158,6 +181,14 @@ export default function LogScreen() {
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
   const [photoStatus, setPhotoStatus] = useState<PhotoStatus>('none');
   const [saved, setSaved] = useState<FoodLog | null>(null);
+  // The screen opens on the camera and only ever leaves it forward, to
+  // confirm or to manual, or back to itself on "Log another". Nothing sends
+  // it back to capture from manual: once someone has chosen to type, forcing
+  // them back through the camera on the next field would be the app
+  // second-guessing a choice it already asked for.
+  const [mode, setMode] = useState<'capture' | 'confirm' | 'manual'>('capture');
+  const [estimate, setEstimate] = useState<PhotoEstimate | null>(null);
+  const [estimateNotice, setEstimateNotice] = useState<string | null>(null);
   // The one entrance this screen ever plays. Keyed on the saved log's id
   // rather than firing from onSuccess directly, so it also fires correctly if
   // this state is ever restored rather than only just set, and so it cannot
@@ -190,9 +221,15 @@ export default function LogScreen() {
   // empty the list under the field that had just been filled in.
   const categories = useCategories(null);
   const search = useSearch(query);
+  // A second, independent search against whatever a photo guessed, so the
+  // confirm screen can offer the same quick dish/category chips the form
+  // already has without the two queries fighting over one piece of state.
+  const guessSearch = useSearch(estimate?.dish_guess ?? '');
   const restaurants = useRestaurants(restaurantName);
   const createLog = useCreateLog();
   const uploadPhoto = useSetPhoto();
+  const estimatePhoto = useEstimatePhoto();
+  const photoPicker = usePhotoPicker();
 
   const selectedCategory = useMemo(
     () => (categories.data ?? []).find((category) => String(category.id) === String(categoryId)) ?? null,
@@ -261,8 +298,46 @@ export default function LogScreen() {
     setPhoto(null);
     setPhotoStatus('none');
     setRefused(false);
+    setMode('capture');
+    setEstimate(null);
+    setEstimateNotice(null);
     createLog.reset();
     uploadPhoto.reset();
+    estimatePhoto.reset();
+  };
+
+  /**
+   * Take or choose a photo, then read it, then land on the confirm screen.
+   *
+   * A declined permission or a cancelled picker hands back null and is not an
+   * error: the person changed their mind, and the capture screen just sits
+   * there with its buttons still live. A 429 gets its own message and drops
+   * straight to the manual form rather than leaving someone stuck on a
+   * screen whose one button just told them no.
+   */
+  const captureAndEstimate = async (fromCamera: boolean) => {
+    setEstimateNotice(null);
+    const picked = await photoPicker.pick(fromCamera);
+    if (!picked) return;
+    setPhoto(picked);
+
+    estimatePhoto.mutate(picked, {
+      onSuccess: (result) => {
+        haptics.tap();
+        setEstimate(result);
+        setDishName(result.dish_guess);
+        setMode('confirm');
+      },
+      onError: (error) => {
+        haptics.error();
+        if (axios.isAxiosError(error) && error.response?.status === 429) {
+          setEstimateNotice("You've hit the photo-scan limit for now, try typing this one in.");
+          setMode('manual');
+          return;
+        }
+        setEstimateNotice(describeError(error));
+      },
+    });
   };
 
   const pickCuisine = (next: RefId | null) => {
@@ -469,6 +544,217 @@ export default function LogScreen() {
     );
   }
 
+  if (mode === 'capture') {
+    const busy = photoPicker.preparing || estimatePhoto.isPending;
+
+    return (
+      <Screen title="Log a meal">
+        <View style={column}>
+          <View style={{ gap: spacing.sm, paddingBottom: spacing.sm }}>
+            <Text style={[type.display, { color: colors.text }]}>What did you eat?</Text>
+            <Text style={[type.body, { color: colors.muted }]}>
+              Snap a photo and Forkast guesses the dish, the portion and the calories. Typing it in
+              yourself works just as well.
+            </Text>
+          </View>
+
+          {busy ? <Loading label="Looking at your photo" /> : null}
+          {estimateNotice ? <FormError>{estimateNotice}</FormError> : null}
+
+          <View style={{ gap: spacing.md }}>
+            <Button
+              label="Take a photo"
+              icon="camera"
+              size="lg"
+              full
+              loading={busy}
+              onPress={() => void captureAndEstimate(true)}
+            />
+            <Button
+              label="Choose from library"
+              variant="secondary"
+              size="lg"
+              full
+              disabled={busy}
+              onPress={() => void captureAndEstimate(false)}
+            />
+            <Button
+              label="Type it in instead"
+              variant="ghost"
+              size="lg"
+              full
+              disabled={busy}
+              onPress={() => {
+                setEstimateNotice(null);
+                setMode('manual');
+              }}
+            />
+          </View>
+        </View>
+      </Screen>
+    );
+  }
+
+  if (mode === 'confirm' && estimate) {
+    // Same length gate the manual search uses, applied to the guess instead
+    // of to what someone typed, so a one or two word guess with nothing
+    // useful to match does not show an empty "Matches" heading over nothing.
+    const guessResults = estimate.dish_guess.trim().length >= 2 ? guessSearch.data : undefined;
+
+    return (
+      <Screen title="Log a meal">
+        <View style={column}>
+          <View style={{ gap: spacing.sm, paddingBottom: spacing.sm }}>
+            <Text style={[type.display, { color: colors.text }]}>Is this right?</Text>
+            <Text style={[type.body, { color: colors.muted }]}>
+              {CONFIDENCE_COPY[estimate.confidence]}
+            </Text>
+          </View>
+
+          <View style={group}>
+            {photo ? (
+              <View
+                style={{
+                  borderRadius: radius.card,
+                  overflow: 'hidden',
+                  aspectRatio: 4 / 3,
+                  backgroundColor: colors.surfaceAlt,
+                }}
+              >
+                <Image
+                  source={{ uri: photo.uri }}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                  accessibilityIgnoresInvertColors
+                />
+              </View>
+            ) : null}
+
+            <Field
+              label="Dish"
+              value={dishName}
+              onChangeText={setDishName}
+              placeholder="Chicken karahi"
+            />
+
+            {/* The fastest way to a category: the same dish search the manual
+                form uses, run against the guess instead of against typing.
+                Picking one of these is what actually resolves a category --
+                the guess alone never does, since a photo has no category on
+                it at all. */}
+            {guessResults && guessResults.dishes.length > 0 ? (
+              <View style={{ gap: spacing.sm }}>
+                <ControlLabel>Matches this dish</ControlLabel>
+                <View style={optionRow}>
+                  {guessResults.dishes.slice(0, 4).map((dish, index) => (
+                    <Chip
+                      key={`${dish.dish_name}-${index}`}
+                      label={dish.dish_name}
+                      selected={dishName === dish.dish_name && categoryId === dish.category_id}
+                      showCheck
+                      style={optionChip}
+                      onPress={() => {
+                        setDishName(dish.dish_name);
+                        setCategoryId(dish.category_id);
+                      }}
+                    />
+                  ))}
+                </View>
+              </View>
+            ) : null}
+
+            {guessResults && guessResults.categories.length > 0 ? (
+              <View style={{ gap: spacing.sm }}>
+                <ControlLabel>Or the category</ControlLabel>
+                <View style={optionRow}>
+                  {guessResults.categories.slice(0, 4).map((category) => (
+                    <Chip
+                      key={String(category.id)}
+                      label={category.name}
+                      selected={String(categoryId) === String(category.id)}
+                      showCheck
+                      style={optionChip}
+                      onPress={() => {
+                        setCuisineId(category.cuisine_id);
+                        setCategoryId(category.id);
+                      }}
+                    />
+                  ))}
+                </View>
+              </View>
+            ) : null}
+
+            <View style={{ gap: spacing.sm }}>
+              <ControlLabel>Serving size</ControlLabel>
+              <View style={optionRow}>
+                {SERVING_SIZES.map((size) => (
+                  <Chip
+                    key={size}
+                    label={SERVING_LABELS[size]}
+                    selected={servingSize === size}
+                    showCheck
+                    style={optionChip}
+                    onPress={() => setServingSize(size)}
+                  />
+                ))}
+              </View>
+            </View>
+
+            <View style={{ gap: spacing.xs }}>
+              <Text style={[type.title, { color: colors.text }]}>
+                About {formatNumber(Math.round(estimate.calories))} kcal
+              </Text>
+              <Text style={[type.caption, { color: colors.muted }]}>
+                {formatNumber(Math.round(estimate.macros.protein_g))}g protein ·{' '}
+                {formatNumber(Math.round(estimate.macros.carbs_g))}g carbs ·{' '}
+                {formatNumber(Math.round(estimate.macros.fat_g))}g fat
+              </Text>
+              <Text style={[type.caption, { color: colors.muted }]}>
+                A preview from the photo alone. The saved figure comes from the category you pick,
+                same as it always does.
+              </Text>
+            </View>
+          </View>
+
+          {createLog.isError ? <FormError>{describeError(createLog.error)}</FormError> : null}
+
+          <View style={{ gap: spacing.sm }}>
+            {/* Never disabled, same reasoning as the manual form's own button:
+                an unresolved category is answered by the line below rather
+                than by making the control unpressable. */}
+            <Button
+              label={createLog.isPending ? 'Saving' : 'Log it'}
+              icon="check"
+              size="lg"
+              full
+              onPress={submit}
+              loading={createLog.isPending}
+            />
+
+            {outstanding ? (
+              <Text
+                style={[
+                  type.caption,
+                  { color: refused ? colors.danger : colors.muted, textAlign: 'center' },
+                ]}
+              >
+                {outstanding}
+              </Text>
+            ) : null}
+
+            <Button
+              label="Not right? Edit manually"
+              variant="ghost"
+              size="lg"
+              full
+              onPress={() => setMode('manual')}
+            />
+          </View>
+        </View>
+      </Screen>
+    );
+  }
+
   // Results only count once the query is long enough to have produced them, so
   // this is undefined rather than empty while someone is still typing the first
   // letter. Held in one const so the blocks below narrow off it.
@@ -489,6 +775,12 @@ export default function LogScreen() {
             from.
           </Text>
         </View>
+
+        {/* Only ever set by a failed photo estimate landing here on its own,
+            see captureAndEstimate. Cleared by resetForm, not by anything on
+            this screen, so it survives exactly as long as it takes to notice
+            it and does not vanish the moment a field is touched. */}
+        {estimateNotice ? <FormError>{estimateNotice}</FormError> : null}
 
         {/* Group one: the meal, and the two answers the estimate is built out
             of. No heading, because the question above it is the heading. */}

@@ -37,6 +37,7 @@ const GLYPHS = {
   map: 'map',
   history: { outline: 'time-outline', filled: 'time' },
   meal: 'restaurant',
+  camera: { outline: 'camera-outline', filled: 'camera' },
   forward: 'chevron-forward',
   check: 'checkmark',
   close: 'close',

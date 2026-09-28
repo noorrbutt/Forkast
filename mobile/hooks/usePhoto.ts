@@ -4,7 +4,7 @@ import { API_BASE_URL, api, getAccessToken } from '../lib/api';
 import { useAuthedImage } from '../lib/authedImage';
 import { pickImage, useImagePicker, type PickedImage } from '../lib/pickImage';
 import { appendFile } from '../lib/upload';
-import type { FoodLog, Uuid } from '../lib/types';
+import type { FoodLog, PhotoEstimate, Uuid } from '../lib/types';
 
 /**
  * Bumped every time any meal photo changes.
@@ -120,6 +120,37 @@ export function useSetPhoto() {
       revision += 1;
       queryClient.setQueryData(['log', log.id], log);
       void queryClient.invalidateQueries({ queryKey: ['logs'] });
+    },
+  });
+}
+
+/**
+ * Read a photo and guess what is on it, without saving anything.
+ *
+ * No log id involved at all, unlike useSetPhoto: this runs before a meal
+ * exists, which is the whole point of leading the log form with the camera.
+ * The estimate it returns is a preview -- confirming still goes through the
+ * ordinary create-log call once a category has been picked, the same as
+ * typing a dish name does.
+ */
+export function useEstimatePhoto() {
+  return useMutation({
+    mutationFn: async (picked: PickedPhoto) => {
+      const form = new FormData();
+      await appendFile(form, 'file', {
+        uri: picked.uri,
+        name: `meal.${picked.mimeType.split('/')[1] ?? 'jpg'}`,
+        mimeType: picked.mimeType,
+      });
+
+      const response = await api.post<PhotoEstimate>('/logs/estimate-photo', form, {
+        // Left to the runtime, same reasoning as useSetPhoto: axios has to set
+        // the multipart boundary itself, and naming the content type here
+        // strips it.
+        headers: { 'Content-Type': undefined },
+        transformRequest: (value) => value,
+      });
+      return response.data;
     },
   });
 }

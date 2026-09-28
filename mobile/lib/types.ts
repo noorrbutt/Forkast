@@ -81,6 +81,26 @@ export type SearchResults = {
   dishes: DishHit[];
 };
 
+export type PhotoMacros = {
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+};
+
+/**
+ * A preview, not a saved figure. There is no category yet at this point, so
+ * `calories` is never clamped to a known range the way a saved log's is --
+ * confirming still goes through the ordinary create-log call once a category
+ * has been picked, and that is what actually prices the meal.
+ */
+export type PhotoEstimate = {
+  dish_guess: string;
+  calories: number;
+  macros: PhotoMacros;
+  confidence: 'high' | 'medium' | 'low';
+  reasoning: string | null;
+};
+
 export type Restaurant = {
   id: Uuid;
   name: string;
