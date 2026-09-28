@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RefreshControl, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
-import { Button, Card, Dialog, ErrorState, Hero, HeroWash, Loading, Screen } from '../../components/ui';
+import { Button, Card, Dialog, ErrorState, FlameMeter, Hero, HeroWash, Loading, Screen } from '../../components/ui';
 import { useStreaks } from '../../hooks/useInsights';
 import { describeError } from '../../lib/api';
 import { formatDate } from '../../lib/format';
@@ -180,37 +180,26 @@ export default function StreaksScreen() {
         {data && started ? (
           <>
             {/* The one editorial moment on this screen, and the only thing
-                that gets it: `heroStat` at 88pt on the hero wash, rather than
-                `hero`'s 64 on flat background. The streak count is the whole
-                reason this tab exists, with nothing else on the screen
-                competing for size, which is a stronger claim than the
-                dashboard's net figure can make sharing its screen with a
-                chart and a trend card -- see heroStat's own note in
-                tokens.ts for why that earns a size hero itself does not
-                reach. HeroWash is "one per screen, under the hero only", so
-                nothing else here may take one. */}
+                that gets it: the streak count inside a custom drawn flame,
+                rather than a bare number even at `heroStat`'s 88pt. The
+                streak count is the whole reason this tab exists, with
+                nothing else on the screen competing for attention, which is
+                a stronger claim than the dashboard's net figure can make
+                sharing its screen with a chart and a trend card. HeroWash is
+                "one per screen, under the hero only", so nothing else here
+                may take one.
+
+                FlameMeter carries its own colour: the number sits on
+                `accentFill`, the same fill a primary button uses, so it
+                takes `accentInk` regardless of whether the run is live or
+                just broken. The sage-versus-ink distinction the plain
+                number used to draw doesn't disappear, the flame's own
+                intensity (see FlameMeter's own note on `INTENSITY_CAP_DAYS`)
+                is what now answers "is this one running": small and calm at
+                zero, taller and faster the longer it has gone. */}
             <HeroWash>
               <View style={{ alignItems: 'center', gap: spacing.xs }}>
-                {/*
-                 * Sage while the run is live, ink once it is broken.
-                 *
-                 * It used to be saffron, which is wrong twice over: saffron is the
-                 * one action colour and a figure wearing it looks tappable, and
-                 * the palette's own note on sage names "a live streak" as the
-                 * example of what it is for. The same fact was being drawn in two
-                 * colours depending on which file you were in.
-                 *
-                 * Zero stays ink, so it reads as a reading rather than as a thing
-                 * to celebrate. The number still carries the meaning on its own.
-                 */}
-                <Text
-                  style={[
-                    type.heroStat,
-                    { color: current > 0 ? colors.success : colors.text, textAlign: 'center' },
-                  ]}
-                >
-                  {current}
-                </Text>
+                <FlameMeter value={current} />
                 <Text style={[type.body, { color: colors.muted, textAlign: 'center' }]}>
                   {current === 1 ? 'day without junk' : 'days without junk'}
                 </Text>
