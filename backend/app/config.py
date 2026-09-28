@@ -74,6 +74,10 @@ class Settings(BaseSettings):
     refine_rate_limit: int = Field(default=60, alias="REFINE_RATE_LIMIT")
     log_daily_limit: int = Field(default=300, alias="LOG_DAILY_LIMIT")
     photo_daily_limit: int = Field(default=100, alias="PHOTO_DAILY_LIMIT")
+    # Separate from photo_daily_limit: attaching a photo to a saved meal is one
+    # database write, while estimating from one is a vision model call and the
+    # only route besides /plans that costs real money once Groq is behind it.
+    photo_estimate_daily_limit: int = Field(default=60, alias="PHOTO_ESTIMATE_DAILY_LIMIT")
     restaurant_daily_limit: int = Field(default=20, alias="RESTAURANT_DAILY_LIMIT")
 
     default_timezone: str = Field(default="Asia/Karachi", alias="DEFAULT_TIMEZONE")
@@ -81,6 +85,13 @@ class Settings(BaseSettings):
     ai_provider: AIProvider = Field(default=AIProvider.fake, alias="AI_PROVIDER")
     groq_api_key: SecretStr | None = Field(default=None, alias="GROQ_API_KEY")
     groq_model: str = Field(default="openai/gpt-oss-20b", alias="GROQ_MODEL")
+    # A kill switch, not a provider swap: AI_PROVIDER=fake already turns off
+    # real Groq spend everywhere, for local dev and CI. This is for a live
+    # AI_PROVIDER=groq deployment where photo estimation specifically needs to
+    # be switched off in an emergency -- a cost spike, a bad incident with the
+    # vision model -- without a redeploy or touching anything else the same
+    # provider serves, such as plans or text calorie refinement.
+    photo_estimate_enabled: bool = Field(default=True, alias="PHOTO_ESTIMATE_ENABLED")
     resend_api_key: SecretStr | None = Field(default=None, alias="RESEND_API_KEY")
     resend_from_email: str = Field(default="", alias="RESEND_FROM_EMAIL")
 
@@ -149,6 +160,22 @@ class Settings(BaseSettings):
     # Plans are the only route that costs real money once Groq is behind it.
     plan_rate_limit: int = Field(default=20, alias="PLAN_RATE_LIMIT")
     plan_rate_window_seconds: int = Field(default=3600, alias="PLAN_RATE_WINDOW_SECONDS")
+
+    # Photo estimation is the other route that costs real money once Groq is
+    # behind it, and it is meaningfully more expensive per call than either of
+    # those: the request carries a whole image rather than a few hundred bytes
+    # of JSON, it runs a vision model rather than a text one, and vision
+    # inference is slower. It gets its own short-window limit rather than
+    # sharing plan_rate_limit or refine_rate_limit, tighter than plans since a
+    # camera is now the default way to log a meal and someone genuinely using
+    # the app will call this far more often than they generate a plan.
+    # photo_estimate_daily_limit above is the second, longer-window cap on
+    # the same route -- this one catches a burst, that one catches someone
+    # stayed well under the burst limit but ran it all day.
+    photo_estimate_rate_limit: int = Field(default=15, alias="PHOTO_ESTIMATE_RATE_LIMIT")
+    photo_estimate_rate_window_seconds: int = Field(
+        default=3600, alias="PHOTO_ESTIMATE_RATE_WINDOW_SECONDS"
+    )
 
     # Argon2id cost parameters, matching argon2-cffi's own OWASP-aligned
     # defaults (t=3, m=64 MiB, p=4). Overridable rather than hardcoded in

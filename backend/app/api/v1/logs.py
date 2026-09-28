@@ -39,8 +39,9 @@ from app.schemas.logs import FoodLogCreate, FoodLogOut, FoodLogPage, FoodLogUpda
 from app.services.ai.base import AIService
 from app.services.ai.deps import EstimateSource, get_ai_service, get_estimate_source
 from app.services.ai.groq_service import GroqResponseError
-from app.services.ai.schemas import CalorieAdjustRequest
+from app.services.ai.schemas import CalorieAdjustRequest, PhotoCalorieEstimate
 from app.services.calories import finalise_estimate
+from app.services.images import compress_for_estimation
 from app.services.insights import build_trend
 from app.services.rate_limit import account_identity
 
@@ -338,6 +339,124 @@ async def create_log(
     # own session, and after the response is built, so nobody waits for it.
     background.add_task(_refine_estimate, created.id, created.category_id, ai, factory)
     return _food_log_out(created, estimate_source)
+
+
+@logs_router.post("/estimate-photo", response_model=PhotoCalorieEstimate)
+async def estimate_photo(
+    user: CurrentUser,
+    ai: AIDep,
+    estimate_source: EstimateSourceDep,
+    limiter: RateLimiterDep,
+    file: Annotated[UploadFile, File()],
+) -> PhotoCalorieEstimate:
+    """Read a photo and guess what is on it, without saving anything.
+
+    The camera is the primary way to log a meal now, and nobody should have to
+    trust a guess sight unseen: this exists so the app can show what the model
+    thinks it saw and let the estimate be confirmed or corrected before it
+    becomes a log. There is no category yet at this point, so the calorie
+    figure returned here is a preview rather than the number that ends up
+    stored -- saving still goes through POST /logs once a category has been
+    picked (by search, by a suggested match, or by hand), and that route prices
+    the meal the same way it prices every other log, text or photo.
+
+    Declared ahead of GET/PATCH/DELETE /logs/{log_id} in this file on purpose:
+    those all capture a single path segment as log_id and FastAPI matches
+    routes in declaration order, so a route registered after them would never
+    be reached, Starlette would try to parse "estimate-photo" as a UUID first
+    and 422 before this function ever ran.
+
+    The rate limiting, the kill switch and the downscale below all exist for
+    one reason: unlike every other AI call in this app, a vision request bills
+    for a whole image rather than a few hundred bytes of JSON, and a camera is
+    now the default way to log a meal. None of that is a real cost while the
+    fake estimator is in use -- it does not look at the bytes at all -- so all
+    three are skipped outright in that mode.
+
+    Gated on `estimate_source` rather than reading settings.ai_provider
+    directly, and that is not a style choice: get_estimate_source is a
+    dependency, so the test suite's deterministic_ai fixture (conftest.py)
+    overrides it straight to "local" for every test regardless of what a
+    developer's own .env happens to have AI_PROVIDER set to. Reading the
+    setting directly here would silently disagree with which AIService is
+    actually injected below and rate-limit, kill-switch and compress against a
+    live setting while `ai` itself was quietly the deterministic stub.
+    """
+    settings = get_settings()
+    live = estimate_source == "ai"
+
+    if live and not settings.photo_estimate_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Photo scanning is temporarily unavailable. Try typing this one in.",
+        )
+
+    if live:
+        # Short window first: it is the one that actually stops a burst, and
+        # failing fast on it means a caller who is about to be blocked by the
+        # daily cap anyway does not also pay for a second counter increment.
+        await limiter.hit(
+            "photo-estimate",
+            account_identity(user.id),
+            limit=settings.photo_estimate_rate_limit,
+            window_seconds=settings.photo_estimate_rate_window_seconds,
+        )
+        await limiter.hit(
+            "photo-estimate-day",
+            account_identity(user.id),
+            limit=settings.photo_estimate_daily_limit,
+            window_seconds=86400,
+        )
+
+    # Read with one byte of headroom so a file exactly on the limit passes and
+    # anything over it is caught here rather than deep inside an upload to a
+    # provider that will never see it.
+    data = await file.read(MAX_PHOTO_BYTES + 1)
+    if len(data) > MAX_PHOTO_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"Photos must be {MAX_PHOTO_BYTES // 1024} KB or smaller.",
+        )
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="That file was empty.",
+        )
+
+    content_type = _sniff(data)
+    if content_type is None:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Photos must be JPEG, PNG or WebP.",
+        )
+
+    send_data, send_content_type = data, content_type
+    if live:
+        try:
+            send_data = compress_for_estimation(data)
+            send_content_type = "image/jpeg"
+        except Exception as exc:
+            # _sniff already confirmed a real signature, so a decode failure
+            # here means the file is truncated or otherwise corrupt past its
+            # header rather than genuinely not an image.
+            logger.warning("Could not downscale an uploaded photo", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="That photo could not be read. Try another one.",
+            ) from exc
+
+    try:
+        return await ai.estimate_from_photo(send_data, send_content_type)
+    except GroqResponseError as exc:
+        # Same reasoning as _estimate_calories: the provider is upstream of us,
+        # so its failure is a 502. Nothing has been persisted, so there is
+        # nothing to roll back and no meal at risk of being lost, unlike a
+        # provider outage during a text log.
+        logger.warning("Photo calorie estimation failed", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The photo estimator is unavailable.",
+        ) from exc
 
 
 @logs_router.get("", response_model=FoodLogPage)
