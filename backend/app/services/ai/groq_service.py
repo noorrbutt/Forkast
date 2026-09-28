@@ -18,7 +18,15 @@ signature:
 
 Do not switch the model to ``llama-3.3-70b-versatile`` or
 ``llama-3.1-8b-instant``: both were shut down on 2026-08-16 even though they
-lingered on the models page.
+lingered on the models page. The same goes for
+``meta-llama/llama-4-scout-17b-16e-instruct`` as a vision model: it is gone
+too (a live call now 404s with ``model_not_found``), which is what VISION_MODEL
+below actually runs against instead. Checked directly against
+``GET /openai/v1/models`` on 2026-09-28: the only model on this account whose
+``input_modalities`` includes ``image`` is ``qwen/qwen3.8-27b``, which is also
+the second model named in the structured-output note above -- so it is not a
+downgrade, it is the model this seam's own strict-JSON requirement was already
+written to expect.
 
 The model is never trusted to respect the calorie range. It is asked to stay
 inside it, the schema constrains the shape of the reply, and then the caller
@@ -77,7 +85,12 @@ PHOTO_CALORIE_MAX_TOKENS = 1024
 # configured, but a photo needs a vision-capable one, and only one is in use
 # here. Not read from settings, on purpose -- an operator changing GROQ_MODEL
 # to a text-only model must not silently break photo estimation.
-VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+#
+# qwen/qwen3.8-27b, not a Llama model: see the module docstring for what was
+# tried first and why it 404s now. This is also the only model on the account
+# both capable of reading an image at all and named in this file's own note
+# on which models support strict structured output.
+VISION_MODEL = "qwen/qwen3.8-27b"
 
 # Fragments that mark a failure as a coin toss rather than a standing problem.
 # Groq reports the empty generation case as a 400, which is ordinarily a
