@@ -191,6 +191,37 @@ describe('the diary', () => {
     expect(queryByText('NI')).toBeNull();
   });
 
+  it('gives a meal with a photo its own full width card, dish and figure included', async () => {
+    const { getByText, getByLabelText } = render(<HistoryScreen />, { wrapper });
+
+    // Nihari has a photo, so it renders through the card path rather than
+    // the compact row -- this is the whole point of the photo carrying the
+    // dish name and the calorie figure itself rather than sitting beside a
+    // thumbnail-sized copy of them.
+    await waitFor(() => expect(getByText('Nihari')).toBeTruthy());
+    expect(getByLabelText('Nihari, 820 kcal')).toBeTruthy();
+  });
+
+  it('still opens a photo meal when its card is tapped, the same as any other row', async () => {
+    const { getByText } = render(<HistoryScreen />, { wrapper });
+
+    await waitFor(() => expect(getByText('Nihari')).toBeTruthy());
+    fireEvent.press(getByText('Nihari'));
+
+    expect(mockPush).toHaveBeenCalledWith('/logs/log-nihari');
+  });
+
+  it('keeps a mixed day working: a photo meal next to a photoless one', async () => {
+    // Nihari (photo) and Chicken biryani (no photo) share 2026-09-15, so this
+    // is the one day that actually exercises segmentMeals splitting a run of
+    // compact rows away from a standalone photo card.
+    const { getByText } = render(<HistoryScreen />, { wrapper });
+
+    await waitFor(() => expect(getByText('Nihari')).toBeTruthy());
+    expect(getByText('Chicken biryani')).toBeTruthy();
+    expect(getByText(/1,640 kcal/)).toBeTruthy();
+  });
+
   /**
    * The diary is paged, and it says when there is no more of it.
    *

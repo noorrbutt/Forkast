@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, Pressable, RefreshControl, Text, View } from 'react-native';
@@ -10,6 +11,7 @@ import { SERVING_LABELS, formatNumber } from '../../lib/format';
 import { haptics } from '../../lib/haptics';
 import type { FoodLog, Uuid } from '../../lib/types';
 import { useTheme } from '../../theme';
+import { elevation } from '../../theme/tokens';
 
 /**
  * The diary.
@@ -68,12 +70,27 @@ import { useTheme } from '../../theme';
  *    now lives, so the repetition buys something. The cards are gone: a day is
  *    one surface with hairlines between its meals, so the screen holds one
  *    surface per day rather than one per meal.
+ *
+ * 5. The one exception to "every row is equal weight", and why it is not one.
+ *    A meal WITH a photo now renders as a full width photo card instead of the
+ *    compact row, taller than its neighbours. That is not a rank between
+ *    meals -- the guide's argument in section 3 above still holds, and a
+ *    photoless meal is not treated as lesser content. It is a rank between
+ *    the two things a row can be MADE OF: a photograph is the one piece of
+ *    genuinely rich content this app has anywhere, thumbnail-sized it was
+ *    being thrown away, and letting it stay small was the actual default no
+ *    one had decided on. The list is still one column of meals in the order
+ *    they happened; it is only the row's own height that now follows what it
+ *    has to show, which FlatList already handles per item without any of the
+ *    fixed-height assumptions a `getItemLayout` would have needed.
  */
 
 /** How long the confirmation stays on a row before the row goes quiet again. */
 const CONFIRMED_MS = 4000;
 
-/** The photo, square, large enough to recognise a dish and no larger. */
+/** The photo, square, large enough to recognise a dish and no larger. Used
+ * only by the compact, photoless row; a meal with a photo gets the full width
+ * card below instead. */
 const THUMB = 64;
 
 /**
@@ -85,6 +102,17 @@ const THUMB = 64;
  * an outlier wrap onto two lines at large system text sizes instead.
  */
 const CALORIES = 64;
+
+/** Inlined so the photo card does not pull in StyleSheet for one constant;
+ * `absoluteFill` exists as a style id but not as a typed plain object on
+ * this RN version, so this is the literal it resolves to. */
+const ABSOLUTE_FILL = {
+  position: 'absolute' as const,
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+};
 
 
 type DiaryDay = {
@@ -180,19 +208,64 @@ type MealRowProps = {
 };
 
 /**
- * One meal.
- *
- * Local to this screen rather than in components/ui because there is exactly
- * one caller: a meal row is a photo, a dish, a figure to compare and a repeat,
- * which is a different shape from the settings row `ListRow` exists for. If a
- * second screen ever needs it, it moves.
+ * Log again, the confirmation and the error. Shared between both row shapes
+ * because it is identical either way: repeating a meal is not a different
+ * action depending on whether it has a photo.
  */
-function MealRowBase({ log, last, onOpen, onRepeat, sending, confirmed, error }: MealRowProps) {
-  const { colors, radius, spacing, type } = useTheme();
+function MealActions({
+  log,
+  onRepeat,
+  sending,
+  confirmed,
+  error,
+}: Pick<MealRowProps, 'log' | 'onRepeat' | 'sending' | 'confirmed' | 'error'>) {
+  const { colors, spacing, type } = useTheme();
 
-  // Asked for only when the payload says there is one, so a meal without a
-  // photo never fires a request that can only come back empty.
-  const photo = usePhotoSource(log.has_photo ? log.id : null);
+  return (
+    <View style={{ gap: spacing.sm }}>
+      {/* Every row gets its own control rather than a swipe or a long press.
+          The whole point of repeating is to skip the trip through the meal,
+          and a gesture nobody can see is not a shortcut, it is a secret. */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: spacing.md,
+        }}
+      >
+        <Button
+          // Deliberately never disabled, however much a spinner would suit
+          // it. A disabled Pressable does not claim the touch, so the row
+          // underneath would take the second tap and open the meal, which is
+          // the one thing this button must not do. It stays live, absorbs the
+          // tap, and the guard in the screen refuses the duplicate. The label
+          // carries the state instead.
+          label={sending ? 'Logging' : 'Log again'}
+          variant="secondary"
+          icon="log"
+          onPress={() => onRepeat(log.id)}
+          accessibilityHint={`Adds ${log.dish_name} to today, with the time you tap it`}
+        />
+
+        {confirmed ? (
+          <Text style={[type.caption, { color: colors.success, flex: 1 }]}>
+            Logged again for today.
+          </Text>
+        ) : null}
+      </View>
+
+      {error ? <FormError>{error}</FormError> : null}
+    </View>
+  );
+}
+
+/**
+ * A meal with no photo. Compact: a monogram, the dish, the figure to compare,
+ * the way in.
+ */
+function CompactMealRow({ log, last, onOpen, onRepeat, sending, confirmed, error }: MealRowProps) {
+  const { colors, radius, spacing, type } = useTheme();
 
   const meta = [
     log.category?.name,
@@ -230,19 +303,10 @@ function MealRowBase({ log, last, onOpen, onRepeat, sending, confirmed, error }:
           overflow: 'hidden',
         }}
       >
-        {photo ? (
-          <Image
-            source={photo}
-            style={{ width: '100%', height: '100%' }}
-            resizeMode="cover"
-            accessibilityIgnoresInvertColors
-          />
-        ) : (
-          // Typographic, never a camera glyph in a grey box. A monogram is the
-          // same fallback the profile picture uses, so a missing image reads as
-          // a deliberate placeholder rather than as a failed load.
-          <Text style={[type.title, { color: colors.muted }]}>{initialsOf(log.dish_name)}</Text>
-        )}
+        {/* Typographic, never a camera glyph in a grey box. A monogram is the
+            same fallback the profile picture uses, so a missing image reads
+            as a deliberate placeholder rather than as a failed load. */}
+        <Text style={[type.title, { color: colors.muted }]}>{initialsOf(log.dish_name)}</Text>
       </View>
 
       <View style={{ flex: 1, gap: spacing.xs }}>
@@ -274,43 +338,138 @@ function MealRowBase({ log, last, onOpen, onRepeat, sending, confirmed, error }:
 
         {meta ? <Text style={[type.caption, { color: colors.muted }]}>{meta}</Text> : null}
 
-        {/* Every row gets its own control rather than a swipe or a long press.
-            The whole point of repeating is to skip the trip through the meal,
-            and a gesture nobody can see is not a shortcut, it is a secret. */}
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: spacing.md,
-            marginTop: spacing.sm,
-          }}
-        >
-          <Button
-            // Deliberately never disabled, however much a spinner would suit
-            // it. A disabled Pressable does not claim the touch, so the row
-            // underneath would take the second tap and open the meal, which is
-            // the one thing this button must not do. It stays live, absorbs the
-            // tap, and the guard in the screen refuses the duplicate. The label
-            // carries the state instead.
-            label={sending ? 'Logging' : 'Log again'}
-            variant="secondary"
-            icon="log"
-            onPress={() => onRepeat(log.id)}
-            accessibilityHint={`Adds ${log.dish_name} to today, with the time you tap it`}
+        <View style={{ marginTop: spacing.sm }}>
+          <MealActions
+            log={log}
+            onRepeat={onRepeat}
+            sending={sending}
+            confirmed={confirmed}
+            error={error}
           />
-
-          {confirmed ? (
-            <Text style={[type.caption, { color: colors.success, flex: 1 }]}>
-              Logged again for today.
-            </Text>
-          ) : null}
         </View>
-
-        {error ? <FormError>{error}</FormError> : null}
       </View>
     </Pressable>
   );
+}
+
+/**
+ * A meal WITH a photo. Full width, taller, the picture doing the work a
+ * 64pt square never could: dish name, figure and meta sit over the bottom of
+ * the image itself rather than beside a thumbnail of it.
+ *
+ * The gradient uses `colors.scrim`, the same token a modal backdrop sits on,
+ * not a one-off value invented here: the job is identical, making whatever is
+ * under a dark layer readable against it. What changes is what sits under it,
+ * a photograph instead of a screen, so the white text on top is a fixed
+ * value rather than a theme token -- a photo carries its own colours and
+ * `colors.text`, tuned to sit on this app's own two backgrounds, has no
+ * reason to be legible against someone's dinner.
+ */
+function PhotoMealRow({ log, last, onOpen, onRepeat, sending, confirmed, error }: MealRowProps) {
+  const { colors, isDark, radius, spacing, type } = useTheme();
+  const photo = usePhotoSource(log.id);
+
+  const meta = [
+    log.category?.name,
+    log.restaurant?.name ?? log.area,
+    SERVING_LABELS[log.serving_size],
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <View style={{ gap: spacing.md, paddingBottom: last ? 0 : spacing.lg }}>
+      <Pressable
+        onPress={() => onOpen(log.id)}
+        accessibilityRole="button"
+        accessibilityLabel={`${log.dish_name}, ${formatNumber(log.estimated_calories)} kcal`}
+        accessibilityHint="Opens this meal"
+        style={({ pressed }) => [
+          {
+            borderRadius: radius.card,
+            overflow: 'hidden',
+            backgroundColor: colors.surfaceAlt,
+            opacity: pressed ? 0.92 : 1,
+          },
+          // Same primary-surface treatment Card reserves for prominent
+          // content: this photo is the one piece of rich content the diary
+          // has, so it gets the full radius and, on light, the shadow that
+          // lifts it off the page.
+          !isDark ? elevation.light : null,
+        ]}
+      >
+        <View style={{ width: '100%', aspectRatio: 4 / 3 }}>
+          {photo ? (
+            <Image
+              source={photo}
+              style={ABSOLUTE_FILL}
+              resizeMode="cover"
+              accessibilityIgnoresInvertColors
+            />
+          ) : null}
+
+          {/* Only over the lower part of the photo, not the whole frame: the
+              food itself should read clearly, and the gradient exists solely
+              to buy the two lines of text at the bottom their contrast. */}
+          <LinearGradient
+            colors={['transparent', colors.scrim]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            locations={[0.4, 1]}
+            style={ABSOLUTE_FILL}
+          />
+
+          <View
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              padding: spacing.lg,
+              gap: spacing.xs,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.md }}>
+              <Text
+                style={[type.subtitle, { color: '#FFFFFF', flex: 1 }]}
+                numberOfLines={2}
+              >
+                {log.dish_name}
+              </Text>
+              <Text
+                style={[
+                  type.body,
+                  { color: '#FFFFFF', fontVariant: ['tabular-nums'] },
+                ]}
+              >
+                {formatNumber(log.estimated_calories)}
+              </Text>
+            </View>
+            {meta ? (
+              <Text style={[type.caption, { color: 'rgba(255, 255, 255, 0.85)' }]}>{meta}</Text>
+            ) : null}
+          </View>
+        </View>
+      </Pressable>
+
+      <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
+        {log.estimate_source === 'local' ? <EstimateBadge /> : null}
+        <MealActions
+          log={log}
+          onRepeat={onRepeat}
+          sending={sending}
+          confirmed={confirmed}
+          error={error}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** One meal, shaped by whether it has a photo. See section 5 of the note
+ * above this file's rules. */
+function MealRowBase(props: MealRowProps) {
+  return props.log.has_photo ? <PhotoMealRow {...props} /> : <CompactMealRow {...props} />;
 }
 
 /**
@@ -328,6 +487,98 @@ function MealRowBase({ log, last, onOpen, onRepeat, sending, confirmed, error }:
  * comparator would only be one more thing to get wrong.
  */
 const MealRow = memo(MealRowBase);
+
+/**
+ * A day's meals, cut into runs of consecutive photoless meals and single
+ * photo meals, in the order they happened.
+ *
+ * A photo card carries its own rounded corners and, on light, its own
+ * shadow, which is the whole point of it. Sitting it inside ListGroup's
+ * bordered, overflow-hidden box -- the compact row's surface -- would mean
+ * nesting one card's chrome inside another's and clipping the photo card's
+ * shadow at the group's edge. So only a run of compact rows gets a
+ * ListGroup; a photo meal stands on its own between runs, which still
+ * renders every meal in encounter order and still groups the ones that share
+ * a surface, it just no longer forces every meal in a day onto one surface
+ * regardless of what kind of row it is.
+ */
+type MealSegment =
+  | { kind: 'group'; items: FoodLog[] }
+  | { kind: 'photo'; item: FoodLog };
+
+function segmentMeals(meals: FoodLog[]): MealSegment[] {
+  const segments: MealSegment[] = [];
+  for (const log of meals) {
+    if (log.has_photo) {
+      segments.push({ kind: 'photo', item: log });
+      continue;
+    }
+    const current = segments[segments.length - 1];
+    if (current?.kind === 'group') {
+      current.items.push(log);
+    } else {
+      segments.push({ kind: 'group', items: [log] });
+    }
+  }
+  return segments;
+}
+
+function DayGroup({
+  day,
+  onOpen,
+  onRepeat,
+  confirmed,
+  repeat,
+}: {
+  day: DiaryDay;
+  onOpen: (id: Uuid) => void;
+  onRepeat: (id: Uuid) => void;
+  confirmed: Uuid | null;
+  repeat: ReturnType<typeof useRepeatLog>;
+}) {
+  const { colors, spacing, type } = useTheme();
+  const segments = useMemo(() => segmentMeals(day.meals), [day.meals]);
+
+  const rowProps = (log: FoodLog) => ({
+    onOpen,
+    onRepeat,
+    sending: repeat.isPending && repeat.variables === log.id,
+    confirmed: confirmed === log.id,
+    error:
+      repeat.isError && repeat.variables === log.id ? describeError(repeat.error) : null,
+  });
+
+  return (
+    <View style={{ gap: spacing.sm }}>
+      {/* The heading ListGroup used to print via its own `title` prop, moved
+          out here now that a day can hold more than one surface: it names
+          the day once, above all of them, rather than repeating per run or
+          being unreachable for a day that opens on a photo. */}
+      <Text style={[type.labelSoft, { color: colors.muted, paddingHorizontal: spacing.xs }]}>
+        {`${day.heading} · ${formatNumber(day.total)} kcal`}
+      </Text>
+
+      <View style={{ gap: spacing.md }}>
+        {segments.map((segment, index) =>
+          segment.kind === 'photo' ? (
+            <PhotoMealRow key={segment.item.id} log={segment.item} last {...rowProps(segment.item)} />
+          ) : (
+            <ListGroup key={`group-${index}`}>
+              {segment.items.map((log, i) => (
+                <MealRow
+                  key={log.id}
+                  log={log}
+                  last={i === segment.items.length - 1}
+                  {...rowProps(log)}
+                />
+              ))}
+            </ListGroup>
+          ),
+        )}
+      </View>
+    </View>
+  );
+}
 
 /**
  * The diary list.
@@ -443,24 +694,7 @@ function DiaryList({
        already carried by the surface and the space around it, so the
        heading only has to name the day and say what it came to. */
     renderItem={({ item: day }) => (
-      <ListGroup title={`${day.heading} · ${formatNumber(day.total)} kcal`}>
-        {day.meals.map((log, index) => (
-          <MealRow
-            key={log.id}
-            log={log}
-            last={index === day.meals.length - 1}
-            onOpen={onOpen}
-            onRepeat={onRepeat}
-            sending={repeat.isPending && repeat.variables === log.id}
-            confirmed={confirmed === log.id}
-            error={
-              repeat.isError && repeat.variables === log.id
-                ? describeError(repeat.error)
-                : null
-            }
-          />
-        ))}
-      </ListGroup>
+      <DayGroup day={day} onOpen={onOpen} onRepeat={onRepeat} confirmed={confirmed} repeat={repeat} />
     )}
     ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
   />

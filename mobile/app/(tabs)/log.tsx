@@ -36,6 +36,7 @@ import {
 } from '../../lib/types';
 import { useTheme } from '../../theme';
 import { motion } from '../../theme/motion';
+import { elevation } from '../../theme/tokens';
 
 /**
  * Logging a meal, and the one screen state that follows it.
@@ -163,7 +164,7 @@ const CONFIDENCE_COPY: Record<PhotoEstimate['confidence'], string> = {
 type PhotoStatus = 'none' | 'uploading' | 'attached' | 'failed';
 
 export default function LogScreen() {
-  const { colors, layout, radius, spacing, type } = useTheme();
+  const { colors, isDark, layout, radius, spacing, type } = useTheme();
   const router = useRouter();
   const estimatorSource = useEstimatorSource();
 
@@ -635,13 +636,22 @@ export default function LogScreen() {
           <View style={group}>
             {photo ? (
               <View style={{ gap: spacing.sm }}>
+                {/* The one primary surface on this screen: full width, the
+                    large radius, and on light the same shadow Card reserves
+                    for a prominent surface (see Card's `prominent` prop).
+                    The photo just taken is the reason this screen exists, so
+                    it gets the same weight the diary now gives a photo row
+                    rather than sitting as a preview beside the text. */}
                 <View
-                  style={{
-                    borderRadius: radius.card,
-                    overflow: 'hidden',
-                    aspectRatio: 4 / 3,
-                    backgroundColor: colors.surfaceAlt,
-                  }}
+                  style={[
+                    {
+                      borderRadius: radius.card,
+                      overflow: 'hidden',
+                      aspectRatio: 4 / 3,
+                      backgroundColor: colors.surfaceAlt,
+                    },
+                    !isDark ? elevation.light : null,
+                  ]}
                 >
                   <Image
                     source={{ uri: photo.uri }}
