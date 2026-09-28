@@ -7,15 +7,31 @@ seed data, snapshot tests and demo screenshots stay stable across runs.
 from __future__ import annotations
 
 import hashlib
+from typing import Literal
 
 from app.services.ai.schemas import (
     CalorieAdjustRequest,
     CalorieAdjustResult,
+    PhotoCalorieEstimate,
+    PhotoMacros,
     PlanDay,
     PlanMeal,
     PlanRequest,
     PlanResult,
 )
+
+# Dish guesses the fake vision path cycles through. It cannot actually see the
+# photo, so the point is only that it behaves like something that produces a
+# named dish and a plausible number, never that the name matches the picture.
+_PHOTO_DISH_GUESSES = (
+    "chicken biryani",
+    "grilled chicken with rice",
+    "cheese pizza slice",
+    "garden salad",
+    "beef burger with fries",
+    "daal chawal",
+)
+_PHOTO_CONFIDENCES: tuple[Literal["high", "medium", "low"], ...] = ("high", "medium", "low")
 
 # Words that genuinely move a dish within its category's range. This table is
 # throwaway: it exists so the stub visibly behaves like the model it stands in
@@ -84,6 +100,34 @@ class DeterministicAIService:
         return CalorieAdjustResult(
             calories=max(low, min(high, calories)),
             reasoning=f"[stub] {why}",
+        )
+
+    async def estimate_from_photo(self, image: bytes, content_type: str) -> PhotoCalorieEstimate:
+        """Stands in for the vision model without looking at the bytes at all.
+
+        Deterministic on the image content, the same reasoning as
+        adjust_calories: the same photo submitted twice should not produce two
+        different guesses, since that would read as a flaky estimator rather
+        than a stub. content_type is accepted and ignored, matching the real
+        method's signature exactly.
+        """
+        digest = hashlib.sha256(image).hexdigest()
+        dish_guess = _PHOTO_DISH_GUESSES[int(digest[0:8], 16) % len(_PHOTO_DISH_GUESSES)]
+        confidence = _PHOTO_CONFIDENCES[int(digest[8:16], 16) % len(_PHOTO_CONFIDENCES)]
+        # A plausible single-serving range, picked the same way
+        # _stable_unit_interval biases a dish within its category range.
+        calories = 350.0 + _stable_unit_interval(digest) * 550.0
+
+        return PhotoCalorieEstimate(
+            dish_guess=dish_guess,
+            calories=round(calories),
+            macros=PhotoMacros(
+                protein_g=round(calories * 0.20 / 4, 1),
+                carbs_g=round(calories * 0.50 / 4, 1),
+                fat_g=round(calories * 0.30 / 9, 1),
+            ),
+            confidence=confidence,
+            reasoning="[stub] deterministic photo estimate, no vision model called",
         )
 
     async def generate_plan(self, req: PlanRequest) -> PlanResult:

@@ -27,14 +27,21 @@ clamps the value anyway. A schema constrains structure, never the number inside.
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 from typing import Any
 
-from app.services.ai.prompts import CALORIE_SYSTEM_PROMPT, PLAN_SYSTEM_PROMPT
+from app.services.ai.prompts import (
+    CALORIE_SYSTEM_PROMPT,
+    PHOTO_CALORIE_SYSTEM_PROMPT,
+    PLAN_SYSTEM_PROMPT,
+)
 from app.services.ai.schemas import (
     CalorieAdjustRequest,
     CalorieAdjustResult,
+    PhotoCalorieEstimate,
+    PhotoMacros,
     PlanRequest,
     PlanResult,
 )
@@ -63,6 +70,14 @@ BASE_SEED = 1337
 # name that makes the model think harder than usual.
 PLAN_MAX_TOKENS = 8192
 CALORIE_MAX_TOKENS = 1024
+PHOTO_CALORIE_MAX_TOKENS = 1024
+
+# Photo estimation always uses this model regardless of GROQ_MODEL: the text
+# calorie and plan seams are free to run on whichever text model is
+# configured, but a photo needs a vision-capable one, and only one is in use
+# here. Not read from settings, on purpose -- an operator changing GROQ_MODEL
+# to a text-only model must not silently break photo estimation.
+VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 # Fragments that mark a failure as a coin toss rather than a standing problem.
 # Groq reports the empty generation case as a 400, which is ordinarily a
@@ -144,6 +159,42 @@ PLAN_SCHEMA: dict[str, Any] = {
             "nudges": {"type": "array", "items": {"type": "string"}},
         },
         "required": ["summary", "days", "nudges"],
+        "additionalProperties": False,
+    },
+}
+
+PHOTO_CALORIE_SCHEMA: dict[str, Any] = {
+    "name": "photo_calorie_estimate",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "dish_guess": {
+                "type": "string",
+                "description": "Short, ordinary name for the dish in the photo",
+            },
+            "calories": {
+                "type": "integer",
+                "description": "Calories for the portion actually visible",
+            },
+            "protein_g": {"type": "number"},
+            "carbs_g": {"type": "number"},
+            "fat_g": {"type": "number"},
+            "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+            "reasoning": {
+                "type": "string",
+                "description": "One short sentence on what drove the estimate",
+            },
+        },
+        "required": [
+            "dish_guess",
+            "calories",
+            "protein_g",
+            "carbs_g",
+            "fat_g",
+            "confidence",
+            "reasoning",
+        ],
         "additionalProperties": False,
     },
 }
@@ -264,6 +315,24 @@ def _plan_prompt(req: PlanRequest) -> str:
     )
 
 
+def _photo_user_content(data_uri: str) -> list[dict[str, Any]]:
+    """The two-block content list a vision message needs.
+
+    Per Groq's OpenAI-compatible chat completions format: content is a list
+    rather than a string once an image is involved, with a text block for the
+    instruction and an image_url block whose url is the data URI itself. There
+    is no public URL for an uploaded photo, so this is the only shape that
+    works -- Groq fetches nothing, the bytes are already inline.
+    """
+    return [
+        {
+            "type": "text",
+            "text": "Identify this dish and estimate its calories and macros.",
+        },
+        {"type": "image_url", "image_url": {"url": data_uri}},
+    ]
+
+
 class GroqAIService:
     """Implements AIService against the Groq API.
 
@@ -299,12 +368,24 @@ class GroqAIService:
             raise GroqResponseError(f"Groq model probe failed for {self._model}: {exc}") from exc
 
     async def _attempt(
-        self, system: str, user: str, schema: dict[str, Any], max_tokens: int, seed: int
+        self,
+        system: str,
+        user: str | list[dict[str, Any]],
+        schema: dict[str, Any],
+        max_tokens: int,
+        seed: int,
+        model: str | None = None,
     ) -> Any:
-        """One call. Raises GroqResponseError, transient or not, on any failure."""
+        """One call. Raises GroqResponseError, transient or not, on any failure.
+
+        `user` is a plain string for the text seams and a content list (text
+        block plus image_url block) for the photo one -- the chat completions
+        API accepts both shapes for a message's content, so this stays one
+        method rather than a near-duplicate for images.
+        """
         try:
             response = await self._client.chat.completions.create(
-                model=self._model,
+                model=model or self._model,
                 messages=[
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
@@ -339,7 +420,12 @@ class GroqAIService:
             raise GroqResponseError("Groq returned content that was not JSON") from exc
 
     async def _complete(
-        self, system: str, user: str, schema: dict[str, Any], max_tokens: int
+        self,
+        system: str,
+        user: str | list[dict[str, Any]],
+        schema: dict[str, Any],
+        max_tokens: int,
+        model: str | None = None,
     ) -> Any:
         """Call Groq, retrying the failures that are known to be a coin toss.
 
@@ -364,7 +450,9 @@ class GroqAIService:
             # bug. Retries have to move off it, because asking again with the
             # identical seed is asking for the generation that just failed.
             try:
-                return await self._attempt(system, user, schema, max_tokens, BASE_SEED + attempt)
+                return await self._attempt(
+                    system, user, schema, max_tokens, BASE_SEED + attempt, model=model
+                )
             except GroqResponseError as exc:
                 last = exc
                 if attempt + 1 >= MAX_ATTEMPTS or not _is_retryable(exc):
@@ -415,6 +503,45 @@ class GroqAIService:
         reasoning = payload.get("reasoning")
         return CalorieAdjustResult(
             calories=clamped,
+            reasoning=normalise_text(reasoning) if reasoning else None,
+        )
+
+    async def estimate_from_photo(self, image: bytes, content_type: str) -> PhotoCalorieEstimate:
+        data_uri = f"data:{content_type};base64,{base64.b64encode(image).decode('ascii')}"
+
+        payload = await self._complete(
+            PHOTO_CALORIE_SYSTEM_PROMPT,
+            _photo_user_content(data_uri),
+            PHOTO_CALORIE_SCHEMA,
+            max_tokens=PHOTO_CALORIE_MAX_TOKENS,
+            model=VISION_MODEL,
+        )
+
+        try:
+            calories = float(payload["calories"])
+            macros = PhotoMacros(
+                protein_g=float(payload["protein_g"]),
+                carbs_g=float(payload["carbs_g"]),
+                fat_g=float(payload["fat_g"]),
+            )
+            dish_guess = str(payload["dish_guess"])
+            confidence = payload["confidence"]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise GroqResponseError(f"Groq photo reply had an unusable shape: {payload!r}") from exc
+
+        if confidence not in ("high", "medium", "low"):
+            # The schema's enum should make this unreachable, but a value the
+            # caller cannot render is worse than a conservative default.
+            confidence = "low"
+
+        reasoning = payload.get("reasoning")
+        return PhotoCalorieEstimate(
+            dish_guess=normalise_text(dish_guess),
+            # Never negative: unlike adjust_calories there is no known range to
+            # clamp into, so the only floor worth enforcing here is zero.
+            calories=max(0.0, calories),
+            macros=macros,
+            confidence=confidence,
             reasoning=normalise_text(reasoning) if reasoning else None,
         )
 

@@ -7,6 +7,7 @@ so swapping one for the other never changes a route signature.
 from __future__ import annotations
 
 import datetime as dt
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -68,6 +69,30 @@ class PlanContext(BaseModel):
     # different coaching even at the same junk ratio.
     eating_out_frequency: EatingOutFrequency | None = None
     biggest_struggle: BiggestStruggle | None = None
+
+
+class PhotoMacros(BaseModel):
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+
+
+class PhotoCalorieEstimate(BaseModel):
+    """What a photo alone can tell us, before any category has been chosen.
+
+    Unlike CalorieAdjustResult this is not clamped to a known range -- there is
+    no category yet, only a picture -- so `calories` here is a preview meant to
+    build trust and let someone catch a wildly wrong guess before they even
+    pick a category, not the figure that ends up on the saved log. A log is
+    still priced by the existing category-range flow once a category is
+    chosen, so nothing here is ever written to food_logs.
+    """
+
+    dish_guess: str
+    calories: float
+    macros: PhotoMacros
+    confidence: Literal["high", "medium", "low"]
+    reasoning: str | None = None
 
 
 class PlanRequest(BaseModel):
