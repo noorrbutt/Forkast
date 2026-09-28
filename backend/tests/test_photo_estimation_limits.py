@@ -65,8 +65,7 @@ async def test_the_fake_provider_is_never_rate_limited(auth_client: AsyncClient)
     limit = get_settings().photo_estimate_rate_limit
 
     statuses = [
-        (await auth_client.post(ESTIMATE, files=_upload(PNG))).status_code
-        for _ in range(limit + 2)
+        (await auth_client.post(ESTIMATE, files=_upload(PNG))).status_code for _ in range(limit + 2)
     ]
 
     assert 429 not in statuses, f"the fake provider was throttled: {statuses}"
@@ -92,8 +91,7 @@ async def test_too_many_estimates_in_the_short_window_are_refused(
     limit = get_settings().photo_estimate_rate_limit
 
     statuses = [
-        (await auth_client.post(ESTIMATE, files=_upload(PNG))).status_code
-        for _ in range(limit + 2)
+        (await auth_client.post(ESTIMATE, files=_upload(PNG))).status_code for _ in range(limit + 2)
     ]
 
     assert 429 in statuses, f"photo estimation was never throttled: {statuses}"
@@ -123,9 +121,7 @@ async def test_a_429_carries_a_retry_after_header(
     so the client's existing 429 handling covers this route for free."""
     limit = get_settings().photo_estimate_rate_limit
 
-    responses = [
-        await auth_client.post(ESTIMATE, files=_upload(PNG)) for _ in range(limit + 1)
-    ]
+    responses = [await auth_client.post(ESTIMATE, files=_upload(PNG)) for _ in range(limit + 1)]
 
     blocked = next(r for r in responses if r.status_code == 429)
     assert "Retry-After" in blocked.headers

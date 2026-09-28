@@ -29,4 +29,6 @@ class AIService(Protocol):
     # the magic bytes (never the client's declared header). Raw rather than
     # wrapped in a request model: a base64 blob has nothing left to validate
     # once the caller has already checked it is a real JPEG/PNG/WebP.
-    async def estimate_from_photo(self, image: bytes, content_type: str) -> PhotoCalorieEstimate: ...
+    async def estimate_from_photo(
+        self, image: bytes, content_type: str
+    ) -> PhotoCalorieEstimate: ...

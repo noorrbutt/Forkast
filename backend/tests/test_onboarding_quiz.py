@@ -35,9 +35,7 @@ async def test_both_answers_can_be_set(auth_client: AsyncClient) -> None:
 
 
 async def test_an_unknown_answer_is_refused(auth_client: AsyncClient) -> None:
-    response = await auth_client.patch(
-        "/api/v1/me", json={"eating_out_frequency": "constantly"}
-    )
+    response = await auth_client.patch("/api/v1/me", json={"eating_out_frequency": "constantly"})
 
     assert response.status_code == 422
 

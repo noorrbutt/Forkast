@@ -312,7 +312,9 @@ def _plan_prompt(req: PlanRequest) -> str:
             if c.eating_out_frequency:
                 facts += f"- How often they eat out: {c.eating_out_frequency.value}\n"
             if c.biggest_struggle:
-                facts += f"- Their biggest struggle, in their own words: {c.biggest_struggle.value}\n"
+                facts += (
+                    f"- Their biggest struggle, in their own words: {c.biggest_struggle.value}\n"
+                )
             facts += (
                 "Let this shape tone and suggestions, not the numbers: cravings "
                 "calls for smaller, more frequent wins; eating out calls for "

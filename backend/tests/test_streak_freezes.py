@@ -46,7 +46,9 @@ async def _set_timezone(client: AsyncClient, timezone: str) -> None:
     assert response.status_code == 200, response.text
 
 
-async def _log_clean_streak(client: AsyncClient, categories: dict, days: int, today: dt.date) -> None:
+async def _log_clean_streak(
+    client: AsyncClient, categories: dict, days: int, today: dt.date
+) -> None:
     """Days [today - days + 1, today], each with one clean meal at noon."""
     for offset in range(days):
         day = today - dt.timedelta(days=days - 1 - offset)
