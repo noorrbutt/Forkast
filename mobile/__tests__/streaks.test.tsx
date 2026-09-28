@@ -253,7 +253,10 @@ describe('a run in progress', () => {
     const view = await show(RUNNING);
 
     const hero = await waitFor(() => view.getByText('7'));
-    expect(flatten(hero.props.style).fontSize).toBe(type.hero.fontSize);
+    // heroStat, not hero: the streak count is the one figure on this screen
+    // with nothing else competing for size, which earns it a step beyond
+    // even hero's reservation. See heroStat's own note in tokens.ts.
+    expect(flatten(hero.props.style).fontSize).toBe(type.heroStat.fontSize);
   });
 
   it('keeps a full step of the scale between the figure and everything else', async () => {
@@ -324,7 +327,7 @@ describe('a run that has just been broken', () => {
     const hero = await waitFor(() => view.getByText('0'));
     // Honest, because this one is a real reading of a real run. The line under
     // it is what carries the tone.
-    expect(flatten(hero.props.style).fontSize).toBe(type.hero.fontSize);
+    expect(flatten(hero.props.style).fontSize).toBe(type.heroStat.fontSize);
   });
 
   it('says how to read the zero instead of leaving it bare', async () => {

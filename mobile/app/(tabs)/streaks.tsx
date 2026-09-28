@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RefreshControl, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
-import { Button, Card, Dialog, ErrorState, Hero, Loading, Screen } from '../../components/ui';
+import { Button, Card, Dialog, ErrorState, Hero, HeroWash, Loading, Screen } from '../../components/ui';
 import { useStreaks } from '../../hooks/useInsights';
 import { describeError } from '../../lib/api';
 import { formatDate } from '../../lib/format';
@@ -179,11 +179,19 @@ export default function StreaksScreen() {
 
         {data && started ? (
           <>
-            <View style={heroSpace}>
-              <Hero
-                value={String(current)}
-                caption={current === 1 ? 'day without junk' : 'days without junk'}
-                /**
+            {/* The one editorial moment on this screen, and the only thing
+                that gets it: `heroStat` at 88pt on the hero wash, rather than
+                `hero`'s 64 on flat background. The streak count is the whole
+                reason this tab exists, with nothing else on the screen
+                competing for size, which is a stronger claim than the
+                dashboard's net figure can make sharing its screen with a
+                chart and a trend card -- see heroStat's own note in
+                tokens.ts for why that earns a size hero itself does not
+                reach. HeroWash is "one per screen, under the hero only", so
+                nothing else here may take one. */}
+            <HeroWash>
+              <View style={{ alignItems: 'center', gap: spacing.xs }}>
+                {/*
                  * Sage while the run is live, ink once it is broken.
                  *
                  * It used to be saffron, which is wrong twice over: saffron is the
@@ -194,15 +202,28 @@ export default function StreaksScreen() {
                  *
                  * Zero stays ink, so it reads as a reading rather than as a thing
                  * to celebrate. The number still carries the meaning on its own.
-                 */
-                color={current > 0 ? colors.success : colors.text}
-              />
-            </View>
+                 */}
+                <Text
+                  style={[
+                    type.heroStat,
+                    { color: current > 0 ? colors.success : colors.text, textAlign: 'center' },
+                  ]}
+                >
+                  {current}
+                </Text>
+                <Text style={[type.body, { color: colors.muted, textAlign: 'center' }]}>
+                  {current === 1 ? 'day without junk' : 'days without junk'}
+                </Text>
+              </View>
+            </HeroWash>
 
             {/* The record, which is reference rather than the answer, so it sits
                 two full steps of the scale below the figure above it. The two
-                values share a right edge so they read as one column. */}
-            <Card>
+                values share a right edge so they read as one column.
+                `prominent={false}`: a stat tile backing up the hero above,
+                not content of its own, so it gets the lighter chrome rather
+                than the same radius and shadow as the figure it supports. */}
+            <Card prominent={false}>
               <View style={{ gap: spacing.lg }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.lg }}>
                   <Text style={[type.body, { color: colors.muted, flex: 1 }]}>Longest run</Text>

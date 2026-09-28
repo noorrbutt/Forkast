@@ -394,6 +394,32 @@ export const type = {
     lineHeight: 70,
     fontVariant: ['tabular-nums'],
   } satisfies TextStyle,
+  /**
+   * 88 / 300, -3.4 tracking. Reserved for the one screen-defining number that
+   * also sits on its own `heroWash` field -- narrower than `hero`'s licence.
+   * `hero` is "the one number a screen leads with", which the dashboard
+   * already spends on a figure sharing its screen with a chart and a trend
+   * card. The streak count on the Streaks tab is the whole reason that screen
+   * exists, with nothing else on it competing for size, so it earns a step
+   * beyond even that.
+   *
+   * Tracking tightens with size rather than holding hero's -2.2: held at the
+   * same -0.034em ratio a numeral this large starts to look loose, the way a
+   * billboard set in body copy's tracking looks loose. -3.4 keeps that ratio.
+   *
+   * No auto-shrink for a long value, unlike Hero. The one caller this exists
+   * for prints a streak length, realistically one to three digits, so the
+   * measure-and-step-down machinery Hero carries for an unbounded string has
+   * nothing to do here.
+   */
+  heroStat: {
+    fontFamily: FAMILY.light,
+    fontSize: 88,
+    fontWeight: '300',
+    letterSpacing: -3.4,
+    lineHeight: 92,
+    fontVariant: ['tabular-nums'],
+  } satisfies TextStyle,
   /** 48 / 300. A page title, or a secondary numeral on a screen with a hero. */
   display: {
     fontFamily: FAMILY.light,

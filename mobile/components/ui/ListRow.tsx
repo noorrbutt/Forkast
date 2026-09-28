@@ -116,6 +116,12 @@ export function ListRow({
  *
  * Exists so screens stop hand rolling a Card with its own padding for every
  * group, which is how two groups end up a few pixels different from each other.
+ *
+ * `radius.tile`, not `radius.card`. A settings group is a secondary container,
+ * not the screen's content, and it never carries a shadow either: the large
+ * radius and the elevation together are the primary-surface treatment, and a
+ * group of rows had been defaulting to that weight simply because Card's own
+ * number was the only one in reach at the time this was written.
  */
 export function ListGroup({ title, children }: { title?: string; children: ReactNode }) {
   const { colors, radius, spacing, type } = useTheme();
@@ -128,7 +134,7 @@ export function ListGroup({ title, children }: { title?: string; children: React
       ) : null}
       <View
         style={{
-          borderRadius: radius.card,
+          borderRadius: radius.tile,
           backgroundColor: colors.surface,
           borderWidth: 1,
           borderColor: colors.border,

@@ -325,6 +325,17 @@ describe('the layers a reader is supposed to be able to see', () => {
     }
   });
 
+  it('keeps a live streak legible on the wash too, not only on a card', () => {
+    // The streaks screen's heroStat figure sits on the wash and, while the
+    // run is live, is drawn in `success` rather than `text` -- a pairing
+    // nothing checked before it, since success previously only ever landed on
+    // a plain surface.
+    for (const theme of THEMES) {
+      const p = palettes[theme];
+      expect(ratio(p.success, heroWash[theme][0])).toBeGreaterThanOrEqual(TEXT);
+    }
+  });
+
   it('can measure a translucent token at all, which is the point of the rewrite', () => {
     // A guard on the instrument rather than on the palette. If someone
     // simplifies the parser back to hex only, these throw instead of silently
