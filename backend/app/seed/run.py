@@ -26,9 +26,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import SessionLocal
-from app.models import Cuisine, FoodCategory, FoodLog, Restaurant, User
+from app.models import Cuisine, FoodCategory, FoodLog, FoodLogPhoto, Restaurant, User
 from app.models.enums import FriendScale, Goal, ServingSize
 from app.seed.data import DISH_NAMES, RESTAURANTS
+from app.seed.photos import demo_food_photo
 from app.services.ai.fake import DeterministicAIService
 from app.services.ai.schemas import CalorieAdjustRequest
 from app.services.calories import finalise_estimate
@@ -40,6 +41,11 @@ DEMO_PASSWORD = "demo1234"
 DAYS_OF_HISTORY = 90
 TARGET_LOGS = 120
 RANDOM_SEED = 20260916
+# Roughly what a real diary looks like: some meals photographed, most not.
+# High enough that history.tsx's photo card treatment (see its own file for
+# why a photo gets a full width card instead of the compact row) is actually
+# on screen within the first handful of scrolls, not a rare find.
+PHOTO_CHANCE = 0.45
 
 
 async def _clear_demo_data(session: AsyncSession) -> None:
@@ -87,7 +93,8 @@ async def _generate_logs(
     user: User,
     categories: list[FoodCategory],
     restaurants: list[Restaurant],
-) -> list[FoodLog]:
+) -> tuple[list[FoodLog], int]:
+    """Returns the logs and how many of them got a photo, for the console summary."""
     rng = random.Random(RANDOM_SEED)
     ai = DeterministicAIService()
     tz = ZoneInfo(user.timezone)
@@ -101,6 +108,11 @@ async def _generate_logs(
 
     meal_slots = [(8, 30), (13, 15), (16, 0), (20, 30)]
     logs: list[FoodLog] = []
+    # Paired alongside logs rather than read back off log.category later,
+    # because that relationship is not eager loaded here and touching it
+    # would be a second round trip per log. is_junk is all the photo
+    # generator needs, so that is all this carries.
+    junk_by_log: dict[FoodLog, bool] = {}
 
     for _ in range(TARGET_LOGS):
         days_ago = rng.randint(0, DAYS_OF_HISTORY - 1)
@@ -155,9 +167,35 @@ async def _generate_logs(
         )
         session.add(log)
         logs.append(log)
+        junk_by_log[log] = category.is_junk
+
+    # log.id is a Python-side default, only resolved at flush, so this has to
+    # happen before a FoodLogPhoto can name which log it belongs to.
+    await session.flush()
+
+    # Not every meal in a real diary has a photo, and a demo account that
+    # looked otherwise would misrepresent the feature it exists to show off:
+    # the whole point of history.tsx's photo card treatment is that it sits
+    # next to the compact, photoless row rather than replacing it everywhere.
+    # Chosen by the same rng the rest of this generator already draws from,
+    # so the seed stays reproducible end to end on one fixed RANDOM_SEED.
+    photo_count = 0
+    for log in logs:
+        if rng.random() > PHOTO_CHANCE:
+            continue
+        data, content_type = demo_food_photo(log.dish_name, junk_by_log[log])
+        session.add(
+            FoodLogPhoto(
+                food_log_id=log.id,
+                content_type=content_type,
+                byte_size=len(data),
+                data=data,
+            )
+        )
+        photo_count += 1
 
     await session.flush()
-    return logs
+    return logs, photo_count
 
 
 def _summarise(user: User, logs: list[FoodLog], categories: list[FoodCategory]) -> dict:
@@ -315,7 +353,7 @@ async def seed(reset_only: bool = False) -> None:
         await session.flush()
 
         restaurants = await _ensure_restaurants(session, created_by=user.id)
-        logs = await _generate_logs(session, user, categories, restaurants)
+        logs, photo_count = await _generate_logs(session, user, categories, restaurants)
 
         summary = _summarise(user, logs, categories)
 
@@ -327,6 +365,7 @@ async def seed(reset_only: bool = False) -> None:
         print(f"      categories   {len(categories)}")
         print(f"     restaurants   {len(restaurants)}")
         print(f"       food logs   {len(logs)} across {DAYS_OF_HISTORY} days")
+        print(f"          photos   {photo_count} of them")
         print(
             f"          streak   current {summary['streaks']['current_streak']}, "
             f"longest {summary['streaks']['longest_streak']}"
