@@ -87,17 +87,32 @@ export type PhotoMacros = {
   fat_g: number;
 };
 
+/** One tappable serving, offered when the photo alone does not say enough to
+ * judge scale. `calories` is that portion's whole estimate, not a delta. */
+export type PortionOption = {
+  label: string;
+  calories: number;
+};
+
 /**
  * A preview, not a saved figure. There is no category yet at this point, so
  * `calories` is never clamped to a known range the way a saved log's is --
  * confirming still goes through the ordinary create-log call once a category
  * has been picked, and that is what actually prices the meal.
+ *
+ * `confidence` and `portion_ambiguous` answer different questions and are
+ * never conflated: confidence is about recognising the dish, portion_
+ * ambiguous is about judging its scale in this photo. A dish can be
+ * unmistakable and still have nothing in frame to size it against.
  */
 export type PhotoEstimate = {
   dish_guess: string;
   calories: number;
   macros: PhotoMacros;
   confidence: 'high' | 'medium' | 'low';
+  portion_ambiguous: boolean;
+  /** 2 or 3 entries when portion_ambiguous is true, otherwise empty. */
+  portion_options: PortionOption[];
   reasoning: string | null;
 };
 

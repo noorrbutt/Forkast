@@ -96,7 +96,25 @@ const ESTIMATE = {
   calories: 780,
   macros: { protein_g: 32, carbs_g: 88, fat_g: 30 },
   confidence: 'high',
+  portion_ambiguous: false,
+  portion_options: [],
   reasoning: 'full slice, visible cheese',
+};
+
+// Confidence about the dish and ambiguity about its portion are independent,
+// so this is deliberately "high" on the dish and still ambiguous on scale.
+const AMBIGUOUS_ESTIMATE = {
+  dish_guess: 'pepperoni pizza',
+  calories: 550,
+  macros: { protein_g: 22, carbs_g: 62, fat_g: 21 },
+  confidence: 'high',
+  portion_ambiguous: true,
+  portion_options: [
+    { label: 'small', calories: 350 },
+    { label: 'medium', calories: 550 },
+    { label: 'large', calories: 750 },
+  ],
+  reasoning: 'no plate edge or hand in frame to judge scale',
 };
 
 const SAVED = {
@@ -245,6 +263,63 @@ describe('the confirm screen', () => {
     fireEvent.press(screen.getByText('Not right? Edit manually'));
 
     expect(screen.getByPlaceholderText('Chicken karahi').props.value).toBe('pepperoni pizza');
+  });
+
+  it('does not ask about portion when the estimate is not ambiguous', async () => {
+    const screen = openLogScreen();
+    await takeAPhoto(screen);
+
+    expect(screen.queryByText('Which portion is closest?')).toBeNull();
+  });
+});
+
+describe('an ambiguous portion', () => {
+  beforeEach(() => {
+    mockedApi.post.mockImplementation(async (url: string) => {
+      if (url === '/logs/estimate-photo') return { data: AMBIGUOUS_ESTIMATE };
+      if (url === '/logs') return { data: SAVED };
+      return { data: null };
+    });
+  });
+
+  it('shows portion chips instead of a single trusted number', async () => {
+    const screen = openLogScreen();
+    await takeAPhoto(screen);
+
+    expect(screen.getByText('Which portion is closest?')).toBeTruthy();
+    expect(screen.getByText('small (~350 kcal)')).toBeTruthy();
+    expect(screen.getByText('medium (~550 kcal)')).toBeTruthy();
+    expect(screen.getByText('large (~750 kcal)')).toBeTruthy();
+    // The model's own single guess, shown until a chip is tapped.
+    expect(screen.getByText('About 550 kcal')).toBeTruthy();
+  });
+
+  it('is one tap: picking a portion updates the preview and nothing else', async () => {
+    const screen = openLogScreen();
+    await takeAPhoto(screen);
+
+    fireEvent.press(screen.getByText('large (~750 kcal)'));
+
+    expect(screen.getByText('About 750 kcal')).toBeTruthy();
+    // Macros move with it, scaled by the same ratio, so the two numbers on
+    // screen never describe two different portions.
+    expect(screen.getByText(/30g protein/)).toBeTruthy();
+  });
+
+  it('saving does not require a portion to have been picked', async () => {
+    const screen = openLogScreen();
+    await takeAPhoto(screen);
+    await waitFor(() => expect(screen.getByText('Matches this dish')).toBeTruthy());
+    fireEvent.press(screen.getByText('pepperoni pizza'));
+
+    fireEvent.press(screen.getByText('Log it'));
+
+    await waitFor(() =>
+      expect(mockedApi.post).toHaveBeenCalledWith(
+        '/logs',
+        expect.objectContaining({ category_id: 21 }),
+      ),
+    );
   });
 });
 

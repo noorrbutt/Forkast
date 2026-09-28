@@ -189,6 +189,11 @@ export default function LogScreen() {
   const [mode, setMode] = useState<'capture' | 'confirm' | 'manual'>('capture');
   const [estimate, setEstimate] = useState<PhotoEstimate | null>(null);
   const [estimateNotice, setEstimateNotice] = useState<string | null>(null);
+  // Which of estimate.portion_options was tapped, null until one is. Only
+  // ever meaningful while estimate.portion_ambiguous is true; the calorie and
+  // macro preview falls back to estimate's own single guess otherwise, so
+  // nothing downstream has to check portion_ambiguous a second time.
+  const [portionCalories, setPortionCalories] = useState<number | null>(null);
   // The one entrance this screen ever plays. Keyed on the saved log's id
   // rather than firing from onSuccess directly, so it also fires correctly if
   // this state is ever restored rather than only just set, and so it cannot
@@ -301,6 +306,7 @@ export default function LogScreen() {
     setMode('capture');
     setEstimate(null);
     setEstimateNotice(null);
+    setPortionCalories(null);
     createLog.reset();
     uploadPhoto.reset();
     estimatePhoto.reset();
@@ -325,6 +331,7 @@ export default function LogScreen() {
       onSuccess: (result) => {
         haptics.tap();
         setEstimate(result);
+        setPortionCalories(null);
         setDishName(result.dish_guess);
         setMode('confirm');
       },
@@ -603,6 +610,18 @@ export default function LogScreen() {
 
     const photoBusy = estimatePhoto.isPending || photoPicker.preparing;
 
+    // Scaled together so the macro line never disagrees with the headline
+    // number: picking "large" moves both by the same ratio rather than the
+    // calories updating while the macros keep describing the model's
+    // original single guess.
+    const previewCalories = portionCalories ?? estimate.calories;
+    const portionScale = estimate.calories > 0 ? previewCalories / estimate.calories : 1;
+    const previewMacros = {
+      protein_g: estimate.macros.protein_g * portionScale,
+      carbs_g: estimate.macros.carbs_g * portionScale,
+      fat_g: estimate.macros.fat_g * portionScale,
+    };
+
     return (
       <Screen title="Log a meal" onBack={resetForm}>
         <View style={column}>
@@ -772,14 +791,39 @@ export default function LogScreen() {
               </View>
             </View>
 
+            {/* Shown instead of trusting a single guess when the photo gives
+                no size reference to judge scale from -- a hand, a utensil, a
+                plate edge. One tap and it is answered; nothing here opens a
+                second screen or asks for a gram figure. */}
+            {estimate.portion_ambiguous && estimate.portion_options.length > 0 ? (
+              <View style={{ gap: spacing.sm }}>
+                <ControlLabel>Which portion is closest?</ControlLabel>
+                <View style={optionRow}>
+                  {estimate.portion_options.map((option) => (
+                    <Chip
+                      key={option.label}
+                      label={`${option.label} (~${formatNumber(Math.round(option.calories))} kcal)`}
+                      selected={portionCalories === option.calories}
+                      showCheck
+                      style={optionChip}
+                      onPress={() => setPortionCalories(option.calories)}
+                    />
+                  ))}
+                </View>
+                <Text style={[type.caption, { color: colors.muted }]}>
+                  Hard to tell the portion from the photo alone. Pick the closest one.
+                </Text>
+              </View>
+            ) : null}
+
             <View style={{ gap: spacing.xs }}>
               <Text style={[type.title, { color: colors.text }]}>
-                About {formatNumber(Math.round(estimate.calories))} kcal
+                About {formatNumber(Math.round(previewCalories))} kcal
               </Text>
               <Text style={[type.caption, { color: colors.muted }]}>
-                {formatNumber(Math.round(estimate.macros.protein_g))}g protein ·{' '}
-                {formatNumber(Math.round(estimate.macros.carbs_g))}g carbs ·{' '}
-                {formatNumber(Math.round(estimate.macros.fat_g))}g fat
+                {formatNumber(Math.round(previewMacros.protein_g))}g protein ·{' '}
+                {formatNumber(Math.round(previewMacros.carbs_g))}g carbs ·{' '}
+                {formatNumber(Math.round(previewMacros.fat_g))}g fat
               </Text>
               <Text style={[type.caption, { color: colors.muted }]}>
                 A preview from the photo alone. The saved figure comes from the category you pick,
