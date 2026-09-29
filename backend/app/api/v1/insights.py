@@ -113,6 +113,7 @@ def _csv_safe(value: str | None) -> str | None:
         return f"'{value}"
     return value
 
+
 # How many recent logs to hand the planner. Enough to spot a pattern, small
 # enough to keep the prompt cheap once a real model is behind it.
 PLAN_LOG_WINDOW = 30

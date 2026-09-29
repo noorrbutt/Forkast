@@ -164,7 +164,9 @@ def _fallback_page(*, heading: str, deep_link: str) -> str:
 @router.get("/reset-password", response_class=HTMLResponse)
 async def reset_password_fallback(token: str | None = None) -> str:
     query = f"?token={token}" if token else ""
-    return _fallback_page(heading="Reset your password", deep_link=f"forkast://reset-password{query}")
+    return _fallback_page(
+        heading="Reset your password", deep_link=f"forkast://reset-password{query}"
+    )
 
 
 @router.get("/check-email", response_class=HTMLResponse)
