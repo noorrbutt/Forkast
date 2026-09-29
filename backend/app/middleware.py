@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 import uuid
 
@@ -44,6 +45,15 @@ logger = logging.getLogger(__name__)
 _WARNED_ABOUT_X_FORWARDED_FOR = False
 
 
+# A client-supplied request id is echoed straight back into the response
+# header and the log line, never interpreted, so this only has to rule out
+# the pathological cases: something absurdly long, or bytes that are not
+# even valid header text. It is not trying to look like a UUID -- callers are
+# free to pass their own tracing format -- only to be short, printable ASCII.
+_REQUEST_ID_MAX_LENGTH = 128
+_REQUEST_ID_PATTERN = re.compile(rb"^[\x21-\x7e]{1,%d}$" % _REQUEST_ID_MAX_LENGTH)
+
+
 class RequestLoggingMiddleware:
     """Log one JSON line per request without leaking body or headers."""
 
@@ -58,7 +68,15 @@ class RequestLoggingMiddleware:
         request_id = None
         for key, value in scope.get("headers", []):
             if key == b"x-request-id":
-                request_id = value.decode()
+                # A bare .decode() on unbounded, untrusted bytes both risks
+                # raising on invalid UTF-8 (crashing the request before it is
+                # even routed) and happily reflects back however many bytes a
+                # caller feels like sending. The regex only accepts short,
+                # printable ASCII, which decodes trivially and is exactly
+                # what a request id is for; anything else falls through to a
+                # fresh one below.
+                if _REQUEST_ID_PATTERN.match(value):
+                    request_id = value.decode("ascii")
                 break
         if request_id is None:
             request_id = uuid.uuid4().hex
