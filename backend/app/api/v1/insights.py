@@ -20,6 +20,7 @@ from typing import Annotated, Literal
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     HTTPException,
@@ -29,11 +30,19 @@ from fastapi import (
     status,
 )
 from fastapi.security import HTTPAuthorizationCredentials
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from starlette.responses import StreamingResponse
 
 from app.api.deps import CurrentUser, RateLimiterDep, SessionDep, bearer_scheme
+
+# Re-verification on an email change is the same mechanism registration
+# already uses -- issue a token, send the link -- so it is reused rather than
+# rebuilt here. See update_me for why the flow has to live in this route
+# rather than in a schema validator: it needs a session to check the new
+# address for uniqueness and a background task to send the mail after commit.
+from app.api.v1.auth import _issue_email_verification_token, _send_verification_email_safely
 
 # The signature check that decides whether an upload really is an image, shared
 # with the meal photo route rather than written twice, so the two cannot drift
@@ -223,7 +232,13 @@ async def export_me(
 
 
 @router.patch("/me", response_model=UserOut)
-async def update_me(payload: UserUpdate, session: SessionDep, user: CurrentUser) -> User:
+async def update_me(
+    payload: UserUpdate,
+    session: SessionDep,
+    user: CurrentUser,
+    background_tasks: BackgroundTasks,
+    limiter: RateLimiterDep,
+) -> User:
     """Apply exactly the fields the caller sent, including the ones set to null.
 
     exclude_unset is what separates "leave this alone" from "clear this", and it
@@ -236,11 +251,58 @@ async def update_me(payload: UserUpdate, session: SessionDep, user: CurrentUser)
 
     The fields that genuinely cannot take a null are refused by UserUpdate
     before reaching here.
+
+    An email change is not a plain column write like the rest of this loop:
+    the address has to stay unique, and email_verified means "this address
+    was proved", which stops being true the instant the address changes.
+    Google having verified the old one says nothing about who controls the
+    new one, so this both refuses to leave email_verified sitting at true for
+    an address nobody has proved and does not just silently flip it back on
+    its own -- it re-runs the same registration flow, a fresh token mailed to
+    the new address, and email_verified only becomes true again once that
+    link is actually clicked.
     """
     changes = payload.model_dump(exclude_unset=True)
+
+    new_email = changes.pop("email", None)
+    verification_token: str | None = None
+    if new_email is not None and new_email.strip().lower() != user.email.lower():
+        settings = get_settings()
+        await limiter.hit(
+            "email-change",
+            account_identity(user.id),
+            limit=settings.login_rate_limit,
+            window_seconds=settings.login_rate_window_seconds,
+        )
+        existing = await session.scalar(
+            select(User).where(func.lower(User.email) == new_email.strip().lower())
+        )
+        if existing is not None and existing.id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An account with that email already exists",
+            )
+        user.email = new_email.strip()
+        user.email_verified = False
+        verification_token = await _issue_email_verification_token(session, user)
+
     for field, value in changes.items():
         setattr(user, field, value)
-    await session.commit()
+
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        # The uniqueness check above is not atomic, the same race register
+        # already guards against.
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with that email already exists",
+        ) from exc
+
+    if verification_token is not None:
+        background_tasks.add_task(_send_verification_email_safely, user, verification_token)
+
     return user
 
 

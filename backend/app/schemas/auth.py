@@ -240,6 +240,13 @@ class UserUpdate(BaseModel):
     daily_calorie_target: int | None = Field(default=None, ge=0, le=10_000)
     eating_out_frequency: EatingOutFrequency | None = None
     biggest_struggle: BiggestStruggle | None = None
+    first_name: RequiredName | None = None
+    last_name: RequiredName | None = None
+    # Re-checked for uniqueness and re-verified on change -- see update_me in
+    # api/v1/insights.py, which is also where email_verified actually flips
+    # back to false. Not done here: a schema validator has no session to
+    # check another row against.
+    email: EmailStr | None = None
 
     @model_validator(mode="after")
     def _null_only_where_the_column_is_nullable(self) -> UserUpdate:
@@ -252,7 +259,7 @@ class UserUpdate(BaseModel):
         timezone would set a NOT NULL column to null and surface as a 500 from
         the database, so it is refused here with a field path instead.
         """
-        for field in ("goal", "timezone"):
+        for field in ("goal", "timezone", "first_name", "last_name", "email"):
             if field in self.model_fields_set and getattr(self, field) is None:
                 raise ValueError(f"{field} cannot be null")
         return self
