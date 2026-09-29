@@ -73,7 +73,14 @@ async def test_every_response_carries_the_security_headers(client: AsyncClient) 
 async def test_ready_works_and_uses_the_database(client: AsyncClient) -> None:
     response = await client.get("/ready")
     assert response.status_code == 200, response.text
-    assert response.json()["status"] == "ready"
+    body = response.json()
+    assert body["status"] == "ready"
+    # Whatever this environment's AI_PROVIDER is -- the deterministic_ai
+    # fixture only overrides the injected service, not the raw setting /ready
+    # reads, so this can legitimately be "not_configured", "checking" (no
+    # lifespan runs under the test client) or "ok"/"degraded" depending on
+    # what .env says outside the suite.
+    assert body["ai"] in ("not_configured", "checking", "ok", "degraded")
 
 
 async def test_ready_returns_503_when_the_db_dependency_fails(client: AsyncClient) -> None:

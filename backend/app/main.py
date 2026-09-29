@@ -12,7 +12,9 @@ requests being answered by the wrong server rather than as a bind error.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -30,18 +32,52 @@ from app.middleware import (
 from app.services.ai.deps import get_ai_service
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
+
+# Whether the configured Groq model answered the startup probe. None until the
+# background probe finishes, so /ready can tell "still checking" apart from
+# "checked and it's down" instead of reporting one as the other for however
+# long the first call takes.
+ai_probe_ok: bool | None = None
+
+
+async def _probe_ai_in_background() -> None:
+    """Check the model without blocking startup on it.
+
+    get_settings() already fails fast -- and synchronously, before the app
+    even starts -- when AI_PROVIDER=groq has no key, because that is a config
+    mistake no request can route around. This is the other failure mode: the
+    key is fine but the model itself is down or was deprecated out from under
+    the config, same as the .env.example warning about Groq retiring models
+    without notice. Logging and food search do not touch the model at all,
+    and log creation already falls back to a provisional estimate when the
+    call fails, so there is no reason an upstream outage should also take
+    down login and every non-AI route with it.
+    """
+    global ai_probe_ok
+    try:
+        await get_ai_service().probe()
+    except Exception:
+        ai_probe_ok = False
+        logger.warning(
+            "AI_PROVIDER is groq but the configured model failed its startup probe; "
+            "serving degraded (provisional estimates only) until it recovers.",
+            exc_info=True,
+        )
+    else:
+        ai_probe_ok = True
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if settings.ai_provider is AIProvider.groq:
+        task = asyncio.create_task(_probe_ai_in_background())
         try:
-            await get_ai_service().probe()
-        except Exception as exc:  # pragma: no cover - startup failure path
-            raise RuntimeError(
-                f"AI_PROVIDER is groq but the configured model is unavailable: {exc}"
-            ) from exc
-    yield
+            yield
+        finally:
+            task.cancel()
+    else:
+        yield
 
 
 app = FastAPI(
@@ -105,7 +141,14 @@ async def health() -> dict[str, str]:
 
 @app.get("/ready", tags=["meta"])
 async def ready() -> dict[str, str]:
-    """Application readiness: the app can talk to Postgres right now."""
+    """Application readiness: the app can talk to Postgres right now.
+
+    The database is the one dependency a request cannot route around, so it
+    is still the thing that decides 503 versus 200. Groq is not: an outage
+    there degrades AI estimates rather than taking the service down, so it is
+    reported as a field on an otherwise-200 response rather than as a failure
+    of readiness itself.
+    """
     dependency = app.dependency_overrides.get(get_session, get_session)
     try:
         value = dependency()
@@ -119,4 +162,14 @@ async def ready() -> dict[str, str]:
             await value
     except Exception as exc:  # pragma: no cover - DB failure path
         raise HTTPException(status_code=503, detail="Database unavailable") from exc
-    return {"status": "ready"}
+
+    if settings.ai_provider is not AIProvider.groq:
+        ai_status = "not_configured"
+    elif ai_probe_ok is None:
+        ai_status = "checking"
+    elif ai_probe_ok:
+        ai_status = "ok"
+    else:
+        ai_status = "degraded"
+
+    return {"status": "ready", "ai": ai_status}
