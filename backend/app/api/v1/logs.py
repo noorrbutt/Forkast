@@ -261,6 +261,23 @@ async def create_log(
     response: Response,
 ) -> FoodLog:
     settings = get_settings()
+
+    # Checked before either quota is touched: an offline client retries the
+    # same client_id until it sees a 2xx, and without this an ordinary spotty
+    # connection burned one real log_daily_limit slot per retry rather than
+    # the one meal it actually represents. A client_id collision is answered
+    # from the row that already exists, not created twice, so a retry must
+    # never cost quota, seen or not.
+    if payload.client_id is not None:
+        existing = await session.scalar(
+            select(FoodLog).where(
+                FoodLog.user_id == user.id, FoodLog.client_id == payload.client_id
+            )
+        )
+        if existing is not None:
+            response.status_code = status.HTTP_200_OK
+            return _food_log_out(await _load_log(session, user.id, existing.id), estimate_source)
+
     await limiter.hit(
         "log-day",
         account_identity(user.id),
@@ -285,16 +302,6 @@ async def create_log(
             created_by=user.id,
         )
         restaurant_id = restaurant.id
-
-    if payload.client_id is not None:
-        existing = await session.scalar(
-            select(FoodLog).where(
-                FoodLog.user_id == user.id, FoodLog.client_id == payload.client_id
-            )
-        )
-        if existing is not None:
-            response.status_code = status.HTTP_200_OK
-            return _food_log_out(await _load_log(session, user.id, existing.id), estimate_source)
 
     # Saved with a figure that needs nobody's permission, and refined behind
     # the response. See _provisional_estimate.
