@@ -1,0 +1,13 @@
+# Test tooling and lint. Not installed in production -- see the Dockerfile,
+# which installs only requirements.txt.
+-r requirements.txt
+
+coverage==7.16.1
+iniconfig==2.3.0
+pluggy==1.6.0
+Pygments==2.21.0
+pytest==9.1.1
+pytest-asyncio==1.4.0
+pytest-cov==7.0.0
+pytest-timeout==2.4.0
+ruff==0.14.2
