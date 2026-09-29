@@ -99,6 +99,20 @@ def _plan_out(plan: AIPlan, estimate_source: EstimateSource) -> PlanOut:
 
 CallerToken = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)]
 
+# Cells that open with any of these are live formulas to Excel, Sheets and
+# Numbers, and every one of these fields is a string a user chose (a dish
+# name, a burn note): "=HYPERLINK(\"http://evil\",\"x\")" as a dish name runs
+# the moment the export is opened. A leading apostrophe makes every one of
+# those readers show the text as-typed instead of evaluating it, and it never
+# shows up in the opened cell itself.
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value: str | None) -> str | None:
+    if value is not None and value.startswith(_CSV_FORMULA_PREFIXES):
+        return f"'{value}"
+    return value
+
 # How many recent logs to hand the planner. Enough to spot a pattern, small
 # enough to keep the prompt cheap once a real model is behind it.
 PLAN_LOG_WINDOW = 30
@@ -181,9 +195,9 @@ async def export_me(
         writer.writerow(
             [
                 log.id,
-                log.dish_name,
-                log.category_name,
-                log.restaurant_name,
+                _csv_safe(log.dish_name),
+                _csv_safe(log.category_name),
+                _csv_safe(log.restaurant_name),
                 log.estimated_calories,
                 log.created_at.isoformat(),
             ]
@@ -197,7 +211,7 @@ async def export_me(
                 burn.id,
                 burn.calories,
                 burn.created_at.isoformat() if burn.created_at else "",
-                burn.note or "",
+                _csv_safe(burn.note) or "",
             ]
         )
     return StreamingResponse(

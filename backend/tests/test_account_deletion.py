@@ -98,6 +98,53 @@ async def test_export_is_json_or_csv_and_only_contains_the_callers_data(
     assert "burn_logs" in csv_response.text
 
 
+async def test_export_csv_neutralises_formula_looking_dish_names(client: AsyncClient) -> None:
+    """A dish named like a spreadsheet formula must not run as one.
+
+    Excel, Sheets and Numbers all treat a cell starting with =, +, -, @, tab
+    or CR as a live formula. A dish name is free text the user chose, so
+    without this a name like =HYPERLINK("http://evil","x") executes the
+    moment the export is opened in any of them.
+    """
+    user = (
+        await client.post(
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Exporter",
+                "last_name": "User",
+                "email": "csv-injection@forkast.app",
+                "password": "password123",
+            },
+        )
+    ).json()
+    headers = {"Authorization": f"Bearer {user['access_token']}"}
+    categories = {
+        c["slug"]: c for c in (await client.get("/api/v1/categories", headers=headers)).json()
+    }
+    # No comma or double quote in the payload, so csv.writer never has a
+    # reason to quote the field and the assertion below can check the raw
+    # text rather than reverse-engineering CSV quote-doubling.
+    await client.post(
+        "/api/v1/logs",
+        headers=headers,
+        json={
+            "dish_name": "=cmd|' /C calc'!A1",
+            "category_id": categories["biryani"]["id"],
+            "rating": 4,
+            "serving_size": "medium",
+        },
+    )
+
+    csv_response = await client.get(EXPORT, headers=headers, params={"format": "csv"})
+    assert csv_response.status_code == 200
+    # Neutralised with a leading apostrophe, not stripped: the export still
+    # shows what the user actually typed, it just no longer evaluates.
+    assert "'=cmd|' /C calc'!A1" in csv_response.text
+    # And never present unprefixed at the start of a cell, which is what
+    # would make a spreadsheet reader treat it as live.
+    assert "\n=cmd|' /C calc'!A1" not in csv_response.text
+
+
 async def test_the_account_and_its_data_go(auth_client: AsyncClient) -> None:
     await _eat(auth_client)
     await auth_client.put("/api/v1/burn", json={"calories": 200})
