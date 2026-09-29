@@ -245,11 +245,6 @@ async def list_restaurants(
             .where(FoodLog.restaurant_id == Restaurant.id, FoodLog.user_id == user.id)
             .exists()
         )
-    else:
-        # Not `mine`: this is the shared-registry listing (autocomplete, plain
-        # browse), and a custom row is only shared with the person who made
-        # it, never with everyone.
-        stmt = stmt.where(or_(Restaurant.created_by.is_(None), Restaurant.created_by == user.id))
 
         # How many times, counted here rather than by the caller.
         #
@@ -271,6 +266,11 @@ async def list_restaurants(
             RestaurantOut.model_validate(restaurant).model_copy(update={"visit_count": count})
             for restaurant, count in rows
         ]
+    else:
+        # Not `mine`: this is the shared-registry listing (autocomplete, plain
+        # browse), and a custom row is only shared with the person who made
+        # it, never with everyone.
+        stmt = stmt.where(or_(Restaurant.created_by.is_(None), Restaurant.created_by == user.id))
 
     result = await session.scalars(stmt)
     return [RestaurantOut.model_validate(restaurant) for restaurant in result]
