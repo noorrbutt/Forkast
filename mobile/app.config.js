@@ -120,8 +120,13 @@ const config = {
       "ios": {
         "supportsTablet": true,
         "bundleIdentifier": "com.forkast.app"
+        // associatedDomains is added below, only when EXPO_PUBLIC_APP_DOMAIN
+        // is set: claiming a domain here that apple-app-site-association
+        // does not actually verify just gets the entitlement silently
+        // ignored, so there is no reason to declare it unconditionally.
       },
       "android": {
+        // intentFilters is added below, same condition and same reason.
         "adaptiveIcon": {
           // Ink, not the pale blue the Expo template ships. The launcher draws
           // one icon for both system themes, so this is the brand's dark end
@@ -245,6 +250,38 @@ module.exports = () => {
   assertApiUrlForBuildProfile();
 
   let next = config;
+
+  // App Links / Universal Links. Only added when a domain is actually
+  // configured, the same reasoning as the Google plugin below: an
+  // associatedDomains entry or intent filter naming a domain that
+  // apple-app-site-association / assetlinks.json does not verify does
+  // nothing useful, so a checkout with nothing configured should build
+  // exactly as it did before this existed rather than silently claim a
+  // domain that goes nowhere.
+  const appDomain = process.env.EXPO_PUBLIC_APP_DOMAIN;
+  if (appDomain) {
+    next = {
+      ...next,
+      ios: {
+        ...next.ios,
+        associatedDomains: [`applinks:${appDomain}`],
+      },
+      android: {
+        ...next.android,
+        intentFilters: [
+          {
+            action: 'VIEW',
+            autoVerify: true,
+            data: [
+              { scheme: 'https', host: appDomain, pathPrefix: '/reset-password' },
+              { scheme: 'https', host: appDomain, pathPrefix: '/check-email' },
+            ],
+            category: ['BROWSABLE', 'DEFAULT'],
+          },
+        ],
+      },
+    };
+  }
 
   // Google sign in. The plugin writes the iOS URL scheme into the native
   // project and wires the Android dependency, so it only matters in a real
