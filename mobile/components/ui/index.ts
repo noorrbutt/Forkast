@@ -16,7 +16,6 @@ export { Dialog } from './Dialog';
 export { ListRow, ListGroup } from './ListRow';
 export { Select, type SelectOption } from './Select';
 export { Hero } from './Hero';
-export { FlameMeter } from './FlameMeter';
 export { Ring } from './Ring';
 export { HeroWash } from './HeroWash';
 export { EstimateBadge, EstimateSourceLabel } from './EstimateBadge';

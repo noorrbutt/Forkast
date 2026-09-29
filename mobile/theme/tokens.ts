@@ -95,32 +95,6 @@ export type Palette = {
 const SAFFRON = '#F5A524';
 const SAFFRON_DEEP = '#9A4D08';
 
-/**
- * The inner core of the flame meter.
- *
- * `colors.accentFill` gives FlameMeter its outer layer, correctly theme-aware
- * for that job: the vivid saffron on dark, the deeper amber on light,
- * whichever this theme's one action colour actually is. The core wants the
- * opposite property, a layer that reads as hotter and denser than the outer
- * flame in BOTH themes, which rules out reusing either existing saffron: on
- * dark the outer layer already IS `SAFFRON`, and on light it already IS
- * `SAFFRON_DEEP` (that is what `accentFill` resolves to there), so either
- * one doubling as the core would make the two layers of that theme identical
- * rather than two layers at all.
- *
- * A third, genuinely darker value instead: the same hue, pulled down toward
- * an ember rather than a flame. Not derived from a formula -- there is
- * nothing here for a contrast floor to check, since nothing renders text
- * against it and this is a decorative fill, not a text/background pairing --
- * chosen by eye to read as "denser" next to both existing saffrons at once.
- *
- * Not `colors.danger`, despite sitting in the same rust family. Status
- * colour is reserved and the app's own rule (see `split`'s note below) is
- * that a decorative fill may not borrow a meaning it does not have; nothing
- * about a streak's flame is a warning.
- */
-export const flameCore = '#6E3608';
-
 export const palettes: Record<ThemeName, Palette> = {
   dark: {
     // The greys are a solved ramp, not a taste. Every step clears a measured

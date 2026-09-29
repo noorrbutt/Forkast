@@ -28,16 +28,7 @@ configure({ asyncUtilTimeout: 10_000 });
 // haptics fire on the right interaction. Whether the motion looks right is a
 // question only a device answers.
 jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'));
-jest.mock('react-native-reanimated', () => ({
-  ...require('react-native-reanimated/mock'),
-  // The shipped mock leaves this one out ("ADD ME IF NEEDED" in its own
-  // source). FlameMeter reads it to decide whether to start its idle loop at
-  // all, so without this the hook is simply undefined and calling it throws
-  // before the component ever gets to render. A jest.fn rather than a bare
-  // arrow function so a test that actually needs the reduced-motion branch
-  // can override the return value for its own duration.
-  useReducedMotion: jest.fn(() => false),
-}));
+jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 
 // No taptic engine in a test runner, and the real module rejects. The wrapper
 // in lib/haptics.ts swallows that by design, so without this mock the tests
