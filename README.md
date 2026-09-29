@@ -313,6 +313,32 @@ development client. There is no way around this even in principle: Google
 refuses to redirect to an `exp://` address, so the pure JavaScript route is
 shut there too.
 
+## Deploy
+
+```bash
+# backend/, build and run the container. It applies pending migrations before
+# starting uvicorn, so a deploy that forgets to run alembic by hand is not a
+# deploy that silently serves the old schema.
+docker build -t forkast-api .
+docker run --env-file .env -p 8010:8010 forkast-api
+```
+
+Production installs only `requirements.txt`. `requirements-dev.txt` (pytest,
+ruff, coverage) layers on top of it for local work and CI, and is never
+installed in the image.
+
+Set `ENVIRONMENT=production` in the deployed `.env`. It turns off `/docs`,
+`/redoc` and `/openapi.json` (see app/main.py) and makes `app/seed/run.py`
+refuse to run, since the demo account it creates uses a fixed, public
+password.
+
+The mobile build for EAS never bakes a developer's LAN address into a
+committed file. `EXPO_PUBLIC_API_URL` for a development-client build is set
+per machine with `eas env:create --environment development --name
+EXPO_PUBLIC_API_URL --value "http://<your LAN ip>:8010"`, the same pattern the
+Google client ids above already use, or read from mobile/.env.local for a run
+that never leaves the machine.
+
 ## Layout
 
 ```

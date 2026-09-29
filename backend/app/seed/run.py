@@ -24,7 +24,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
+from app.config import Environment, get_settings
 from app.db import SessionLocal
 from app.models import Cuisine, FoodCategory, FoodLog, FoodLogPhoto, Restaurant, User
 from app.models.enums import FriendScale, Goal, ServingSize
@@ -329,6 +329,20 @@ def _summarise(user: User, logs: list[FoodLog], categories: list[FoodCategory]) 
 
 async def seed(reset_only: bool = False) -> None:
     settings = get_settings()
+
+    # DEMO_PASSWORD is a fixed, public string. Anyone who has ever read this
+    # file knows it, so running this against a real database creates a
+    # publicly known login into whatever ENVIRONMENT=production actually
+    # protects. --reset is exempt: it only deletes the demo row and never
+    # creates a credential, so there is nothing here for production to guard
+    # against.
+    if not reset_only and settings.environment is Environment.production:
+        raise SystemExit(
+            "Refusing to seed the demo account with ENVIRONMENT=production: "
+            f"{DEMO_EMAIL} / {DEMO_PASSWORD} would be a publicly known login "
+            "into a real database. Use `--reset` to remove it instead, or run "
+            "this against a non-production database."
+        )
 
     async with SessionLocal() as session:
         await _clear_demo_data(session)
