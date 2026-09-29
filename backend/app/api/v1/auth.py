@@ -571,10 +571,18 @@ async def _user_for_google_identity(
 
     Known address, no `sub` yet: somebody who registered with a password is now
     pressing "Continue with Google" with the same address. That is the same
-    person, and the alternative -- a second account on the same address -- is
-    refused by the unique index anyway, so the sign in would simply fail
-    forever. The identity is attached to the existing row and both doors now
-    open it. This is only safe because verify_google_id_token refuses a token
+    person *only if* nobody registered that address first to squat on it: a
+    password account with an unverified email is not proven to belong to
+    whoever is holding this Google token, it is only proven to belong to
+    whoever typed the address into the register form. Google verifying the
+    address here is the first real proof this row has ever had, so an
+    unverified row is folded into the Google identity rather than merely
+    linked to it: the squatter's password stops working and every refresh
+    token issued to it dies, since either one would otherwise still open an
+    account that address's real owner just proved is theirs. An already
+    verified row has no such gap -- its password was already backed by a
+    proven address -- so it only gains Google as a second door, same as
+    before. This is only safe because verify_google_id_token refuses a token
     whose email Google has not verified; without that check this branch would
     hand somebody else's account to whoever could put their address in a Google
     profile.
@@ -603,6 +611,17 @@ async def _user_for_google_identity(
             by_email.first_name = identity.first_name
         if by_email.last_name is None and identity.last_name:
             by_email.last_name = identity.last_name
+        if not by_email.email_verified:
+            # This row's only prior claim to the address was an unverified
+            # register call, which anyone could have made. Google verifying
+            # the address is what actually proves ownership, so whatever the
+            # squatter set up under that claim is torn down now: the
+            # password they chose stops working, and every refresh token
+            # already issued to it -- which could otherwise keep a session
+            # alive under the real owner's account -- is revoked.
+            by_email.password_hash = None
+            await session.execute(delete(RefreshToken).where(RefreshToken.user_id == by_email.id))
+            by_email.email_verified = True
         # Not created: this is an account that already existed and has now
         # gained a second way in, so it has already been through setup.
         return by_email, False

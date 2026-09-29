@@ -29,6 +29,7 @@ from app.services.google import GoogleAuthError, GoogleIdentity
 REGISTER = "/api/v1/auth/register"
 LOGIN = "/api/v1/auth/login"
 GOOGLE = "/api/v1/auth/google"
+REFRESH = "/api/v1/auth/refresh"
 ME = "/api/v1/me"
 
 
@@ -195,13 +196,15 @@ async def test_google_follows_the_sub_when_the_address_has_changed(
     assert len((await session.scalars(select(User))).all()) == 1
 
 
-async def test_google_links_to_an_account_that_registered_with_a_password(
+async def test_google_links_to_a_verified_account_that_registered_with_a_password(
     client: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The same person, arriving by the other door.
 
     Without this branch the unique index on the address refuses the insert and
     "Continue with Google" fails forever for anybody who once used the form.
+    Only a *verified* address gets to keep its password on link -- see the
+    unverified case below for why that distinction exists at all.
     """
     await client.post(
         REGISTER,
@@ -212,6 +215,11 @@ async def test_google_links_to_an_account_that_registered_with_a_password(
             "password": "password123",
         },
     )
+    verified = await session.scalar(select(User).where(User.email == "both@forkast.app"))
+    assert verified is not None
+    verified.email_verified = True
+    await session.commit()
+
     monkeypatch.setattr(
         "app.api.v1.auth.verify_google_id_token",
         fake_google(identity(email="both@forkast.app")),
@@ -224,13 +232,67 @@ async def test_google_links_to_an_account_that_registered_with_a_password(
     assert response.status_code == 200
     assert len((await session.scalars(select(User))).all()) == 1
 
+    # The google() call above committed the row's new columns on a different
+    # session (the request's own). This session's identity map still holds
+    # `verified` from before that write and, with expire_on_commit=False,
+    # would hand it back unrefreshed rather than re-reading the row.
+    session.expire_all()
     linked = await session.scalar(select(User).where(User.email == "both@forkast.app"))
     assert linked is not None
     assert linked.google_sub == "google-sub-1"
-    # Both doors still open it. Linking must not take the password away.
+    # Both doors still open it. Linking a verified address must not take the
+    # password away.
     assert linked.password_hash is not None
     login = await client.post(LOGIN, json={"email": "both@forkast.app", "password": "password123"})
     assert login.status_code == 200
+
+
+async def test_google_link_strips_the_password_of_an_unverified_squatter(
+    client: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The account pre-hijack case: someone registers an address that is not
+    theirs, hoping to inherit it once the real owner signs in with Google.
+
+    Registration alone never proves ownership of the address; only Google
+    verifying it does. So linking an *unverified* row must not leave the
+    squatter's password standing, and must not leave any refresh token they
+    already minted still valid -- both would otherwise still open the real
+    owner's account after Google just proved who it belongs to.
+    """
+    register = await client.post(
+        REGISTER,
+        json={
+            "first_name": "Squatter",
+            "last_name": "Account",
+            "email": "victim@forkast.app",
+            "password": "attackerpass1",
+        },
+    )
+    assert register.status_code == 201
+    squatter_refresh = register.json()["refresh_token"]
+
+    monkeypatch.setattr(
+        "app.api.v1.auth.verify_google_id_token",
+        fake_google(identity(email="victim@forkast.app")),
+    )
+
+    response = await client.post(GOOGLE, json={"id_token": "whatever"})
+    assert response.status_code == 200
+
+    linked = await session.scalar(select(User).where(User.email == "victim@forkast.app"))
+    assert linked is not None
+    assert linked.google_sub == "google-sub-1"
+    assert linked.email_verified is True
+    # The squatter's password no longer opens the account Google just proved
+    # belongs to someone else.
+    assert linked.password_hash is None
+    login = await client.post(
+        LOGIN, json={"email": "victim@forkast.app", "password": "attackerpass1"}
+    )
+    assert login.status_code == 401
+    # Nor does the refresh token issued at registration time.
+    refresh = await client.post(REFRESH, json={"refresh_token": squatter_refresh})
+    assert refresh.status_code == 401
 
 
 async def test_google_does_not_overwrite_a_name_the_account_already_has(

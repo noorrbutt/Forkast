@@ -132,6 +132,12 @@ class UserOut(BaseModel):
     # no password to ask such an account for before it deletes itself. The hash
     # itself is of course never sent.
     has_password: bool = True
+    # False for an account that registered with a password but never clicked
+    # the verification link. The client uses this to show a banner and to
+    # decide whether the account is safe to trust as proof of the address --
+    # see _user_for_google_identity in api/v1/auth.py for what happens to
+    # this flag, and to the row, the moment Google actually proves it.
+    email_verified: bool = True
     created_at: dt.datetime
 
 

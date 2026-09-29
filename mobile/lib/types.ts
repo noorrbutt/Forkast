@@ -39,6 +39,13 @@ export type User = {
    * ask such an account for.
    */
   has_password: boolean;
+  /**
+   * False for an account that registered with a password but never clicked
+   * the verification link. Drives the "verify your email" banner; nothing
+   * client-side gates on it beyond that, since the server is the one place
+   * that actually needs to trust the address.
+   */
+  email_verified: boolean;
   // Both are NOT NULL with a default on the server, so they always arrive.
   timezone: string;
   goal: Goal;

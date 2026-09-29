@@ -16,6 +16,7 @@ import {
   Ring,
   Screen,
 } from '../../components/ui';
+import { useMe } from '../../hooks/useAuth';
 import { useDashboard, useTrend } from '../../hooks/useInsights';
 import { describeError } from '../../lib/api';
 import { formatNumber, formatRatio } from '../../lib/format';
@@ -503,6 +504,7 @@ export default function DashboardScreen() {
   const dashboard = useDashboard();
   // Held here rather than inside the card so a pull to refresh reloads both.
   const trend = useTrend();
+  const me = useMe();
 
   const data = dashboard.data;
 
@@ -522,6 +524,29 @@ export default function DashboardScreen() {
       }
     >
       <View style={{ width: '100%', maxWidth: layout.contentWidth, alignSelf: 'center' }}>
+        {/* Only a password account can be unverified at all -- a Google row is
+            verified the moment it exists -- and only until the link in the
+            registration email is clicked, so this disappears for most
+            accounts within minutes and isn't something the empty/loading
+            states above need to make room for. Placed above everything else
+            on purpose: the whole reason this matters is the account itself,
+            which outranks today's number. */}
+        {me.data?.email_verified === false ? (
+          <Pressable
+            onPress={() => router.navigate({ pathname: '/check-email', params: { email: me.data!.email } })}
+            style={{
+              backgroundColor: colors.dangerSoft,
+              borderRadius: 12,
+              padding: spacing.md,
+              marginBottom: spacing.md,
+            }}
+          >
+            <Text style={[type.caption, { color: colors.text }]}>
+              Verify your email to keep your account secure. Tap to resend the link.
+            </Text>
+          </Pressable>
+        ) : null}
+
         {dashboard.isLoading ? <Loading label="Reading your day" /> : null}
 
         {dashboard.isError && !data ? (
