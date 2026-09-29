@@ -35,7 +35,14 @@ const PUBLIC_PATHS = ['/auth/login', '/auth/register', '/auth/refresh', '/health
 
 function isPublicPath(url?: string): boolean {
   if (!url) return false;
-  return PUBLIC_PATHS.some((path) => url.includes(path));
+  // Exact match on the path, not a substring search: `.includes` matched
+  // "/auth/login" against a hypothetical future "/auth/login-history" or
+  // "/users/auth/login-relay" just as happily as the real route, which would
+  // silently strip the bearer token (or skip a 401's refresh) from a request
+  // that was never meant to be public. The query string, if any, is not part
+  // of the comparison -- a public route stays public with query params.
+  const path = url.split('?')[0];
+  return PUBLIC_PATHS.includes(path);
 }
 
 let accessToken: string | null = null;
