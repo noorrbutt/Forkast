@@ -102,6 +102,31 @@ async def test_request_id_is_echoed_in_the_response(client: AsyncClient) -> None
     assert response.headers["X-Request-ID"] == "abc-123"
 
 
+async def test_an_oversized_request_id_is_replaced_rather_than_echoed(
+    client: AsyncClient,
+) -> None:
+    """An unbounded client-supplied id used to be reflected back verbatim,
+    which is a client handed the response header as free storage. Anything
+    over the cap falls through to a fresh, server-generated one instead."""
+    response = await client.get("/health", headers={"X-Request-ID": "x" * 5000})
+    echoed = response.headers["X-Request-ID"]
+    assert echoed != "x" * 5000
+    assert len(echoed) <= 128
+
+
+async def test_a_request_id_with_invalid_bytes_is_replaced_rather_than_crashing(
+    client: AsyncClient,
+) -> None:
+    """A bare .decode() on untrusted header bytes raised on invalid UTF-8,
+    failing the request before it was even routed. Latin-1 bytes are valid
+    header bytes but not the printable ASCII this now requires, so they fall
+    through to a fresh id instead of ever reaching .decode()."""
+    response = await client.get("/health", headers={"X-Request-ID": "café".encode("latin-1")})
+    assert response.status_code == 200
+    echoed = response.headers["X-Request-ID"]
+    assert echoed.isascii()
+
+
 async def test_hsts_is_not_sent_over_plain_http(client: AsyncClient) -> None:
     """Sending it over http is meaningless, and on a shared development host it
     pins a browser to https for an origin that does not serve it."""
@@ -323,8 +348,12 @@ def test_wildcard_cors_is_rejected_for_a_nonlocal_database() -> None:
 async def test_refresh_allows_more_than_the_login_peer_window(client: AsyncClient) -> None:
     """Refresh calls are a different bucket from login attempts, because a CGNAT
     or a corporate proxy can share one peer across many users."""
+    # A handful of users, each refreshed several times in a row -- each
+    # refresh rotates the token, so calling it repeatedly per user reaches a
+    # call count past login_peer_rate_limit without needing more distinct
+    # registrations than register_rate_limit allows in the window.
     tokens = []
-    for i in range(60):
+    for i in range(15):
         user = (
             await client.post(
                 REGISTER,
@@ -338,9 +367,13 @@ async def test_refresh_allows_more_than_the_login_peer_window(client: AsyncClien
         ).json()
         tokens.append(user["refresh_token"])
 
-    statuses = [
-        (await client.post(REFRESH, json={"refresh_token": token})).status_code for token in tokens
-    ]
+    statuses = []
+    for token in tokens:
+        current = token
+        for _ in range(4):
+            response = await client.post(REFRESH, json={"refresh_token": current})
+            statuses.append(response.status_code)
+            current = response.json().get("refresh_token", current)
 
     assert 429 not in statuses, statuses
 
