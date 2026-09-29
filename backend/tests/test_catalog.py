@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import Restaurant
 
 
 async def test_cuisines_are_returned_in_display_order(auth_client: AsyncClient) -> None:
@@ -244,9 +247,44 @@ async def test_a_nul_byte_in_a_restaurant_name_is_a_client_error(
     assert response.status_code == 422
 
 
-async def test_the_restaurant_list_is_shared_by_default(client: AsyncClient) -> None:
-    """The registry is deliberately shared: the autocomplete on the log screen
-    is what stops one place being typed in five slightly different ways."""
+async def test_seeded_restaurants_are_shared_by_default(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    """The seeded registry is deliberately shared: the autocomplete on the log
+    screen is what stops one place being typed in five slightly different
+    ways. Seeded rows have no `created_by`, which is what this test actually
+    tells apart from a row a user typed in -- see the custom-row test below
+    for why those two cases now behave differently."""
+    mine = (
+        await client.post(
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "r1@forkast.app",
+                "password": "password123",
+            },
+        )
+    ).json()
+
+    # No route lets a client create a `created_by IS NULL` row -- that shape
+    # only exists via the seed script -- so it is planted directly here.
+    session.add(Restaurant(name="Seeded Spot", area="Clifton", created_by=None))
+    await session.commit()
+
+    listed = await client.get(
+        "/api/v1/restaurants", headers={"Authorization": f"Bearer {mine['access_token']}"}
+    )
+
+    assert "Seeded Spot" in [r["name"] for r in listed.json()]
+
+
+async def test_a_custom_restaurant_is_not_visible_to_other_users(client: AsyncClient) -> None:
+    """Free text like a restaurant's name is not moderated. A row one user
+    typed in -- "Home", a street address, or something abusive -- must not
+    become every other user's autocomplete suggestion, which the old shared
+    listing did unconditionally. Only seeded rows (no `created_by`) are
+    global; a custom row is visible only to whoever created it."""
     mine = (
         await client.post(
             "/api/v1/auth/register",
@@ -279,8 +317,20 @@ async def test_the_restaurant_list_is_shared_by_default(client: AsyncClient) -> 
     listed = await client.get(
         "/api/v1/restaurants", headers={"Authorization": f"Bearer {mine['access_token']}"}
     )
+    assert "Someone Elses Place" not in [r["name"] for r in listed.json()]
 
-    assert "Someone Elses Place" in [r["name"] for r in listed.json()]
+    searched = await client.get(
+        "/api/v1/restaurants",
+        params={"q": "Someone"},
+        headers={"Authorization": f"Bearer {mine['access_token']}"},
+    )
+    assert "Someone Elses Place" not in [r["name"] for r in searched.json()]
+
+    # But it is visible to the person who created it.
+    own_listing = await client.get(
+        "/api/v1/restaurants", headers={"Authorization": f"Bearer {theirs['access_token']}"}
+    )
+    assert "Someone Elses Place" in [r["name"] for r in own_listing.json()]
 
 
 async def test_mine_narrows_the_list_to_places_this_user_has_eaten_at(

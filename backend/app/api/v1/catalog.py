@@ -195,7 +195,8 @@ async def list_restaurants(
     ),
     limit: int = Query(default=20, ge=1, le=100),
 ) -> list[RestaurantOut]:
-    """The registry is shared, so by default this lists every restaurant.
+    """The registry is shared, so by default this lists every seeded
+    restaurant plus whatever the caller has personally added.
 
     That is right for the autocomplete on the log screen, where the point is to
     find a place someone else already added rather than create a duplicate. It
@@ -203,6 +204,19 @@ async def list_restaurants(
     the whole registry there pins places the user has never been, and tells them
     which restaurants other people have been adding. `mine=true` narrows it to
     the ones they have actually logged a meal at.
+
+    A custom row -- anything with `created_by` set -- is only ever visible to
+    the person who typed it in, here or in search. Free text like a
+    restaurant's name is not moderated, and "Home" or an abusive string typed
+    by one user becoming every other user's autocomplete suggestion is a
+    privacy leak the personal-diary framing of this app does not allow.
+    `created_by IS NULL` is a seeded row, planted at launch rather than typed
+    by a user, and those stay global. `mine=true` does not need this filter
+    layered on top of it: a FoodLog is a stronger, more direct proof the
+    caller has a legitimate reason to see that row than who happened to type
+    its name in first, and applying both would hide a restaurant a user
+    genuinely visited just because somebody else had logged a meal there
+    first and created the row.
     """
     stmt = select(Restaurant).order_by(Restaurant.name).limit(limit)
     if q:
@@ -231,6 +245,11 @@ async def list_restaurants(
             .where(FoodLog.restaurant_id == Restaurant.id, FoodLog.user_id == user.id)
             .exists()
         )
+    else:
+        # Not `mine`: this is the shared-registry listing (autocomplete, plain
+        # browse), and a custom row is only shared with the person who made
+        # it, never with everyone.
+        stmt = stmt.where(or_(Restaurant.created_by.is_(None), Restaurant.created_by == user.id))
 
         # How many times, counted here rather than by the caller.
         #
