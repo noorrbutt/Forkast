@@ -97,6 +97,27 @@ class Settings(BaseSettings):
 
     cors_origins: str = Field(default="*", alias="CORS_ORIGINS")
 
+    # The public host that serves the App Links / Universal Links fallback
+    # pages and the two /.well-known verification files (see api/v1/wellknown.py).
+    # Empty by default -- the API works without it -- which is what makes
+    # password reset and email verification fall back to the forkast:// scheme
+    # in _send_password_reset_email_safely / _send_verification_email_safely
+    # rather than mail out an https link nothing actually serves yet.
+    #
+    # No scheme, no trailing slash: just the hostname, e.g. "forkast.app".
+    app_domain: str = Field(default="", alias="APP_DOMAIN")
+    # The two verification files' real content: Apple's Team ID (App Store
+    # Connect > Membership) joined to the bundle id, and Android's release
+    # signing certificate's SHA-256 fingerprint (`eas credentials`, or the
+    # Play Console's App signing key certificate). Both empty by default,
+    # which is what keeps the well-known routes from serving a page that
+    # *looks* like a working verification file but names no real app -- see
+    # wellknown.py for why that would be worse than a 404.
+    apple_app_id_prefix: str = Field(default="", alias="APPLE_APP_ID_PREFIX")
+    android_sha256_cert_fingerprint: str = Field(
+        default="", alias="ANDROID_SHA256_CERT_FINGERPRINT"
+    )
+
     # Every OAuth client id that may appear in the `aud` claim of a Google ID
     # token this API will accept, comma separated. There is one per platform --
     # iOS, Android and Web all get their own from the Google Cloud console --

@@ -182,11 +182,30 @@ async def _issue_email_verification_token(session: SessionDep, user: User) -> st
     return raw_token
 
 
+def _deep_link(path: str, **params: str) -> str:
+    """An https App Link when the domain is configured, the bare custom
+    scheme otherwise.
+
+    Android lets any installed app claim a custom scheme, and most mail
+    clients don't even linkify one, so forkast://... alone is both
+    interceptable and often not clickable at all. An https link on a domain
+    verified against the two /.well-known files in app/web.py has neither
+    problem: the OS opens the app directly for a link on that domain, and
+    the same URL still works as an ordinary web link for anyone else, since
+    app/web.py serves a page there that hands off to the custom scheme
+    itself. Falling back to the bare scheme when no domain is configured
+    keeps local development, which has no public domain to verify, working
+    exactly as it always did.
+    """
+    settings = get_settings()
+    query = "&".join(f"{key}={quote(value, safe='')}" for key, value in params.items())
+    if settings.app_domain:
+        return f"https://{settings.app_domain}/{path}?{query}"
+    return f"forkast://{path}?{query}"
+
+
 async def _send_verification_email_safely(user: User, raw_token: str) -> None:
-    link = (
-        f"forkast://check-email?token={quote(raw_token, safe='')}"
-        f"&email={quote(user.email, safe='')}"
-    )
+    link = _deep_link("check-email", token=raw_token, email=user.email)
     try:
         await run_in_threadpool(send_verification_email, user.email, link)
     except Exception:
@@ -216,7 +235,7 @@ async def _issue_password_reset_token(session: SessionDep, user: User) -> str:
 
 
 async def _send_password_reset_email_safely(user: User, raw_token: str) -> None:
-    link = f"forkast://reset-password?token={quote(raw_token, safe='')}"
+    link = _deep_link("reset-password", token=raw_token)
     try:
         await run_in_threadpool(send_password_reset_email, user.email, link)
     except Exception:

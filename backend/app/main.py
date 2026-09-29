@@ -30,6 +30,7 @@ from app.middleware import (
     SecurityHeadersMiddleware,
 )
 from app.services.ai.deps import get_ai_service
+from app.web import router as web_router
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -130,6 +131,9 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 
 app.include_router(api_router)
+# Root-level, not under /api/v1: the well-known paths and the App Links
+# fallback paths are dictated by the platforms' own conventions.
+app.include_router(web_router)
 
 
 @app.get("/health", tags=["meta"])
