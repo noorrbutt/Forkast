@@ -9,6 +9,9 @@ type ProfilePatch = {
   daily_calorie_target?: number | null;
   eating_out_frequency?: EatingOutFrequency | null;
   biggest_struggle?: BiggestStruggle | null;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
 };
 
 export function useUpdateProfile() {

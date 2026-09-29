@@ -365,6 +365,209 @@ function TargetRow({ target, last }: { target: number | null; last?: boolean }) 
 }
 
 /**
+ * First and last name, edited together in one dialog.
+ *
+ * One row rather than two: they are one fact (who this account belongs to),
+ * shown as one line by Identity above, and the register form already asks
+ * for them as a pair. Splitting the edit into two rows would ask the same
+ * question twice for no reason the read side has.
+ */
+function NameRow({
+  firstName,
+  lastName,
+  last,
+}: {
+  firstName: string | null;
+  lastName: string | null;
+  last?: boolean;
+}) {
+  const { spacing } = useTheme();
+  const update = useUpdateProfile();
+
+  const [open, setOpen] = useState(false);
+  const [first, setFirst] = useState(firstName ?? '');
+  const [surname, setSurname] = useState(lastName ?? '');
+  const [asked, setAsked] = useState(false);
+
+  const trimmedFirst = first.trim();
+  const trimmedLast = surname.trim();
+  const valid = trimmedFirst.length > 0 && trimmedLast.length > 0;
+  const unchanged = trimmedFirst === (firstName ?? '') && trimmedLast === (lastName ?? '');
+  const problem = asked && !valid ? 'Both names are required.' : null;
+
+  const onSave = () => {
+    if (update.isPending) return;
+    setAsked(true);
+    if (!valid) return;
+    if (unchanged) {
+      setOpen(false);
+      return;
+    }
+    update.mutate(
+      { first_name: trimmedFirst, last_name: trimmedLast },
+      {
+        onSuccess: () => {
+          haptics.success();
+          setOpen(false);
+        },
+        onError: () => haptics.error(),
+      },
+    );
+  };
+
+  return (
+    <>
+      <ListRow
+        label="Name"
+        value={firstName || lastName ? `${firstName ?? ''} ${lastName ?? ''}`.trim() : 'Not set'}
+        onPress={() => {
+          setAsked(false);
+          setFirst(firstName ?? '');
+          setSurname(lastName ?? '');
+          setOpen(true);
+        }}
+        last={last}
+      />
+
+      <Dialog
+        visible={open}
+        onDismiss={() => !update.isPending && setOpen(false)}
+        title="Your name"
+        actions={[
+          {
+            label: 'Save',
+            variant: 'primary',
+            onPress: onSave,
+            disabled: update.isPending,
+            loading: update.isPending,
+          },
+          { label: 'Cancel', variant: 'secondary', onPress: () => setOpen(false), disabled: update.isPending },
+        ]}
+      >
+        <View style={{ gap: spacing.md }}>
+          <Field
+            label="First name"
+            value={first}
+            onChangeText={setFirst}
+            autoCapitalize="words"
+            returnKeyType="next"
+            editable={!update.isPending}
+            maxLength={80}
+          />
+          <Field
+            label="Last name"
+            value={surname}
+            onChangeText={setSurname}
+            autoCapitalize="words"
+            returnKeyType="done"
+            onSubmitEditing={onSave}
+            editable={!update.isPending}
+            maxLength={80}
+            hint={problem ?? undefined}
+          />
+          {update.isError ? <FormError>{describeError(update.error)}</FormError> : null}
+        </View>
+      </Dialog>
+    </>
+  );
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * The sign in address, changeable, at the cost of its own proof.
+ *
+ * Changing it clears email_verified server side and mails a fresh
+ * verification link to the new address -- Google or the old link having
+ * proved the OLD address says nothing about who controls the new one. The
+ * dashboard's "verify your email" banner is what picks that back up; this
+ * dialog only warns about it up front so the drop isn't a surprise.
+ */
+function EmailRow({ email, verified, last }: { email: string; verified: boolean; last?: boolean }) {
+  const { spacing } = useTheme();
+  const update = useUpdateProfile();
+
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(email);
+  const [asked, setAsked] = useState(false);
+
+  const trimmed = draft.trim();
+  const valid = EMAIL_PATTERN.test(trimmed);
+  const unchanged = trimmed.toLowerCase() === email.toLowerCase();
+  const problem = asked && !valid ? 'Enter a valid email address.' : null;
+
+  const onSave = () => {
+    if (update.isPending) return;
+    setAsked(true);
+    if (!valid) return;
+    if (unchanged) {
+      setOpen(false);
+      return;
+    }
+    update.mutate(
+      { email: trimmed },
+      {
+        onSuccess: () => {
+          haptics.success();
+          setOpen(false);
+        },
+        onError: () => haptics.error(),
+      },
+    );
+  };
+
+  return (
+    <>
+      <ListRow
+        label="Email"
+        value={email}
+        hint={verified ? undefined : 'Not yet verified'}
+        onPress={() => {
+          setAsked(false);
+          setDraft(email);
+          setOpen(true);
+        }}
+        last={last}
+      />
+
+      <Dialog
+        visible={open}
+        onDismiss={() => !update.isPending && setOpen(false)}
+        title="Your email"
+        message="Changing this means verifying the new address again before it can be used to sign in or reset your password."
+        actions={[
+          {
+            label: 'Save',
+            variant: 'primary',
+            onPress: onSave,
+            disabled: update.isPending,
+            loading: update.isPending,
+          },
+          { label: 'Cancel', variant: 'secondary', onPress: () => setOpen(false), disabled: update.isPending },
+        ]}
+      >
+        <View style={{ gap: spacing.md }}>
+          <Field
+            label="Email address"
+            value={draft}
+            onChangeText={setDraft}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            returnKeyType="done"
+            onSubmitEditing={onSave}
+            editable={!update.isPending}
+            maxLength={254}
+            hint={problem ?? undefined}
+          />
+          {update.isError ? <FormError>{describeError(update.error)}</FormError> : null}
+        </View>
+      </Dialog>
+    </>
+  );
+}
+
+/**
  * The timezone, and the offer to fix it.
  *
  * Only interactive when the device disagrees with the account, because there is
@@ -584,6 +787,8 @@ export default function ProfileScreen() {
                 floating under the page as a lone pill, which is what made it and
                 the delete trigger read as two orphans that had missed the grid. */}
             <ListGroup title="Account">
+              <NameRow firstName={user.first_name} lastName={user.last_name} />
+              <EmailRow email={user.email} verified={user.email_verified} />
               {/* Only for an account that has a password. One created through
                   Google has none and cannot be given one here: there is no
                   current password to prove, and no email infrastructure in this

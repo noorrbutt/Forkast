@@ -126,11 +126,18 @@ describe('with no target set', () => {
   });
 
   it('shows that there is nothing set without being opened', async () => {
-    const { getByText } = render(<ProfileScreen />, { wrapper });
+    const { getByLabelText } = render(<ProfileScreen />, { wrapper });
 
     // The row carries its own value, which is the whole point of a settings
     // row: the screen answers the question before anything is tapped.
-    await waitFor(() => expect(getByText('Not set')).toBeTruthy());
+    // getByLabelText('Daily calorie target') rather than a bare text search:
+    // Name and Goal fall back to the same "Not set" wording on an empty
+    // account, so the row's own accessibilityValue is what disambiguates them.
+    await waitFor(() =>
+      expect(getByLabelText('Daily calorie target').props.accessibilityValue.text).toBe(
+        'Not set',
+      ),
+    );
   });
 
   it('starts empty and keeps the action inert', async () => {
@@ -276,7 +283,11 @@ describe('with a target already stored', () => {
 
     fireEvent.press(screen.getByText('Clear target'));
 
-    await waitFor(() => expect(screen.getByText('Not set')).toBeTruthy());
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText('Daily calorie target').props.accessibilityValue.text,
+      ).toBe('Not set'),
+    );
     const reopened = await openTarget(screen);
     expect(reopened.props.value).toBe('');
   });
