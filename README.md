@@ -357,6 +357,41 @@ exist as a module a developer might remember to invoke by hand:
 */15 * * * *   cd /app && python -m app.maintenance refine-backfill
 ```
 
+### App Links / Universal Links
+
+Password reset and email verification links used to be bare `forkast://`
+links. On Android any installed app can register for a custom scheme, and
+most mail clients don't even linkify one, so the link was both interceptable
+and often not clickable at all. Set three variables and both platforms
+switch to `https://` links on your own domain instead, with `forkast://`
+kept only as what the fallback web page (`app/web.py`) itself hands off to,
+for a browser that opened the page without the OS routing it straight into
+the app.
+
+```bash
+# backend/.env
+APP_DOMAIN=forkast.app
+APPLE_APP_ID_PREFIX=<Apple Team ID, from App Store Connect > Membership>
+ANDROID_SHA256_CERT_FINGERPRINT=<from `eas credentials`, or the Play Console's
+                                   App signing key certificate>
+
+# mobile/.env.local, or eas env:create for a build -- same domain, no scheme
+EXPO_PUBLIC_APP_DOMAIN=forkast.app
+```
+
+`APP_DOMAIN` alone is not enough: the backend serves
+`/.well-known/apple-app-site-association` and `/.well-known/assetlinks.json`
+as 404 until the matching Team ID or certificate fingerprint is set too (see
+app/web.py) -- a verification file that names no real app is worse than no
+file at all, since it would tell the OS this domain vouches for an app that
+does not exist. All three empty, the default, is not a partial setup: it is
+local development working exactly as it always did, `forkast://` and all.
+
+Nothing here works without those two well-known files actually being served
+from `APP_DOMAIN` at its real HTTPS origin, which means this backend has to
+be reachable there -- point a reverse proxy at it, or serve the app on that
+domain directly.
+
 Neither is wired into the Dockerfile's CMD: a container restarting is not a
 cron tick, and running one continuously inside the API process would tie its
 schedule to uptime rather than wall clock time. Point your platform's own
