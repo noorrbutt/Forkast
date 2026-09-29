@@ -154,7 +154,12 @@ class Settings(BaseSettings):
     # signups in a short span is still common during onboarding tests and
     # product launches. The cap is therefore higher than the login limiter so it
     # does not block normal account creation while still throttling automation.
-    register_rate_limit: int = Field(default=120, alias="REGISTER_RATE_LIMIT")
+    #
+    # Was 120: every successful registration also sends a verification email
+    # from this domain, so that number was really "how many emails can one
+    # peer make us send in five minutes", not just an account-creation limit.
+    # 20 still comfortably covers a real onboarding burst.
+    register_rate_limit: int = Field(default=20, alias="REGISTER_RATE_LIMIT")
     login_rate_window_seconds: int = Field(default=300, alias="LOGIN_RATE_WINDOW_SECONDS")
 
     # Plans are the only route that costs real money once Groq is behind it.
