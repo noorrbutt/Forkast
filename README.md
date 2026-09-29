@@ -339,6 +339,30 @@ EXPO_PUBLIC_API_URL --value "http://<your LAN ip>:8010"`, the same pattern the
 Google client ids above already use, or read from mobile/.env.local for a run
 that never leaves the machine.
 
+### Maintenance cron
+
+Two tasks in `app/maintenance.py` are meant to run on a schedule, not just
+exist as a module a developer might remember to invoke by hand:
+
+```bash
+# Stale rate-limit counters and expired refresh tokens. Cheap; hourly is fine.
+0 * * * *      cd /app && python -m app.maintenance prune
+
+# Retries any log estimate whose refinement never landed -- the process
+# restarted mid-flight, Groq timed out, whatever -- since refinement runs as
+# an in-process BackgroundTasks call and is lost, not retried, if the process
+# dies before it finishes. Bounded concurrency (see _REFINE_BACKFILL_CONCURRENCY
+# in maintenance.py) so a large backlog doesn't fire an unbounded burst of
+# calls at Groq all at once.
+*/15 * * * *   cd /app && python -m app.maintenance refine-backfill
+```
+
+Neither is wired into the Dockerfile's CMD: a container restarting is not a
+cron tick, and running one continuously inside the API process would tie its
+schedule to uptime rather than wall clock time. Point your platform's own
+cron (a Kubernetes CronJob, Railway's cron, `cron(1)` beside the container,
+whatever the deploy target offers) at the two commands above.
+
 ## Layout
 
 ```

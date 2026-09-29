@@ -24,6 +24,14 @@ async def _prune_all() -> tuple[int, int]:
     return rate_limit_rows, refresh_rows
 
 
+# Refinement calls the AI provider, so unbounded concurrency here is
+# unbounded concurrent calls against Groq (or whatever quota/rate limit it
+# enforces) the moment a backlog builds up, e.g. after the process was down
+# for a while. Bounded rather than sequential, since one-at-a-time makes a
+# large backlog take as long as `limit` round trips in series for no reason.
+_REFINE_BACKFILL_CONCURRENCY = 5
+
+
 async def _refine_backfill(limit: int = 100) -> int:
     session_factory = get_session_factory()
     ai = get_ai_service()
@@ -36,8 +44,13 @@ async def _refine_backfill(limit: int = 100) -> int:
         )
         rows_list = rows.all()
 
-    for log_id, category_id in rows_list:
-        await _refine_estimate(log_id, category_id, ai, session_factory)
+    semaphore = asyncio.Semaphore(_REFINE_BACKFILL_CONCURRENCY)
+
+    async def _refine_one(log_id, category_id) -> None:
+        async with semaphore:
+            await _refine_estimate(log_id, category_id, ai, session_factory)
+
+    await asyncio.gather(*(_refine_one(log_id, category_id) for log_id, category_id in rows_list))
     return len(rows_list)
 
 
