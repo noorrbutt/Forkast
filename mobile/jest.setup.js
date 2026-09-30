@@ -14,6 +14,11 @@ jest.setTimeout(30_000);
 const { configure } = require('@testing-library/react-native');
 configure({ asyncUtilTimeout: 10_000 });
 
+// The library's own jest setup: without it, GestureHandlerRootView and any
+// gesture-driven component (the diary's swipe-to-delete) reach for native
+// modules at import time the same way every other native module here does.
+require('react-native-gesture-handler/jestSetup');
+
 // Test setup for the Expo app.
 
 // Reanimated 4 cannot load in a test runner: it reaches for native worklets at

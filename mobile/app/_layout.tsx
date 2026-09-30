@@ -12,6 +12,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { CrashView } from '../components/CrashView';
@@ -153,16 +154,22 @@ export default function RootLayout() {
   if (!ready) return null;
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <SafeAreaProvider>
-          <AuthProvider>
-            <View style={{ flex: 1 }} onLayout={onReady}>
-              <RootNavigator />
-            </View>
-          </AuthProvider>
-        </SafeAreaProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    // As high as it can be, per the library's own requirement: anything
+    // that wants a gesture (the diary's swipe-to-delete) has to sit inside
+    // this, and there is no good way to add it later per-screen only where
+    // it turns out to be needed.
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <SafeAreaProvider>
+            <AuthProvider>
+              <View style={{ flex: 1 }} onLayout={onReady}>
+                <RootNavigator />
+              </View>
+            </AuthProvider>
+          </SafeAreaProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }
