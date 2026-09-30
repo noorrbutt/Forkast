@@ -283,7 +283,12 @@ function RefinedTag() {
         style,
       ]}
     >
-      <Text style={[type.caption, { color: colors.success }]}>Refined</Text>
+      {/* `text`, not `success`: colors.success on colors.successSoft measures
+          under 4.5:1 in dark theme once the translucent fill is actually
+          composited (contrast.test.ts's own "soft status fills" cases), and
+          the tint plus the word "Refined" already carry the meaning without
+          asking the label's own ink to also be the status colour. */}
+      <Text style={[type.caption, { color: colors.text }]}>Refined</Text>
     </Animated.View>
   );
 }

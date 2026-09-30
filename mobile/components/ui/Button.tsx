@@ -155,7 +155,13 @@ export function Button({
           // Back to the pre-motion value. The press scale was supposed to pay
           // for a softer dim and on a small control it does not, so a tap had
           // stopped reading as a tap.
-          opacity: pressed ? 0.82 : 1,
+          //
+          // 0.82, not the 0.9 it is now: on light theme's secondary button,
+          // 0.82 faded the outline to 2.66:1 against the page and the
+          // primary label to 4.22:1 on its own fill while held -- both under
+          // WCAG's floor, caught by contrast.test.ts's own pressed-state
+          // cases. 0.9 is the least fade that clears both.
+          opacity: pressed ? 0.9 : 1,
         },
         animatedStyle,
         style,

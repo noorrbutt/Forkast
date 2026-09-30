@@ -136,7 +136,25 @@ const CASES: Case[] = [
   { what: 'success text on a card', fg: 'success', bg: 'surface', min: TEXT },
   { what: 'a meter inside its limit, against its track', fg: 'success', bg: 'surfaceAlt', min: SHAPE },
   { what: 'a meter past its limit, against its track', fg: 'danger', bg: 'surfaceAlt', min: SHAPE },
+
+  // Placeholder text (Field's placeholderTextColor, Select's search input) is
+  // `muted` on the input's own fill, which is `surfaceAlt` -- named
+  // explicitly, even though the generic "muted on a raised fill" case above
+  // already exercises the same pairing, since a future rename of either
+  // token should not have to know that fact to keep this covered.
+  { what: 'placeholder text on an input', fg: 'muted', bg: 'surfaceAlt', min: TEXT },
 ];
+
+/**
+ * What a Pressable's `opacity: pressed ? N : 1` treatment actually leaves on
+ * screen: the whole subtree, fill and label together, faded toward whatever
+ * is behind it. `over()` already knows how to composite an alpha channel
+ * onto a backdrop, so this just expresses the fade as one.
+ */
+function fadedTowards(colour: string, opacity: number, backdrop: string): string {
+  const { rgb } = channels(colour);
+  return over(`rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${opacity})`, backdrop);
+}
 
 describe.each(THEMES)('%s theme', (theme) => {
   const palette = palettes[theme];
@@ -150,6 +168,47 @@ describe.each(THEMES)('%s theme', (theme) => {
       min,
     });
     expect(got).toBeGreaterThanOrEqual(min);
+  });
+});
+
+describe.each(THEMES)('%s theme, soft status fills', (theme) => {
+  const p = palettes[theme];
+
+  it('keeps error text readable on its own soft fill', () => {
+    // dangerSoft is translucent (see the file's own note on why every token
+    // like this has to be composited before it can be measured at all), and
+    // a banner using it sits on the page underneath.
+    expect(ratio(p.danger, over(p.dangerSoft, p.bg))).toBeGreaterThanOrEqual(TEXT);
+  });
+
+  // No equivalent "success text on successSoft" case: it measures under
+  // 4.5:1 in dark theme once successSoft is actually composited, which is
+  // why the diary's "Refined" tag (history.tsx) prints its label in `text`
+  // and lets the tint alone carry the status colour rather than the ink too.
+});
+
+describe.each(THEMES)('%s theme, pressed', (theme) => {
+  const p = palettes[theme];
+  // Button.tsx's own opacity while held, not a value invented for this test.
+  const PRESS_OPACITY = 0.9;
+
+  it('keeps the primary button visible as a shape while held', () => {
+    const fillWhilePressed = fadedTowards(p.accentFill, PRESS_OPACITY, p.bg);
+    expect(ratio(fillWhilePressed, p.bg)).toBeGreaterThanOrEqual(SHAPE);
+  });
+
+  it('keeps the primary button label readable while held', () => {
+    // The label fades by the same factor as the fill beneath it, since one
+    // opacity wraps the whole Pressable -- both composited against the page
+    // is what the label is actually seen against once either is translucent.
+    const fillWhilePressed = fadedTowards(p.accentFill, PRESS_OPACITY, p.bg);
+    const labelWhilePressed = fadedTowards(p.accentInk, PRESS_OPACITY, p.bg);
+    expect(ratio(labelWhilePressed, fillWhilePressed)).toBeGreaterThanOrEqual(TEXT);
+  });
+
+  it('keeps the secondary button outline visible while held', () => {
+    const outlineWhilePressed = fadedTowards(p.outline, PRESS_OPACITY, p.bg);
+    expect(ratio(outlineWhilePressed, p.bg)).toBeGreaterThanOrEqual(SHAPE);
   });
 });
 
