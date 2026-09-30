@@ -30,6 +30,19 @@ class FoodLogCreate(BaseModel):
     serving_size: ServingSize = ServingSize.medium
     client_id: uuid.UUID | None = None
 
+    # The number the confirm screen actually showed, from POST
+    # /logs/estimate-photo, so the log this becomes carries the figure that
+    # was approved rather than a second, category-derived number nobody
+    # confirmed. Bounds are loose on purpose: create_log clamps this against
+    # the chosen category's own range (see clamp_photo_estimate), not here,
+    # since only the route knows which category was picked. Absent means
+    # "price this from the category" exactly as before -- no photo estimate,
+    # no change in behaviour.
+    estimated_calories: int | None = Field(default=None, gt=0, le=20_000)
+    protein_g: float | None = Field(default=None, ge=0, le=1000)
+    carbs_g: float | None = Field(default=None, ge=0, le=2000)
+    fat_g: float | None = Field(default=None, ge=0, le=1000)
+
     # Optional, for backfilling older meals. Defaults to now on the server.
     created_at: dt.datetime | None = None
 
@@ -62,6 +75,19 @@ class FoodLogCreate(BaseModel):
     def _one_restaurant_reference(self) -> FoodLogCreate:
         if self.restaurant_id is not None and self.restaurant_name:
             raise ValueError("Pass restaurant_id or restaurant_name, not both")
+        return self
+
+    @model_validator(mode="after")
+    def _macros_need_a_calorie_figure(self) -> FoodLogCreate:
+        """A macro without the calorie figure it came from is not a fact
+        worth storing -- it has nowhere to be clamped against and no source
+        to be labelled with, so refuse it rather than accept an orphaned
+        number the app can never explain to whoever reads it back."""
+        macro_fields = ("protein_g", "carbs_g", "fat_g")
+        if self.estimated_calories is None and any(
+            getattr(self, field) is not None for field in macro_fields
+        ):
+            raise ValueError("protein_g, carbs_g and fat_g need estimated_calories alongside them")
         return self
 
 
@@ -116,6 +142,20 @@ class FoodLogOut(BaseModel):
     serving_size: ServingSize
     estimated_calories: int
     estimate_source: EstimateSource = "local"
+    # How THIS row's estimated_calories was priced, once, at creation --
+    # "photo" or "category", null for a log made before this column existed.
+    # Not the same field as estimate_source above: that one says which AI
+    # backend answered this request just now, this one says where the
+    # number on the row itself came from.
+    calorie_source: str | None = None
+    protein_g: float | None = None
+    carbs_g: float | None = None
+    fat_g: float | None = None
+    # True once estimated_calories stopped being provisional -- either a
+    # photo priced it directly at creation, or the background text refinement
+    # landed. The client uses this to show a small "Refined" tag on the one
+    # render where the number changes, instead of a silent swap.
+    refined: bool = False
     # Computed by the database as part of the same SELECT, so a list of logs
     # never loads a byte of image data to answer it.
     has_photo: bool = False

@@ -8,6 +8,7 @@ one router carrying both and the v1 aggregation stays a single include.
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import uuid
 from typing import Annotated
@@ -40,7 +41,7 @@ from app.services.ai.base import AIService
 from app.services.ai.deps import EstimateSource, get_ai_service, get_estimate_source
 from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import CalorieAdjustRequest, PhotoCalorieEstimate
-from app.services.calories import finalise_estimate
+from app.services.calories import clamp_photo_estimate, finalise_estimate
 from app.services.images import compress_for_estimation
 from app.services.insights import build_trend
 from app.services.rate_limit import account_identity
@@ -66,7 +67,12 @@ logger = logging.getLogger(__name__)
 
 def _food_log_out(log: FoodLog, estimate_source: EstimateSource) -> FoodLogOut:
     output = FoodLogOut.model_validate(log)
-    return output.model_copy(update={"estimate_source": estimate_source})
+    return output.model_copy(
+        update={
+            "estimate_source": estimate_source,
+            "refined": log.estimate_refined_at is not None,
+        }
+    )
 
 
 def _provisional_estimate(category: FoodCategory, serving_size: ServingSize) -> int:
@@ -303,9 +309,30 @@ async def create_log(
         )
         restaurant_id = restaurant.id
 
-    # Saved with a figure that needs nobody's permission, and refined behind
-    # the response. See _provisional_estimate.
-    estimated = _provisional_estimate(category, payload.serving_size)
+    # A photo estimate carries its own number, already answered for the real
+    # plate in the photo rather than for a category's nominal range. Using it
+    # is what makes the figure someone confirmed on the estimate screen the
+    # same figure that lands on the diary entry -- see clamp_photo_estimate's
+    # own note on why that clamp is not finalise_estimate's clamp. Absent, this
+    # is the same provisional-then-refined path as before.
+    now = dt.datetime.now(dt.UTC)
+    if payload.estimated_calories is not None:
+        estimated = clamp_photo_estimate(
+            payload.estimated_calories, category.base_calorie_min, category.base_calorie_max
+        )
+        calorie_source = "photo"
+        # Already the model's own answer for this exact photo, not a category
+        # midpoint waiting to be improved -- scheduling _refine_estimate below
+        # would risk replacing a real vision-model figure with a worse,
+        # text-only guess. Marking it refined now is what keeps refine-backfill
+        # (app/maintenance.py) from ever picking this row up either.
+        estimate_refined_at = now
+    else:
+        # Saved with a figure that needs nobody's permission, and refined
+        # behind the response. See _provisional_estimate.
+        estimated = _provisional_estimate(category, payload.serving_size)
+        calorie_source = "category"
+        estimate_refined_at = None
 
     log = FoodLog(
         user_id=user.id,
@@ -318,6 +345,11 @@ async def create_log(
         friend_scale=payload.friend_scale,
         serving_size=payload.serving_size,
         estimated_calories=estimated,
+        calorie_source=calorie_source,
+        protein_g=payload.protein_g,
+        carbs_g=payload.carbs_g,
+        fat_g=payload.fat_g,
+        estimate_refined_at=estimate_refined_at,
         client_id=payload.client_id,
     )
     if payload.created_at is not None:
@@ -342,9 +374,11 @@ async def create_log(
         raise
     created = await _load_log(session, user.id, log.id)
     await session.commit()
-    # After the commit, so the row is certainly there when the task opens its
-    # own session, and after the response is built, so nobody waits for it.
-    background.add_task(_refine_estimate, created.id, created.category_id, ai, factory)
+    if payload.estimated_calories is None:
+        # After the commit, so the row is certainly there when the task opens
+        # its own session, and after the response is built, so nobody waits
+        # for it. Skipped entirely for a photo-priced log; see above.
+        background.add_task(_refine_estimate, created.id, created.category_id, ai, factory)
     return _food_log_out(created, estimate_source)
 
 
@@ -528,6 +562,14 @@ async def update_log(
         category = await _get_category(session, log.category_id)
         log.estimated_calories = _provisional_estimate(category, log.serving_size)
         log.estimate_refined_at = None
+        # The dish name, category or serving size just changed, so a photo
+        # estimate from a previous save no longer describes this row -- the
+        # figure is a fresh category-derived guess now, not the number a
+        # photo confirmed, and the macros were for the old dish/serving.
+        log.calorie_source = "category"
+        log.protein_g = None
+        log.carbs_g = None
+        log.fat_g = None
 
     await session.flush()
     updated = await _load_log(session, user.id, log.id)
@@ -601,6 +643,14 @@ async def repeat_log(
         # fail with a 502 or wait on an upstream call.
         estimated_calories=original.estimated_calories,
         estimate_refined_at=original.estimate_refined_at,
+        # Same reasoning as the calorie figure above: a repeat of a
+        # photo-priced meal is still describing that same photographed
+        # plate, not a fresh guess, so its provenance and macros travel with
+        # it rather than reading as an unexplained category-priced log.
+        calorie_source=original.calorie_source,
+        protein_g=original.protein_g,
+        carbs_g=original.carbs_g,
+        fat_g=original.fat_g,
     )
     # created_at is deliberately left to the column default. That is the whole
     # point of a repeat: same meal, this moment.

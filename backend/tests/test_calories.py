@@ -10,6 +10,7 @@ from app.services.ai.schemas import CalorieAdjustRequest
 from app.services.calories import (
     SERVING_MULTIPLIERS,
     apply_serving_size,
+    clamp_photo_estimate,
     clamp_to_range,
     finalise_estimate,
 )
@@ -43,6 +44,32 @@ def test_a_large_serving_may_exceed_the_category_maximum() -> None:
 def test_an_out_of_range_guess_is_pulled_back_before_scaling() -> None:
     # 9000 is clamped to 400 first, then scaled by the medium multiplier of 1.0.
     assert finalise_estimate(9000, 100, 400, ServingSize.medium) == 400
+
+
+def test_a_photo_estimate_inside_the_widened_bound_is_kept_as_is() -> None:
+    # 700 is well past the category's own max of 400, which a photo estimate
+    # is allowed to be -- it already answers for the real, photographed
+    # portion, not for the category's nominal range.
+    assert clamp_photo_estimate(700, 100, 400) == 700
+
+
+def test_a_photo_estimate_is_clamped_to_three_times_the_category_maximum() -> None:
+    assert clamp_photo_estimate(100_000, 100, 400) == 1200
+
+
+def test_a_photo_estimate_is_clamped_to_the_absolute_ceiling_regardless_of_category() -> None:
+    # Three times a very high category max would exceed 5000 on its own, so
+    # the absolute ceiling has to be the tighter of the two bounds here.
+    assert clamp_photo_estimate(100_000, 1000, 3000) == 5000
+
+
+def test_a_photo_estimate_is_clamped_to_forty_percent_of_the_category_minimum() -> None:
+    assert clamp_photo_estimate(1, 100, 400) == 50
+
+
+def test_a_photo_estimate_never_drops_below_the_absolute_floor() -> None:
+    # 40% of a very low category minimum would be under the floor on its own.
+    assert clamp_photo_estimate(1, 50, 200) == 50
 
 
 def test_apply_serving_size_rounds_to_a_whole_calorie() -> None:
