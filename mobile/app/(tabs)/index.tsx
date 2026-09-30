@@ -21,7 +21,7 @@ import { useDashboard, useTrend } from '../../hooks/useInsights';
 import { describeError } from '../../lib/api';
 import { formatNumber, formatRatio } from '../../lib/format';
 import type { Today } from '../../lib/types';
-import { useTheme } from '../../theme';
+import { useLayout, useTheme } from '../../theme';
 
 /**
  * The dashboard.
@@ -515,6 +515,7 @@ export default function DashboardScreen() {
   // Burned is asked for, never parked on the screen as a form.
   const [burnOpen, setBurnOpen] = useState(false);
   const { colors, layout, spacing, type } = useTheme();
+  const { isExpanded } = useLayout();
   const router = useRouter();
   const dashboard = useDashboard();
   // Held here rather than inside the card so a pull to refresh reloads both.
@@ -538,7 +539,16 @@ export default function DashboardScreen() {
         />
       }
     >
-      <View style={{ width: '100%', maxWidth: layout.contentWidth, alignSelf: 'center' }}>
+      <View
+        style={{
+          width: '100%',
+          // Widened only at the one breakpoint with room for two real
+          // content columns side by side, each still individually capped
+          // below rather than left to stretch across half a wide window.
+          maxWidth: isExpanded ? layout.contentWidth * 1.75 : layout.contentWidth,
+          alignSelf: 'center',
+        }}
+      >
         {/* Only a password account can be unverified at all -- a Google row is
             verified the moment it exists -- and only until the link in the
             registration email is clicked, so this disappears for most
@@ -607,14 +617,26 @@ export default function DashboardScreen() {
         ) : null}
 
         {data && hasAnything ? (
-          <>
-            <TodayHero
-              today={data.today}
-              onSetTarget={() => router.navigate('/profile')}
-              onEditBurn={() => setBurnOpen(true)}
-            />
+          // Row only at expanded: a small tablet in portrait (medium) still
+          // has less width than two genuinely readable columns need, so it
+          // keeps the single stacked column exactly as before. At expanded
+          // each side gets its own flex share of the widened container above.
+          <View
+            style={
+              isExpanded
+                ? { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xxl }
+                : undefined
+            }
+          >
+            <View style={isExpanded ? { flex: 1 } : undefined}>
+              <TodayHero
+                today={data.today}
+                onSetTarget={() => router.navigate('/profile')}
+                onEditBurn={() => setBurnOpen(true)}
+              />
+            </View>
 
-            <View style={{ gap: spacing.xxl }}>
+            <View style={[{ gap: spacing.xxl }, isExpanded ? { flex: 1 } : null]}>
               {/* The one action on this screen that changes the hero, so it
                   sits directly under it rather than below the reference. */}
 
@@ -627,7 +649,7 @@ export default function DashboardScreen() {
 
               <TrendCard trend={trend} />
             </View>
-          </>
+          </View>
         ) : null}
 
         {/* Three destinations are a list, not three headlines. One surface, one

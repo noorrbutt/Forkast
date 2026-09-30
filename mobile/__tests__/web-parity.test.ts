@@ -342,7 +342,13 @@ describe('the content column', () => {
     // wants a shorter measure than the forms use, or the lines come out
     // lopsided.
     for (const screen of SCREENS.filter((s) => !s.includes('welcome'))) {
-      expect(code(screen)).toMatch(/maxWidth: layout\.(content|form)Width/);
+      // Not anchored to `maxWidth: layout.contentWidth` literally: the
+      // dashboard derives its expanded-breakpoint cap from the same token
+      // (`layout.contentWidth * 1.75`, see useLayout's own note on why),
+      // which is still "the width comes from the shared token" and not a
+      // screen inventing its own number -- the thing this test actually
+      // guards against.
+      expect(code(screen)).toMatch(/maxWidth:[\s\S]{0,80}?layout\.(content|form)Width/);
     }
   });
 });
