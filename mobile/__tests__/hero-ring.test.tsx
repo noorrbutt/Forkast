@@ -137,6 +137,34 @@ describe('Ring', () => {
     // The target tick only exists in the over case, so geometry carries it too.
     expect(UNSAFE_circleCount(2400, 1800)).toBeGreaterThan(UNSAFE_circleCount(900, 1800));
   });
+
+  it('collapses into one accessible reading, with the raw numbers attached', () => {
+    const { getByLabelText } = render(
+      <Ring value={900} max={1800} accessibilityLabel="Net calories: 900 of 1,800 kcal target.">
+        <Text>900</Text>
+      </Ring>,
+      { wrapper: wrap },
+    );
+
+    const node = getByLabelText('Net calories: 900 of 1,800 kcal target.');
+    expect(node.props.accessibilityRole).toBe('progressbar');
+    expect(node.props.accessibilityValue).toEqual({ min: 0, max: 1800, now: 900 });
+  });
+
+  it('carries no accessibility grouping when there is no target', () => {
+    // Nothing to collapse a screen reader into: the plain figure already
+    // stands alone, exactly as the empty-ring case above draws no SVG at all.
+    const { UNSAFE_getAllByType } = render(
+      <Ring value={1400} max={null}>
+        <Text>1,400</Text>
+      </Ring>,
+      { wrapper: wrap },
+    );
+
+    const [root] = UNSAFE_getAllByType(require('react-native').View);
+    expect(root.props.accessible).toBe(false);
+    expect(root.props.accessibilityRole).toBeUndefined();
+  });
 });
 
 function renderRing(value: number, max: number) {

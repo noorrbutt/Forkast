@@ -12,6 +12,14 @@ type RingProps = {
   size?: number;
   /** Rendered in the middle. The hero figure and its supporting line. */
   children?: ReactNode;
+  /**
+   * What a screen reader says for the whole meter, required whenever `max`
+   * is set. Marking this group `accessible` collapses its children out of
+   * the focus order -- the visible hero figure inside stops being reachable
+   * on its own -- so this has to say everything that figure and its status
+   * line say between them, not just repeat the bare number the SVG draws.
+   */
+  accessibilityLabel?: string;
 };
 
 /** Where the track starts and ends, leaving a gap at the bottom. */
@@ -34,7 +42,7 @@ const THICKNESS = 14;
  * the ring say "over by N" as well, since the style guide does not allow a state
  * to be carried by colour alone.
  */
-export function Ring({ value, max, size = 220, children }: RingProps) {
+export function Ring({ value, max, size = 220, children, accessibilityLabel }: RingProps) {
   const { colors } = useTheme();
 
   const radius = (size - THICKNESS) / 2;
@@ -72,7 +80,18 @@ export function Ring({ value, max, size = 220, children }: RingProps) {
   const fill = over ? colors.danger : colors.success;
 
   return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+    <View
+      style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}
+      // Collapsed into one reading rather than left for a screen reader to
+      // piece together from an SVG (which announces nothing at all) plus
+      // whatever Text happens to sit inside it. accessibilityRole
+      // "progressbar" pairs with accessibilityValue so VoiceOver/TalkBack
+      // also gets the raw numbers, not only the caller's prose.
+      accessible={hasTarget}
+      accessibilityRole={hasTarget ? 'progressbar' : undefined}
+      accessibilityLabel={hasTarget ? accessibilityLabel : undefined}
+      accessibilityValue={hasTarget ? { min: 0, max: max ?? undefined, now: value } : undefined}
+    >
       {hasTarget ? (
         <Svg width={size} height={size} style={{ position: 'absolute' }}>
           <G rotation={START} origin={`${size / 2}, ${size / 2}`}>

@@ -124,11 +124,21 @@ function readToday(today: Today) {
         ? 'The ring measures net calories, what you ate less what you burned, against your daily target.'
         : 'The ring measures net calories against your daily target. Nothing burned logged today, so net is what you ate.';
 
+  // What the ring itself announces, once, rather than leaving a screen
+  // reader to stitch the figure, the status line and the caption together
+  // from three separately focusable pieces the ring's own accessible={true}
+  // is about to collapse out of the focus order.
+  const accessibilityLabel =
+    target === null
+      ? `${formatNumber(today.net)} kcal today. No daily target set.`
+      : `Net calories: ${formatNumber(today.net)} of ${formatNumber(target)} kcal target. ${status}.`;
+
   return {
     target,
     over,
     status,
     measures,
+    accessibilityLabel,
     figure: formatNumber(today.net),
     caption: target === null ? 'kcal today' : `of ${formatNumber(target)} kcal today`,
   };
@@ -247,7 +257,12 @@ function TodayHero({
         {reading.target === null ? (
           figure
         ) : (
-          <Ring value={today.net} max={reading.target} size={size}>
+          <Ring
+            value={today.net}
+            max={reading.target}
+            size={size}
+            accessibilityLabel={reading.accessibilityLabel}
+          >
             {figure}
           </Ring>
         )}
