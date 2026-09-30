@@ -52,6 +52,7 @@ jest.mock('../lib/api', () => {
 
 import HistoryScreen from '../app/(tabs)/history';
 import MealScreen from '../app/logs/[id]';
+import { Skeleton } from '../components/ui';
 import { AuthProvider } from '../hooks/useAuth';
 import { api, hydrateTokens } from '../lib/api';
 import { ThemeProvider } from '../theme';
@@ -168,6 +169,38 @@ beforeEach(() => {
   });
   mockedApi.patch.mockResolvedValue({ data: NIHARI });
   mockedApi.delete.mockResolvedValue({ data: undefined });
+});
+
+describe('the diary while it is still loading', () => {
+  it('shows a skeleton that matches the row layout, not a spinner', async () => {
+    mockedHydrate.mockResolvedValue({ access_token: 'a', refresh_token: 'r' });
+    let resolveLogs: (value: { data: unknown }) => void = () => {};
+    mockedApi.get.mockImplementation(async (url: string) => {
+      if (url === '/me') {
+        return {
+          data: {
+            id: 'user-1',
+            email: 'noor@example.com',
+            timezone: 'Asia/Karachi',
+            goal: 'maintain',
+            daily_calorie_target: 2200,
+            created_at: '2026-01-04T09:00:00Z',
+          },
+        };
+      }
+      if (url === '/logs') return new Promise((resolve) => (resolveLogs = resolve));
+      return { data: null };
+    });
+
+    const { UNSAFE_queryAllByType, queryByText } = render(<HistoryScreen />, { wrapper });
+
+    // The old spinner's own label must be gone entirely, not joined by a
+    // skeleton alongside it.
+    expect(queryByText('Reading your diary')).toBeNull();
+    expect(UNSAFE_queryAllByType(Skeleton).length).toBeGreaterThan(0);
+
+    resolveLogs({ data: { items: [], total: 0 } });
+  });
 });
 
 describe('the diary', () => {

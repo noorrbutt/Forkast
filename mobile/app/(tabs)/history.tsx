@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, Pressable, RefreshControl, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
-import { Button, Dialog, Empty, ErrorState, EstimateBadge, FormError, Icon, initialsOf, ListGroup, Loading, Screen, useScreenInsets } from '../../components/ui';
+import { Button, Dialog, Empty, ErrorState, EstimateBadge, FormError, Icon, initialsOf, ListGroup, Loading, Screen, Skeleton, SkeletonText, useScreenInsets } from '../../components/ui';
 import { useInfiniteLogs, useRepeatLog } from '../../hooks/useLogs';
 import { usePhotoSource } from '../../hooks/usePhoto';
 import { describeError } from '../../lib/api';
@@ -653,6 +653,41 @@ function segmentMeals(meals: FoodLog[]): MealSegment[] {
   return segments;
 }
 
+/**
+ * One day's worth of the shape DayGroup actually draws -- a heading line
+ * above a card of row-shaped placeholders -- rather than a spinner sitting
+ * alone in the middle of the screen before the first page has answered.
+ */
+function DiaryDaySkeleton() {
+  const { colors, radius, spacing } = useTheme();
+
+  return (
+    <View style={{ gap: spacing.sm }}>
+      <SkeletonText width={120} fontSize={11} />
+      <View
+        style={{
+          borderRadius: radius.card,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
+          padding: spacing.lg,
+          gap: spacing.lg,
+        }}
+      >
+        {[0, 1].map((row) => (
+          <View key={row} style={{ flexDirection: 'row', gap: spacing.lg, alignItems: 'center' }}>
+            <Skeleton width={THUMB} height={THUMB} radius={radius.tile} />
+            <View style={{ flex: 1, gap: spacing.sm }}>
+              <SkeletonText width="70%" fontSize={16} />
+              <SkeletonText width="40%" fontSize={13} />
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function DayGroup({
   day,
   onOpen,
@@ -786,7 +821,12 @@ function DiaryList({
     onEndReachedThreshold={0.5}
     ListHeaderComponent={
       <>
-        {logs.isPending ? <Loading label="Reading your diary" /> : null}
+        {logs.isPending ? (
+          <View style={{ gap: spacing.lg }}>
+            <DiaryDaySkeleton />
+            <DiaryDaySkeleton />
+          </View>
+        ) : null}
 
         {logs.isError && !logs.data ? (
           <ErrorState
