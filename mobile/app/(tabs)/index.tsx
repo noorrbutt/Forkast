@@ -12,9 +12,11 @@ import {
   HeroWash,
   ListGroup,
   ListRow,
-  Loading,
   Ring,
   Screen,
+  Skeleton,
+  SkeletonCard,
+  SkeletonText,
 } from '../../components/ui';
 import { useMe } from '../../hooks/useAuth';
 import { useDashboard, useTrend } from '../../hooks/useInsights';
@@ -189,6 +191,37 @@ function Supporting({
     >
       {body}
     </Pressable>
+  );
+}
+
+/**
+ * What the dashboard looks like before `data` has answered.
+ *
+ * Same wash, same ring size, same two cards below it -- a silent promise
+ * about the layout rather than a spinner in the middle of an otherwise
+ * blank screen, so landing the real response moves nothing. See
+ * components/ui/Skeleton.tsx for why this exists instead of Loading here.
+ */
+function DashboardSkeleton() {
+  const { spacing } = useTheme();
+
+  return (
+    <>
+      <HeroWash pullUp={false}>
+        <View style={{ alignItems: 'center', gap: spacing.xl, paddingBottom: spacing.xxxl }}>
+          <Skeleton width={RING_SIZE} height={RING_SIZE} radius={RING_SIZE / 2} />
+          <View style={{ alignItems: 'center', gap: spacing.sm }}>
+            <SkeletonText width={140} fontSize={21} />
+            <SkeletonText width={220} fontSize={16} />
+          </View>
+        </View>
+      </HeroWash>
+
+      <View style={{ gap: spacing.xxl }}>
+        <SkeletonCard rows={3} />
+        <SkeletonCard rows={4} />
+      </View>
+    </>
   );
 }
 
@@ -375,11 +408,7 @@ function TrendCard({ trend }: { trend: ReturnType<typeof useTrend> }) {
   const data = trend.data;
 
   if (trend.isLoading) {
-    return (
-      <Card>
-        <Loading label="Comparing your months" />
-      </Card>
-    );
+    return <SkeletonCard rows={4} />;
   }
 
   if (trend.isError && !data) {
@@ -572,7 +601,7 @@ export default function DashboardScreen() {
           </Pressable>
         ) : null}
 
-        {dashboard.isLoading ? <Loading label="Reading your day" /> : null}
+        {dashboard.isLoading ? <DashboardSkeleton /> : null}
 
         {dashboard.isError && !data ? (
           <ErrorState

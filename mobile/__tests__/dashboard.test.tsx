@@ -42,7 +42,7 @@ jest.mock('../lib/api', () => {
 });
 
 import DashboardScreen from '../app/(tabs)/index';
-import { Card, Icon, ListGroup } from '../components/ui';
+import { Card, Icon, ListGroup, Skeleton } from '../components/ui';
 import { AuthProvider } from '../hooks/useAuth';
 import { api, hydrateTokens } from '../lib/api';
 import { ThemeProvider, palettes, split, type } from '../theme';
@@ -423,6 +423,41 @@ describe('the chart', () => {
 
     // The tallest eaten day in the fixture.
     expect(screen.getByText('Tallest bar 2,370 kcal.')).toBeTruthy();
+  });
+});
+
+describe('while the day is still loading', () => {
+  it('shows a skeleton that matches the layout, not a spinner', async () => {
+    mockedHydrate.mockResolvedValue({ access_token: 'a', refresh_token: 'r' });
+    // '/me' answers normally -- the dashboard query itself is what's held
+    // open, since that's the one this screen's own loading state gates on.
+    let resolveDashboard: (value: { data: unknown }) => void = () => {};
+    mockedApi.get.mockImplementation(async (url: string) => {
+      if (url === '/me') {
+        return {
+          data: {
+            id: 'u1',
+            email: 'noor@example.com',
+            timezone: 'Asia/Karachi',
+            goal: 'maintain',
+            daily_calorie_target: 2000,
+            created_at: '2026-01-04T09:00:00Z',
+          },
+        };
+      }
+      if (url === '/dashboard') return new Promise((resolve) => (resolveDashboard = resolve));
+      return { data: null };
+    });
+
+    const screen = render(<DashboardScreen />, { wrapper });
+
+    // The old spinner's own label must be gone, not merely joined by
+    // something else -- a skeleton that ships alongside the spinner it was
+    // meant to replace is not a replacement.
+    await waitFor(() => expect(screen.queryByText('Reading your day')).toBeNull());
+    expect(screen.UNSAFE_queryAllByType(Skeleton).length).toBeGreaterThan(0);
+
+    resolveDashboard({ data: null });
   });
 });
 
