@@ -56,7 +56,7 @@ jest.mock('../lib/api', () => {
 
 import HistoryScreen from '../app/(tabs)/history';
 import MealScreen from '../app/logs/[id]';
-import { Button, Skeleton } from '../components/ui';
+import { Skeleton } from '../components/ui';
 import { AuthProvider } from '../hooks/useAuth';
 import { api, hydrateTokens } from '../lib/api';
 import { ThemeProvider } from '../theme';
@@ -209,24 +209,25 @@ describe('the diary while it is still loading', () => {
 
 describe('the diary', () => {
   it('gathers a day into one heading carrying that day’s total', async () => {
-    const { getByText } = render(<HistoryScreen />, { wrapper });
+    const { getAllByText, getByText } = render(<HistoryScreen />, { wrapper });
 
     // Two meals on one day is one heading and one total, not two dates
     // repeated on two cards.
     await waitFor(() => expect(getByText(/1,640 kcal/)).toBeTruthy());
-    // The older meal is five days back, so it gets its own heading.
-    expect(getByText(/540 kcal/)).toBeTruthy();
+    // The older meal is five days back, so it gets its own heading -- and,
+    // being the only meal that day, its own heading total reads the same as
+    // its row's own figure, so both are expected to appear.
+    expect(getAllByText(/540 kcal/).length).toBe(2);
   });
 
-  it('gives a meal with no photo a monogram rather than a camera in a grey box', async () => {
-    const { getByText, queryByText } = render(<HistoryScreen />, { wrapper });
+  it('gives a meal with no photo a category icon rather than a camera in a grey box', async () => {
+    const screen = render(<HistoryScreen />, { wrapper });
 
-    await waitFor(() => expect(getByText('Chicken biryani')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
 
-    // Chicken biryani has no picture, so its initials stand in for one.
-    expect(getByText('CB')).toBeTruthy();
-    // Nihari has one, so nothing stands in.
-    expect(queryByText('NI')).toBeNull();
+    // A monogram used to stand in here; now it is the shared "meal" glyph on
+    // a tile tinted for the category's own junk/healthy judgement.
+    expect(screen.UNSAFE_queryAllByProps({ name: 'restaurant' }).length).toBeGreaterThan(0);
   });
 
   it('gives a meal with a photo its own full width card, dish and figure included', async () => {
@@ -340,7 +341,7 @@ describe('the diary', () => {
     const screen = render(<HistoryScreen />, { wrapper });
     const { getByText, queryByText } = screen;
 
-    await waitFor(() => expect(getByText('823')).toBeTruthy());
+    await waitFor(() => expect(getByText('823 kcal')).toBeTruthy());
     expect(queryByText('Refined')).toBeNull();
 
     BIRYANI.estimated_calories = 751;
@@ -354,32 +355,51 @@ describe('the diary', () => {
       await list.props.refreshControl.props.onRefresh();
     });
 
-    await waitFor(() => expect(getByText('751')).toBeTruthy());
+    await waitFor(() => expect(getByText('751 kcal')).toBeTruthy());
     await waitFor(() => expect(getByText('Refined')).toBeTruthy());
 
     // A log that was already refined before this row ever mounted must never
     // show the tag -- it is marking a change, not restating old news.
     const { queryByText: queryFreshMount } = render(<HistoryScreen />, { wrapper });
-    await waitFor(() => expect(queryFreshMount('751')).toBeTruthy());
+    await waitFor(() => expect(queryFreshMount('751 kcal')).toBeTruthy());
     expect(queryFreshMount('Refined')).toBeNull();
   });
 });
 
 describe('deleting a meal from the diary', () => {
   /**
-   * The diary lists three meals, so a bare `getAllByText('Delete')[0]` finds
-   * whichever row the server happened to list first (NIHARI, not BIRYANI) --
-   * not necessarily the one a test means to press. Button gives its
-   * accessibilityHint the dish name specifically so a screen reader can
-   * tell two "Delete" buttons apart, and that same hint is what disambiguates
-   * them here.
+   * There is no longer a standing Delete pill on the row -- see this file's
+   * own note on why -- so the non-gesture path is the row's long-press menu.
+   * RNTL cannot perform a real long press, but `onAccessibilityAction` is the
+   * same code path a screen reader's custom action actually calls, so firing
+   * it here exercises the real thing rather than simulating a gesture.
    */
-  function deleteButtonFor(screen: ReturnType<typeof render>, dishName: string) {
-    const button = screen
-      .UNSAFE_queryAllByType(Button)
-      .find((node) => (node.props.accessibilityHint as string | undefined)?.startsWith(`Removes ${dishName}`));
-    if (!button) throw new Error(`no Delete button found for ${dishName}`);
-    return button;
+  function openMenuFor(screen: ReturnType<typeof render>, dishName: string) {
+    const row = screen
+      .UNSAFE_queryAllByProps({ accessibilityRole: 'button' })
+      .find((node) => (node.props.accessibilityLabel as string | undefined)?.startsWith(`${dishName}, `));
+    if (!row) throw new Error(`no row found for ${dishName}`);
+    row.props.onAccessibilityAction({ nativeEvent: { actionName: 'longpress' } });
+  }
+
+  /**
+   * The menu's own "Delete", not the swipe panel's -- both render a literal
+   * "Delete" text node (the panel keeps its label even off screen, since
+   * RNTL never actually drags it out of the tree), so this walks up to the
+   * ancestor carrying the menu action's own, undecorated accessibilityLabel
+   * rather than the swipe panel's `Delete ${dishName}`.
+   */
+  function deleteInMenu(screen: ReturnType<typeof render>) {
+    const found = screen.getAllByText('Delete').find((node) => {
+      let ancestor: typeof node | null = node;
+      while (ancestor) {
+        if (ancestor.props.accessibilityLabel === 'Delete') return true;
+        ancestor = ancestor.parent;
+      }
+      return false;
+    });
+    if (!found) throw new Error('Delete action not found in the menu');
+    return found;
   }
 
   it('removes the row immediately and offers Undo, without calling the server yet', async () => {
@@ -387,7 +407,10 @@ describe('deleting a meal from the diary', () => {
     await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
 
     await act(async () => {
-      fireEvent.press(deleteButtonFor(screen, 'Chicken biryani'));
+      openMenuFor(screen, 'Chicken biryani');
+    });
+    await act(async () => {
+      fireEvent.press(deleteInMenu(screen));
     });
 
     expect(screen.queryByText('Chicken biryani')).toBeNull();
@@ -407,7 +430,10 @@ describe('deleting a meal from the diary', () => {
     await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
 
     await act(async () => {
-      fireEvent.press(deleteButtonFor(screen, 'Chicken biryani'));
+      openMenuFor(screen, 'Chicken biryani');
+    });
+    await act(async () => {
+      fireEvent.press(deleteInMenu(screen));
     });
     await act(async () => {
       screen.unmount();
@@ -426,7 +452,10 @@ describe('deleting a meal from the diary', () => {
     await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
 
     await act(async () => {
-      fireEvent.press(deleteButtonFor(screen, 'Chicken biryani'));
+      openMenuFor(screen, 'Chicken biryani');
+    });
+    await act(async () => {
+      fireEvent.press(deleteInMenu(screen));
     });
     await act(async () => {
       fireEvent.press(screen.getByText('Undo'));
@@ -441,26 +470,26 @@ describe('deleting a meal from the diary', () => {
     expect(mockedApi.delete).not.toHaveBeenCalled();
   });
 
-  it('the accessible, non-gesture Delete button reaches the same action the swipe does', async () => {
-    // Deleting is answered by a real, always-present Button in MealActions
-    // (see the row's own comment on why), not only by a swipe someone using
-    // a screen reader has no way to discover or perform. This is that path.
+  it('the accessible, non-gesture path reaches the same action the swipe does', async () => {
+    // Deleting is answered by the row's long-press menu -- reachable by the
+    // same custom accessibility action a screen reader calls, see this
+    // file's own comment on openMenuFor -- not only by a swipe someone using
+    // one has no way to discover or perform. This is that path.
     const screen = render(<HistoryScreen />, { wrapper });
     await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
 
-    const button = deleteButtonFor(screen, 'Chicken biryani');
-    // accessibilityRole lives on Button's own internal Pressable, not on
-    // this outer composite instance's props, so it's read off the subtree
-    // rather than off `button.props` directly.
-    expect(button.findByProps({ accessibilityRole: 'button' })).toBeTruthy();
+    await act(async () => {
+      openMenuFor(screen, 'Chicken biryani');
+    });
+    const deleteAction = deleteInMenu(screen);
 
     await act(async () => {
-      fireEvent.press(button);
+      fireEvent.press(deleteAction);
     });
     expect(screen.queryByText('Chicken biryani')).toBeNull();
   });
 
-  it('the swipe action reaches the same onDelete the button does', async () => {
+  it('the swipe action reaches the same onDelete the menu does', async () => {
     // Swipeable's revealed action renders regardless of an actual drag
     // having happened -- RNTL cannot simulate the gesture itself -- so this
     // checks that pressing it is wired to the real thing, not that the

@@ -1,11 +1,11 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Image, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, Text, View } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
-import { Button, Dialog, Empty, ErrorState, EstimateBadge, FormError, Icon, initialsOf, ListGroup, Loading, Screen, Skeleton, SkeletonText, UndoSnackbar, useScreenInsets } from '../../components/ui';
+import { Dialog, Empty, ErrorState, EstimateBadge, FormError, Icon, ListGroup, Loading, Screen, Skeleton, SkeletonText, UndoSnackbar, useScreenInsets } from '../../components/ui';
 import { useDeleteLog, useInfiniteLogs, useRepeatLog } from '../../hooks/useLogs';
 import { usePhotoSource } from '../../hooks/usePhoto';
 import { useSoftDelete } from '../../hooks/useSoftDelete';
@@ -207,6 +207,10 @@ type MealRowProps = {
   onOpen: (id: Uuid) => void;
   onRepeat: (id: Uuid) => void;
   onDelete: (id: Uuid) => void;
+  /** Opens the non-gesture action menu (Log again / Delete) -- the accessible
+   * equivalent of the swipe, reached by a long press or, for a screen reader,
+   * the "Show actions" custom action. */
+  onLongPress: (id: Uuid) => void;
   sending: boolean;
   confirmed: boolean;
   error: string | null;
@@ -389,54 +393,55 @@ function SwipeToDelete({
   );
 }
 
+/**
+ * Log again, the confirmation and the error. A single 48dp icon button now,
+ * not a row of pills: Delete used to sit right beside it wearing the same
+ * weight as the everyday action, on a row that wrapped onto two lines the
+ * moment either label grew past a phone's width. Delete has not gone away --
+ * it is the swipe, the long-press menu below, and the detail screen's own
+ * Delete -- it just no longer has to be a visible pill on every one of a
+ * hundred rows to be reachable.
+ */
 function MealActions({
   log,
   onRepeat,
-  onDelete,
   sending,
   confirmed,
   error,
-}: Pick<MealRowProps, 'log' | 'onRepeat' | 'onDelete' | 'sending' | 'confirmed' | 'error'>) {
-  const { colors, spacing, type } = useTheme();
+}: Pick<MealRowProps, 'log' | 'onRepeat' | 'sending' | 'confirmed' | 'error'>) {
+  const { colors, radius, spacing, type } = useTheme();
 
   return (
     <View style={{ gap: spacing.sm }}>
-      {/* Every row gets its own control rather than a swipe or a long press.
-          The whole point of repeating is to skip the trip through the meal,
-          and a gesture nobody can see is not a shortcut, it is a secret. The
-          same reasoning is why Delete lives here too, even though the row
-          also answers to a swipe: the swipe is a shortcut for the person who
-          already knows it exists, this button is how everyone else, and
-          anyone using a screen reader, finds the same action. */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: spacing.md,
-        }}
-      >
-        <Button
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+        <Pressable
           // Deliberately never disabled, however much a spinner would suit
           // it. A disabled Pressable does not claim the touch, so the row
           // underneath would take the second tap and open the meal, which is
           // the one thing this button must not do. It stays live, absorbs the
-          // tap, and the guard in the screen refuses the duplicate. The label
-          // carries the state instead.
-          label={sending ? 'Logging' : 'Log again'}
-          variant="secondary"
-          icon="log"
+          // tap, and the guard in the screen refuses the duplicate. The
+          // accessibility label carries the state instead.
           onPress={() => onRepeat(log.id)}
+          accessibilityRole="button"
+          accessibilityLabel={sending ? 'Logging again' : 'Log again'}
           accessibilityHint={`Adds ${log.dish_name} to today, with the time you tap it`}
-        />
-
-        <Button
-          label="Delete"
-          variant="ghost"
-          icon="trash"
-          onPress={() => onDelete(log.id)}
-          accessibilityHint={`Removes ${log.dish_name} from your diary, with a few seconds to undo it`}
-        />
+          style={({ pressed }) => ({
+            width: 48,
+            height: 48,
+            borderRadius: radius.pill,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 1.5,
+            borderColor: colors.outline,
+            backgroundColor: pressed ? colors.surfaceAlt : 'transparent',
+          })}
+        >
+          {sending ? (
+            <ActivityIndicator color={colors.text} />
+          ) : (
+            <Icon name="log" size={20} color={colors.text} />
+          )}
+        </Pressable>
 
         {confirmed ? (
           <Text style={[type.caption, { color: colors.success, flex: 1 }]}>
@@ -451,10 +456,26 @@ function MealActions({
 }
 
 /**
- * A meal with no photo. Compact: a monogram, the dish, the figure to compare,
- * the way in.
+ * The tile's fill and ink for a meal's category: a tint of the same danger
+ * or success tokens the rest of the app already uses for junk versus clean,
+ * not a one-off colour invented for this row, and a neutral tile when a log
+ * (rare, but possible) carries no category at all.
  */
-function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, sending, confirmed, error }: MealRowProps) {
+function categoryTileTone(
+  colors: ReturnType<typeof useTheme>['colors'],
+  category: FoodLog['category'],
+): { fill: string; ink: string } {
+  if (!category) return { fill: colors.surfaceAlt, ink: colors.muted };
+  return category.is_junk
+    ? { fill: colors.dangerSoft, ink: colors.danger }
+    : { fill: colors.successSoft, ink: colors.success };
+}
+
+/**
+ * A meal with no photo. Compact: a category icon, the dish, the figure to
+ * compare, the way in.
+ */
+function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, onLongPress, sending, confirmed, error }: MealRowProps) {
   const { colors, radius, spacing, type } = useTheme();
   const justRefined = useJustRefined(log);
 
@@ -476,6 +497,7 @@ function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, sending, confir
       // No real id to open yet -- this row is the client_id, and the meal
       // it names does not exist on the server until the save settles.
       onPress={() => !log.pending && onOpen(log.id)}
+      onLongPress={() => !log.pending && onLongPress(log.id)}
       disabled={log.pending}
       accessibilityRole="button"
       accessibilityLabel={
@@ -484,6 +506,13 @@ function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, sending, confir
           : `${log.dish_name}, ${formatNumber(log.estimated_calories)} kcal`
       }
       accessibilityHint={log.pending ? undefined : 'Opens this meal'}
+      // The long press this row answers to is a shortcut; the custom action
+      // is the same menu reached without a gesture at all, the way VoiceOver's
+      // rotor and TalkBack's local context menu already expect one.
+      accessibilityActions={log.pending ? undefined : [{ name: 'longpress', label: 'Show actions' }]}
+      onAccessibilityAction={(event) => {
+        if (event.nativeEvent.actionName === 'longpress') onLongPress(log.id);
+      }}
       style={({ pressed }) => ({
         flexDirection: 'row',
         gap: spacing.lg,
@@ -499,18 +528,13 @@ function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, sending, confir
           width: THUMB,
           height: THUMB,
           borderRadius: radius.tile,
-          backgroundColor: colors.surfaceAlt,
-          borderWidth: 1,
-          borderColor: colors.border,
+          backgroundColor: categoryTileTone(colors, log.category).fill,
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'hidden',
         }}
       >
-        {/* Typographic, never a camera glyph in a grey box. A monogram is the
-            same fallback the profile picture uses, so a missing image reads
-            as a deliberate placeholder rather than as a failed load. */}
-        <Text style={[type.title, { color: colors.muted }]}>{initialsOf(log.dish_name)}</Text>
+        <Icon name="meal" size={26} color={categoryTileTone(colors, log.category).ink} />
       </View>
 
       <View style={{ flex: 1, gap: spacing.xs }}>
@@ -532,17 +556,30 @@ function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, sending, confir
               },
             ]}
           >
-            {formatNumber(log.estimated_calories)}
+            {`${formatNumber(log.estimated_calories)} kcal`}
           </Text>
           {log.estimate_source === 'local' ? <EstimateBadge /> : null}
           {/* The row is the way in to the meal, which nothing else here says
-              out loud -- except while pending, when there is nowhere to go yet. */}
+              out loud -- except while pending, when there is nowhere to go yet.
+              Kept on its own at the far end of the row rather than beside the
+              actions below, so it reads as "this row opens" and not as a third
+              action next to Log again. */}
           {log.pending ? null : <Icon name="forward" size={18} />}
         </View>
 
         {log.pending ? <PendingBadge /> : justRefined ? <RefinedTag /> : null}
 
-        {meta ? <Text style={[type.caption, { color: colors.muted }]}>{meta}</Text> : null}
+        {/* `text`, not `muted`: a caption that names the category, the
+            restaurant and the serving is read as often as the dish name
+            itself, and muted-on-surface was the quietest thing on the row for
+            content someone actually relies on. One line, truncated -- a
+            row's height should not depend on how long a restaurant's name
+            happens to be. */}
+        {meta ? (
+          <Text numberOfLines={1} ellipsizeMode="tail" style={[type.caption, { color: colors.text }]}>
+            {meta}
+          </Text>
+        ) : null}
 
         {/* Repeating or acting on a meal that does not exist on the server
             yet has nothing to act on. */}
@@ -551,7 +588,6 @@ function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, sending, confir
             <MealActions
               log={log}
               onRepeat={onRepeat}
-              onDelete={onDelete}
               sending={sending}
               confirmed={confirmed}
               error={error}
@@ -577,7 +613,7 @@ function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, sending, confir
  * `colors.text`, tuned to sit on this app's own two backgrounds, has no
  * reason to be legible against someone's dinner.
  */
-function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, sending, confirmed, error }: MealRowProps) {
+function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, onLongPress, sending, confirmed, error }: MealRowProps) {
   const { colors, isDark, radius, spacing, type } = useTheme();
   const photo = usePhotoSource(log.id);
   const justRefined = useJustRefined(log);
@@ -592,11 +628,19 @@ function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, sending, confirme
 
   return (
     <View style={{ gap: spacing.md, paddingBottom: last ? 0 : spacing.lg }}>
+      {/* Same swipe and menu a photoless row answers to -- a photo is a
+          different surface, not a different set of actions. */}
+      <SwipeToDelete disabled={false} dishName={log.dish_name} onDelete={() => onDelete(log.id)}>
       <Pressable
         onPress={() => onOpen(log.id)}
+        onLongPress={() => onLongPress(log.id)}
         accessibilityRole="button"
         accessibilityLabel={`${log.dish_name}, ${formatNumber(log.estimated_calories)} kcal`}
         accessibilityHint="Opens this meal"
+        accessibilityActions={[{ name: 'longpress', label: 'Show actions' }]}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === 'longpress') onLongPress(log.id);
+        }}
         style={({ pressed }) => [
           {
             borderRadius: radius.card,
@@ -611,7 +655,11 @@ function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, sending, confirme
           !isDark ? elevation.light : null,
         ]}
       >
-        <View style={{ width: '100%', aspectRatio: 4 / 3 }}>
+        {/* Capped rather than left to a fixed 4:3, which on a wide phone or a
+            tablet's column made this card taller than the meal it was
+            showing warranted -- the photo is here to be recognised, not to
+            be the biggest thing on the screen. */}
+        <View style={{ width: '100%', aspectRatio: 4 / 3, maxHeight: 240 }}>
           {photo ? (
             <Image
               source={photo}
@@ -655,15 +703,22 @@ function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, sending, confirme
                   { color: '#FFFFFF', fontVariant: ['tabular-nums'] },
                 ]}
               >
-                {formatNumber(log.estimated_calories)}
+                {`${formatNumber(log.estimated_calories)} kcal`}
               </Text>
             </View>
             {meta ? (
-              <Text style={[type.caption, { color: 'rgba(255, 255, 255, 0.85)' }]}>{meta}</Text>
+              // Raised from 0.85 to 0.92: on the lighter end of the scrim
+              // gradient this is the least opacity that still clears 4.5:1
+              // against a photo, not merely against the solid colour it
+              // fades into.
+              <Text numberOfLines={1} ellipsizeMode="tail" style={[type.caption, { color: 'rgba(255, 255, 255, 0.92)' }]}>
+                {meta}
+              </Text>
             ) : null}
           </View>
         </View>
       </Pressable>
+      </SwipeToDelete>
 
       <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
         {log.estimate_source === 'local' ? <EstimateBadge /> : null}
@@ -671,7 +726,6 @@ function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, sending, confirme
         <MealActions
           log={log}
           onRepeat={onRepeat}
-          onDelete={onDelete}
           sending={sending}
           confirmed={confirmed}
           error={error}
@@ -778,6 +832,7 @@ function DayGroup({
   onOpen,
   onRepeat,
   onDelete,
+  onLongPress,
   confirmed,
   repeat,
 }: {
@@ -785,6 +840,7 @@ function DayGroup({
   onOpen: (id: Uuid) => void;
   onRepeat: (id: Uuid) => void;
   onDelete: (id: Uuid) => void;
+  onLongPress: (id: Uuid) => void;
   confirmed: Uuid | null;
   repeat: ReturnType<typeof useRepeatLog>;
 }) {
@@ -795,6 +851,7 @@ function DayGroup({
     onOpen,
     onRepeat,
     onDelete,
+    onLongPress,
     sending: repeat.isPending && repeat.variables === log.id,
     confirmed: confirmed === log.id,
     error:
@@ -854,6 +911,7 @@ function DiaryList({
   onOpen,
   onRepeat,
   onDelete,
+  onLongPress,
   onLogFirst,
 }: {
   days: DiaryDay[];
@@ -865,6 +923,7 @@ function DiaryList({
   onOpen: (id: Uuid) => void;
   onRepeat: (id: Uuid) => void;
   onDelete: (id: Uuid) => void;
+  onLongPress: (id: Uuid) => void;
   onLogFirst: () => void;
 }) {
   const { colors, layout, spacing, type } = useTheme();
@@ -970,10 +1029,10 @@ function DiaryList({
         // sizing to its own content -- otherwise a short day and a long one
         // paired together left a gap that read as a third, empty column.
         <View style={{ flex: 1 }}>
-          <DayGroup day={day} onOpen={onOpen} onRepeat={onRepeat} onDelete={onDelete} confirmed={confirmed} repeat={repeat} />
+          <DayGroup day={day} onOpen={onOpen} onRepeat={onRepeat} onDelete={onDelete} onLongPress={onLongPress} confirmed={confirmed} repeat={repeat} />
         </View>
       ) : (
-        <DayGroup day={day} onOpen={onOpen} onRepeat={onRepeat} onDelete={onDelete} confirmed={confirmed} repeat={repeat} />
+        <DayGroup day={day} onOpen={onOpen} onRepeat={onRepeat} onDelete={onDelete} onLongPress={onLongPress} confirmed={confirmed} repeat={repeat} />
       )
     }
     ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
@@ -1076,6 +1135,18 @@ export default function HistoryScreen() {
     setPending(itemsRef.current.find((log) => log.id === id) ?? null);
   }, []);
 
+  /**
+   * The non-gesture path to a row's actions: a long press, or the custom
+   * accessibility action every row also carries. Delete no longer has its
+   * own visible button, so this -- alongside the swipe and the detail
+   * screen's own Delete -- is how it stays reachable without either a
+   * gesture no one can see coming or a pill on every one of a hundred rows.
+   */
+  const [menuLog, setMenuLog] = useState<FoodLog | null>(null);
+  const askMenu = useCallback((id: Uuid) => {
+    setMenuLog(itemsRef.current.find((log) => log.id === id) ?? null);
+  }, []);
+
   const logAgain = (log: FoodLog) => {
     if (inFlight.current !== null) return;
     inFlight.current = log.id;
@@ -1146,6 +1217,7 @@ export default function HistoryScreen() {
         onOpen={openMeal}
         onRepeat={askToRepeat}
         onDelete={deleteMeal}
+        onLongPress={askMenu}
         onLogFirst={() => router.navigate('/log')}
       />
 
@@ -1182,6 +1254,38 @@ export default function HistoryScreen() {
             variant: 'secondary',
             onPress: () => setPending(null),
             disabled: repeat.isPending,
+          },
+        ]}
+      />
+
+      {/* The accessible, non-gesture equivalent of the swipe: a long press,
+          or the same custom accessibility action, opens this instead of
+          reaching for a hidden panel off the edge of the row. */}
+      <Dialog
+        visible={menuLog !== null}
+        onDismiss={() => setMenuLog(null)}
+        title={menuLog?.dish_name ?? ''}
+        actions={[
+          {
+            label: 'Log again',
+            icon: 'log',
+            onPress: () => {
+              if (menuLog) askToRepeat(menuLog.id);
+              setMenuLog(null);
+            },
+          },
+          {
+            label: 'Delete',
+            icon: 'trash',
+            variant: 'danger',
+            onPress: () => {
+              if (menuLog) deleteMeal(menuLog.id);
+              setMenuLog(null);
+            },
+          },
+          {
+            label: 'Cancel',
+            onPress: () => setMenuLog(null),
           },
         ]}
       />
