@@ -52,7 +52,7 @@ jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
 }));
 
 import StreaksScreen from '../app/(tabs)/streaks';
-import { Card, Icon } from '../components/ui';
+import { Card, Icon, Skeleton } from '../components/ui';
 import { AuthProvider } from '../hooks/useAuth';
 import { api, hydrateTokens } from '../lib/api';
 import { ThemeProvider } from '../theme';
@@ -191,8 +191,9 @@ describe('before the count has landed', () => {
 
     // The query is disabled until the keystore hands back a token, and a
     // disabled query is not "loading". Reading it as loading left the first
-    // paint of a cold start empty.
-    expect(view.getByText('Counting your days')).toBeTruthy();
+    // paint of a cold start empty. A skeleton matching the eventual layout
+    // now stands in for the spinner this test used to look for.
+    expect(view.UNSAFE_queryAllByType(Skeleton).length).toBeGreaterThan(0);
 
     // Then let the keystore read and the fetch behind it settle, so the state
     // updates land inside the test rather than after it has finished.

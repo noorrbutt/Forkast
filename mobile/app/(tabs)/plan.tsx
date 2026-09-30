@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { Button, Card, Chip, ErrorState, EstimateBadge, Hero, Loading, Screen } from '../../components/ui';
+import { Button, Card, Chip, ErrorState, EstimateBadge, Hero, Screen, SkeletonCard } from '../../components/ui';
 import { useMe } from '../../hooks/useAuth';
 import { useGeneratePlan, usePlans } from '../../hooks/usePlans';
 import { describeError } from '../../lib/api';
@@ -125,7 +125,15 @@ export default function PlanRoute() {
   return (
     <Screen title="AI meal plan">
       <View style={column}>
-        {looking ? <Loading label="Looking for past plans" /> : null}
+        {/* A plan is a handful of day cards once it exists, so the skeleton
+            standing in for "looking for one" is the same shape rather than
+            a spinner with no relationship to what might appear. */}
+        {looking ? (
+          <View style={{ gap: spacing.lg }}>
+            <SkeletonCard rows={2} />
+            <SkeletonCard rows={2} />
+          </View>
+        ) : null}
 
         {!hasPlan && !looking ? (
           <>

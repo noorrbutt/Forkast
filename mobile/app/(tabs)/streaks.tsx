@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RefreshControl, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
-import { Button, Card, Dialog, ErrorState, Hero, HeroWash, Loading, Screen } from '../../components/ui';
+import { Button, Card, Dialog, ErrorState, Hero, HeroWash, Screen, Skeleton, SkeletonCard, SkeletonText } from '../../components/ui';
 import { useStreaks } from '../../hooks/useInsights';
 import { describeError } from '../../lib/api';
 import { formatDate } from '../../lib/format';
@@ -93,6 +93,30 @@ function supportiveCopy(current: number, longest: number): string {
 }
 
 /**
+ * What this screen looks like before `data` has answered.
+ *
+ * Matches the "started" branch below rather than "day one": a returning
+ * user with a real streak is who this loading state is actually shown to
+ * on almost every open, and the richer of the two layouts is the closer
+ * stand-in for either.
+ */
+function StreaksSkeleton() {
+  const { spacing } = useTheme();
+
+  return (
+    <>
+      <HeroWash>
+        <View style={{ alignItems: 'center', gap: spacing.sm }}>
+          <Skeleton width={110} height={88} radius={12} />
+          <SkeletonText width={160} fontSize={16} />
+        </View>
+      </HeroWash>
+      <SkeletonCard rows={3} />
+    </>
+  );
+}
+
+/**
  * The one thing: the current streak, as a single figure in days.
  *
  * This screen answers one question, how long is the run, so it leads with the
@@ -150,7 +174,7 @@ export default function StreaksScreen() {
             the stored token has been read back from the keystore and a disabled
             query is not "loading". Reading it that way left the first paint of a
             cold start blank rather than showing a state anyone designed. */}
-        {streaks.isPending ? <Loading label="Counting your days" /> : null}
+        {streaks.isPending ? <StreaksSkeleton /> : null}
 
         {streaks.isError && !data ? (
           <ErrorState
