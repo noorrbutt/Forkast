@@ -366,14 +366,6 @@ describe('the diary', () => {
 });
 
 describe('deleting a meal from the diary', () => {
-  beforeEach(() => {
-    jest.useFakeTimers();
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
-  });
-
   /**
    * The diary lists three meals, so a bare `getAllByText('Delete')[0]` finds
    * whichever row the server happened to list first (NIHARI, not BIRYANI) --
@@ -403,7 +395,14 @@ describe('deleting a meal from the diary', () => {
     expect(mockedApi.delete).not.toHaveBeenCalled();
   });
 
-  it('actually deletes it from the server once the undo window elapses', async () => {
+  it('reaches the server once something forces the pending delete to settle', async () => {
+    // The five second window itself is useSoftDelete's own job and is
+    // tested in isolation, with fake timers, in useSoftDelete.test.tsx --
+    // mixing fake timers with a full screen render here fought with React
+    // Query's own setTimeout-based notification batching (see this
+    // suite's other comments on that) and made the whole file flaky.
+    // Unmounting exercises the exact same commit path (flush() on
+    // teardown) without needing to wait out or fake the real window.
     const screen = render(<HistoryScreen />, { wrapper });
     await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
 
@@ -411,13 +410,18 @@ describe('deleting a meal from the diary', () => {
       fireEvent.press(deleteButtonFor(screen, 'Chicken biryani'));
     });
     await act(async () => {
-      jest.advanceTimersByTime(5000);
+      screen.unmount();
+      // unmount() fires flush() synchronously, but flush() calls
+      // mutate(), whose mutationFn is itself async -- this is what lets
+      // that microtask actually reach api.delete before the assertion
+      // below runs.
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     expect(mockedApi.delete).toHaveBeenCalledWith('/logs/log-biryani');
   });
 
-  it('Undo brings the row back and never calls the server at all', async () => {
+  it('Undo cancels it outright, so even a later flush never reaches the server', async () => {
     const screen = render(<HistoryScreen />, { wrapper });
     await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
 
@@ -430,9 +434,10 @@ describe('deleting a meal from the diary', () => {
 
     expect(screen.getByText('Chicken biryani')).toBeTruthy();
 
-    await act(async () => {
-      jest.advanceTimersByTime(5000);
-    });
+    // Proves cancellation rather than a delete merely still pending: if
+    // Undo had not actually cleared it, unmounting (which flushes anything
+    // still pending) would call delete here.
+    screen.unmount();
     expect(mockedApi.delete).not.toHaveBeenCalled();
   });
 
