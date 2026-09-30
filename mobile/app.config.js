@@ -160,7 +160,16 @@ const config = {
           "android.permission.WRITE_EXTERNAL_STORAGE"
         ],
         "predictiveBackGestureEnabled": false,
-        "package": "com.forkast.app"
+        "package": "com.forkast.app",
+        // Explicit rather than left to whatever Expo/RN currently defaults
+        // to: "resize" is what makes the window itself shrink when the
+        // keyboard opens, which is what lets a plain ScrollView (every form
+        // in this app, via components/ui/Screen.tsx) scroll the focused
+        // field into the space that's left rather than have the keyboard
+        // simply cover it. iOS gets the equivalent from Screen's own
+        // `automaticallyAdjustKeyboardInsets`, which has no Android
+        // counterpart, so this is the platform half of the same guarantee.
+        "softwareKeyboardLayoutMode": "resize"
       },
       // There was no web key at all, so the browser build shipped with the Expo
       // default tab icon and no colour of its own, on a platform this app is
