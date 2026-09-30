@@ -8,6 +8,8 @@ import datetime as dt
 import pytest
 from httpx import AsyncClient
 
+from app.config import get_settings
+
 LOGS = "/api/v1/logs"
 
 
@@ -658,3 +660,86 @@ async def test_a_whitespace_only_restaurant_name_does_not_create_a_nameless_row(
 
     assert created["restaurant_id"] is None
     assert created["restaurant"] is None
+
+
+async def test_a_log_against_an_unknown_category_is_refused_as_a_client_error(
+    auth_client: AsyncClient,
+) -> None:
+    response = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "mystery",
+            "category_id": 32767,
+            "rating": 3,
+            "serving_size": "medium",
+        },
+    )
+
+    # 422 naming the id, not the 500 the foreign key would raise.
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Unknown category_id 32767"
+
+
+async def test_a_retried_save_with_the_same_client_id_answers_with_the_first_row(
+    auth_client: AsyncClient,
+) -> None:
+    """An offline client resends the same client_id until it sees a 2xx.
+
+    The retry is answered 200 from the row the first attempt made, rather than
+    a second 201 and a duplicate meal, and it ignores whatever else the retry
+    carried: the first save is the meal.
+    """
+    category = await _a_category(auth_client)
+    payload = {
+        "dish_name": "chicken biryani",
+        "category_id": category["id"],
+        "rating": 4,
+        "serving_size": "medium",
+        "client_id": "6f1c2d9e-3b8a-4f7e-9c1d-2a5b8e0f4c3a",
+    }
+
+    first = await auth_client.post(LOGS, json=payload)
+    retry = await auth_client.post(LOGS, json={**payload, "dish_name": "changed my mind"})
+
+    assert first.status_code == 201
+    assert retry.status_code == 200
+    assert retry.json()["id"] == first.json()["id"]
+    assert retry.json()["dish_name"] == "chicken biryani"
+    assert (await auth_client.get(LOGS)).json()["total"] == 1
+
+
+async def test_an_edit_past_the_refine_limit_still_saves_with_the_provisional_figure(
+    auth_client: AsyncClient,
+) -> None:
+    """The refine limit caps model calls, not edits.
+
+    Once it is spent the edit still lands and answers 200 with the category
+    midpoint figure; only the background refinement is skipped.
+    """
+    category = await _a_category(auth_client)
+    created = (
+        await auth_client.post(
+            LOGS,
+            json={
+                "dish_name": "chicken biryani",
+                "category_id": category["id"],
+                "rating": 4,
+                "serving_size": "small",
+            },
+        )
+    ).json()
+
+    settings = get_settings()
+    original = settings.refine_rate_limit
+    object.__setattr__(settings, "refine_rate_limit", 0)
+    try:
+        response = await auth_client.patch(
+            f"{LOGS}/{created['id']}", json={"serving_size": "large"}
+        )
+    finally:
+        object.__setattr__(settings, "refine_rate_limit", original)
+
+    assert response.status_code == 200
+    assert response.json()["serving_size"] == "large"
+    assert response.json()["refined"] is False
+    assert response.json()["estimated_calories"] > created["estimated_calories"]
