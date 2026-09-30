@@ -1,5 +1,5 @@
-import { type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { useEffect, type ReactNode } from 'react';
+import { AccessibilityInfo, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { useTheme } from '../../theme';
 import { Button } from './Button';
@@ -55,6 +55,17 @@ export function Dialog({
   actions,
 }: DialogProps) {
   const { colors, radius, spacing, type } = useTheme();
+
+  // Nothing moves a screen reader's focus onto a Modal by itself, on either
+  // platform, so a dialog that opens silently is one a VoiceOver or TalkBack
+  // user does not know exists until they happen to swipe onto it -- the same
+  // failure FormError and ErrorState exist to close for a message that just
+  // appears on screen. Announced rather than focused: `accessibilityViewIsModal`
+  // above already scopes iOS's swipe navigation to the card once it lands
+  // there, so this only has to say what the dialog is before that happens.
+  useEffect(() => {
+    if (visible) AccessibilityInfo.announceForAccessibility(`${title}${message ? `. ${message}` : ''}`);
+  }, [visible, title, message]);
 
   return (
     <Modal
