@@ -42,7 +42,7 @@ from app.api.deps import CurrentUser, RateLimiterDep, SessionDep, bearer_scheme
 # rebuilt here. See update_me for why the flow has to live in this route
 # rather than in a schema validator: it needs a session to check the new
 # address for uniqueness and a background task to send the mail after commit.
-from app.api.v1.auth import _issue_email_verification_token, _send_verification_email_safely
+from app.api.v1.auth import _send_verification_email_safely
 
 # The signature check that decides whether an upload really is an image, shared
 # with the meal photo route rather than written twice, so the two cannot drift
@@ -80,6 +80,7 @@ from app.services.ai.base import AIService
 from app.services.ai.deps import EstimateSource, get_ai_service, get_estimate_source
 from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import PlanContext, PlanLogSummary, PlanRequest
+from app.services.auth import issue_email_verification_token
 from app.services.google import GoogleAuthError, verify_google_id_token
 from app.services.insights import (
     build_dashboard,
@@ -284,7 +285,7 @@ async def update_me(
             )
         user.email = new_email.strip()
         user.email_verified = False
-        verification_token = await _issue_email_verification_token(session, user)
+        verification_token = await issue_email_verification_token(session, user)
 
     for field, value in changes.items():
         setattr(user, field, value)
