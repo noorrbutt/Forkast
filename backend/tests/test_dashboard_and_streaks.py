@@ -90,14 +90,30 @@ async def test_reminder_signal_tracks_slots_and_junk_streak(
 
     categories = await _categories(auth_client)
     timezone = ZoneInfo("Asia/Karachi")
-    today = dt.datetime.now(timezone).date()
+    now = dt.datetime.now(timezone)
+    today = now.date()
+    # Karachi runs five hours ahead of UTC, so 8am on the Karachi calendar
+    # "today" can still be ahead of the actual UTC clock, and the API rejects
+    # a future created_at outright. If that is the case here, the only
+    # not-yet-future instant on today's date is "now" itself, which may not
+    # land in the 5-11 breakfast bracket the service uses (app/services/
+    # insights.py) -- so the expected slot is derived the same way rather
+    # than hardcoded, to stay correct at whatever hour the suite runs.
+    breakfast_time = min(dt.datetime.combine(today, dt.time(8), tzinfo=timezone), now)
+    expected_slots = []
+    if 5 <= breakfast_time.hour < 11:
+        expected_slots = ["breakfast"]
+    elif 11 <= breakfast_time.hour < 16:
+        expected_slots = ["lunch"]
+    elif 16 <= breakfast_time.hour < 24:
+        expected_slots = ["dinner"]
     await _log(
         auth_client,
         categories["biryani"],
-        when=dt.datetime.combine(today, dt.time(8), tzinfo=timezone),
+        when=breakfast_time,
     )
     breakfast = (await auth_client.get(REMINDER_SIGNAL)).json()
-    assert breakfast["todays_meals_logged"] == ["breakfast"]
+    assert breakfast["todays_meals_logged"] == expected_slots
     assert breakfast["is_on_junk_streak"] is False
 
     await _log(auth_client, categories["fries"], when=dt.datetime.now(timezone))

@@ -46,6 +46,18 @@ async def _set_timezone(client: AsyncClient, timezone: str) -> None:
     assert response.status_code == 200, response.text
 
 
+def _at_noon_or_now(day: dt.date) -> dt.datetime:
+    """Noon Karachi on `day`, unless that is still ahead of the actual clock.
+
+    Karachi runs five hours ahead of UTC, so "today" by the Karachi calendar
+    can start before UTC has reached the corresponding noon instant. The API
+    rejects a future created_at outright, so building noon blindly is flaky
+    for however much of the UTC day sits before that boundary.
+    """
+    noon = dt.datetime.combine(day, dt.time(12), tzinfo=KARACHI)
+    return min(noon, dt.datetime.now(KARACHI))
+
+
 async def _log_clean_streak(
     client: AsyncClient, categories: dict, days: int, today: dt.date
 ) -> None:
@@ -56,7 +68,7 @@ async def _log_clean_streak(
             client,
             categories["biryani"],
             dish=f"clean day {offset}",
-            when=dt.datetime.combine(day, dt.time(12), tzinfo=KARACHI),
+            when=_at_noon_or_now(day),
         )
 
 
@@ -152,7 +164,7 @@ async def test_without_a_freeze_a_junk_day_still_resets_the_streak(
         auth_client,
         categories["fries"],
         dish="regrettable",
-        when=dt.datetime.combine(junk_day, dt.time(12), tzinfo=KARACHI),
+        when=_at_noon_or_now(junk_day),
     )
     await _log_clean_streak(auth_client, categories, 1, today)
 
