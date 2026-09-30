@@ -2,6 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, Pressable, RefreshControl, Text, View } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { Button, Dialog, Empty, ErrorState, EstimateBadge, FormError, Icon, initialsOf, ListGroup, Loading, Screen, Skeleton, SkeletonText, UndoSnackbar, useScreenInsets } from '../../components/ui';
@@ -327,6 +328,67 @@ function PendingBadge() {
  * because it is identical either way: repeating a meal is not a different
  * action depending on whether it has a photo.
  */
+/**
+ * The swipe itself: a shortcut for whoever already knows it exists, sitting
+ * on top of the same onDelete every row's real Delete button already calls
+ * (MealActions, above) -- never the only way to reach it, per this file's
+ * own rule about gestures that "nobody can see" for Log again, which
+ * applies here too.
+ *
+ * `renderRightActions` receiving `dragX` unused is deliberate: this reveals
+ * a plain, fixed-width panel rather than a label that grows or fades with
+ * the drag, since a target that moves while a thumb is still reaching for
+ * it is worse than one that simply appears.
+ */
+function SwipeToDelete({
+  disabled,
+  dishName,
+  onDelete,
+  children,
+}: {
+  disabled: boolean;
+  dishName: string;
+  onDelete: () => void;
+  children: React.ReactNode;
+}) {
+  const { colors, spacing, type } = useTheme();
+  const ref = useRef<Swipeable>(null);
+
+  if (disabled) return <>{children}</>;
+
+  return (
+    <Swipeable
+      ref={ref}
+      renderRightActions={() => (
+        <Pressable
+          onPress={() => {
+            ref.current?.close();
+            onDelete();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`Delete ${dishName}`}
+          style={{
+            width: 96,
+            alignItems: 'center',
+            justifyContent: 'center',
+            // dangerSoft fill with danger ink, not a solid danger fill with
+            // white text: the same pairing every other destructive control
+            // in this app uses (Button's danger variant), and the one this
+            // file's own contrast tests already check clears 4.5:1.
+            backgroundColor: colors.dangerSoft,
+          }}
+        >
+          <Icon name="trash" size={20} color={colors.danger} />
+          <Text style={[type.caption, { color: colors.danger, marginTop: spacing.xs }]}>Delete</Text>
+        </Pressable>
+      )}
+      overshootRight={false}
+    >
+      {children}
+    </Swipeable>
+  );
+}
+
 function MealActions({
   log,
   onRepeat,
@@ -405,6 +467,11 @@ function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, sending, confir
     .join(' · ');
 
   return (
+    <SwipeToDelete
+      disabled={log.pending ?? false}
+      dishName={log.dish_name}
+      onDelete={() => onDelete(log.id)}
+    >
     <Pressable
       // No real id to open yet -- this row is the client_id, and the meal
       // it names does not exist on the server until the save settles.
@@ -493,6 +560,7 @@ function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, sending, confir
         )}
       </View>
     </Pressable>
+    </SwipeToDelete>
   );
 }
 

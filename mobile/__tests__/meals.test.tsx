@@ -454,6 +454,22 @@ describe('deleting a meal from the diary', () => {
     });
     expect(screen.queryByText('Chicken biryani')).toBeNull();
   });
+
+  it('the swipe action reaches the same onDelete the button does', async () => {
+    // Swipeable's revealed action renders regardless of an actual drag
+    // having happened -- RNTL cannot simulate the gesture itself -- so this
+    // checks that pressing it is wired to the real thing, not that the
+    // gesture recognises a swipe.
+    const screen = render(<HistoryScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Delete Chicken biryani'));
+    });
+
+    expect(screen.queryByText('Chicken biryani')).toBeNull();
+    expect(screen.getByText(/Deleted Chicken biryani/)).toBeTruthy();
+  });
 });
 
 describe('the meal', () => {
