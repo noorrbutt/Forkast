@@ -152,10 +152,35 @@ export type FoodLog = {
   serving_size: ServingSize;
   estimated_calories: number;
   estimate_source: EstimateSource;
+  /**
+   * How estimated_calories on THIS row was priced, once, at creation --
+   * "photo" or "category", null for a log made before this existed. Not
+   * `estimate_source` above: that says which AI backend answered this
+   * request just now, this says where the row's own number came from.
+   */
+  calorie_source: 'photo' | 'category' | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  /**
+   * False only while a category-priced log is still waiting on its
+   * background text refinement. True immediately for a photo-priced log
+   * (nothing left to refine) and for anything logged before this existed.
+   * Used to show a small "Refined" tag on the one render where the number
+   * actually changes, instead of a silent swap.
+   */
+  refined: boolean;
   created_at: string;
   /** Joined in by the backend so a log row renders without a second request. */
   category: Category | null;
   restaurant: Restaurant | null;
+  /**
+   * Client-side only, never sent by the server. True for the optimistic row
+   * useCreateLog inserts the instant a meal is logged, for however long the
+   * save is still in flight or waiting on a connection -- see its own note
+   * on why that can outlast the request by a while on a bad signal.
+   */
+  pending?: boolean;
 };
 
 export type LogInput = {
@@ -169,6 +194,17 @@ export type LogInput = {
   friend_scale?: FriendScale;
   serving_size: ServingSize;
   client_id?: Uuid;
+  /**
+   * The figure the confirm screen actually showed, from a photo estimate.
+   * Absent means "price this from the category" exactly as before. Sending
+   * this is what makes the number someone confirmed the number that gets
+   * saved, rather than a second, category-derived number nobody approved --
+   * see create_log's own note on why it stopped silently re-pricing this.
+   */
+  estimated_calories?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
 };
 
 /**

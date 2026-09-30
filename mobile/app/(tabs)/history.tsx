@@ -2,6 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, Pressable, RefreshControl, Text, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { Button, Dialog, Empty, ErrorState, EstimateBadge, FormError, Icon, initialsOf, ListGroup, Loading, Screen, useScreenInsets } from '../../components/ui';
 import { useInfiniteLogs, useRepeatLog } from '../../hooks/useLogs';
@@ -11,6 +12,7 @@ import { SERVING_LABELS, formatNumber } from '../../lib/format';
 import { haptics } from '../../lib/haptics';
 import type { FoodLog, Uuid } from '../../lib/types';
 import { useTheme } from '../../theme';
+import { quick } from '../../theme/motion';
 import { elevation } from '../../theme/tokens';
 
 /**
@@ -207,6 +209,112 @@ type MealRowProps = {
   error: string | null;
 };
 
+/** How long the "Refined" tag stays up after a number changes underneath it. */
+const REFINED_TAG_MS = 4000;
+
+/**
+ * True for one brief window: the render where a log's number just changed
+ * because its background refinement landed, or the response to Log again
+ * came back photo-priced and instantly refined.
+ *
+ * Compares against a ref rather than the previous props, because a memoised
+ * row does not necessarily re-render on every parent pass -- React Query
+ * swapping the cached log in is what has to be caught here, not a React
+ * lifecycle event. Never true for a log that has always been refined (a
+ * fresh mount with `refined: true` and nothing to compare against yet): the
+ * point is to mark a change happening, not to claim credit for one that
+ * happened before this row ever rendered.
+ */
+function useJustRefined(log: FoodLog): boolean {
+  const previous = useRef<{ calories: number; refined: boolean } | null>(null);
+  const [justRefined, setJustRefined] = useState(false);
+
+  useEffect(() => {
+    const prior = previous.current;
+    previous.current = { calories: log.estimated_calories, refined: log.refined };
+    if (
+      prior &&
+      !prior.refined &&
+      log.refined &&
+      prior.calories !== log.estimated_calories
+    ) {
+      setJustRefined(true);
+      const timer = setTimeout(() => setJustRefined(false), REFINED_TAG_MS);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [log.estimated_calories, log.refined]);
+
+  return justRefined;
+}
+
+/**
+ * The acknowledgement that a number just moved, instead of the silent swap
+ * this replaced: `estimated_calories` used to change underneath whatever was
+ * on screen the moment the background refinement landed, with nothing on the
+ * row saying so.
+ */
+function RefinedTag() {
+  const { colors, radius, spacing, type } = useTheme();
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    opacity.value = withTiming(1, quick);
+    return () => {
+      opacity.value = 0;
+    };
+  }, [opacity]);
+
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  return (
+    <Animated.View
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel="Estimate refined"
+      style={[
+        {
+          alignSelf: 'flex-start',
+          borderRadius: radius.pill,
+          backgroundColor: colors.successSoft,
+          paddingHorizontal: spacing.sm,
+          paddingVertical: spacing.xs,
+        },
+        style,
+      ]}
+    >
+      <Text style={[type.caption, { color: colors.success }]}>Refined</Text>
+    </Animated.View>
+  );
+}
+
+/**
+ * The row useCreateLog inserts the instant a meal is logged, before the
+ * server has answered at all. Neutral rather than success or danger colouring
+ * on purpose: this is not yet a fact about the meal, it is a fact about the
+ * connection, and it clears itself the moment either resolves.
+ */
+function PendingBadge() {
+  const { colors, radius, spacing, type } = useTheme();
+
+  return (
+    <View
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel="Saving, will sync when back online"
+      style={{
+        alignSelf: 'flex-start',
+        borderRadius: radius.pill,
+        backgroundColor: colors.surfaceAlt,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: spacing.xs,
+      }}
+    >
+      <Text style={[type.caption, { color: colors.muted }]}>Pending sync</Text>
+    </View>
+  );
+}
+
 /**
  * Log again, the confirmation and the error. Shared between both row shapes
  * because it is identical either way: repeating a meal is not a different
@@ -266,6 +374,7 @@ function MealActions({
  */
 function CompactMealRow({ log, last, onOpen, onRepeat, sending, confirmed, error }: MealRowProps) {
   const { colors, radius, spacing, type } = useTheme();
+  const justRefined = useJustRefined(log);
 
   const meta = [
     log.category?.name,
@@ -277,17 +386,25 @@ function CompactMealRow({ log, last, onOpen, onRepeat, sending, confirmed, error
 
   return (
     <Pressable
-      onPress={() => onOpen(log.id)}
+      // No real id to open yet -- this row is the client_id, and the meal
+      // it names does not exist on the server until the save settles.
+      onPress={() => !log.pending && onOpen(log.id)}
+      disabled={log.pending}
       accessibilityRole="button"
-      accessibilityLabel={`${log.dish_name}, ${formatNumber(log.estimated_calories)} kcal`}
-      accessibilityHint="Opens this meal"
+      accessibilityLabel={
+        log.pending
+          ? `${log.dish_name}, saving`
+          : `${log.dish_name}, ${formatNumber(log.estimated_calories)} kcal`
+      }
+      accessibilityHint={log.pending ? undefined : 'Opens this meal'}
       style={({ pressed }) => ({
         flexDirection: 'row',
         gap: spacing.lg,
         padding: spacing.lg,
         borderBottomWidth: last ? 0 : 1,
         borderBottomColor: colors.border,
-        backgroundColor: pressed ? colors.surfaceAlt : 'transparent',
+        backgroundColor: pressed && !log.pending ? colors.surfaceAlt : 'transparent',
+        opacity: log.pending ? 0.7 : 1,
       })}
     >
       <View
@@ -332,21 +449,27 @@ function CompactMealRow({ log, last, onOpen, onRepeat, sending, confirmed, error
           </Text>
           {log.estimate_source === 'local' ? <EstimateBadge /> : null}
           {/* The row is the way in to the meal, which nothing else here says
-              out loud. */}
-          <Icon name="forward" size={18} />
+              out loud -- except while pending, when there is nowhere to go yet. */}
+          {log.pending ? null : <Icon name="forward" size={18} />}
         </View>
+
+        {log.pending ? <PendingBadge /> : justRefined ? <RefinedTag /> : null}
 
         {meta ? <Text style={[type.caption, { color: colors.muted }]}>{meta}</Text> : null}
 
-        <View style={{ marginTop: spacing.sm }}>
-          <MealActions
-            log={log}
-            onRepeat={onRepeat}
-            sending={sending}
-            confirmed={confirmed}
-            error={error}
-          />
-        </View>
+        {/* Repeating or acting on a meal that does not exist on the server
+            yet has nothing to act on. */}
+        {log.pending ? null : (
+          <View style={{ marginTop: spacing.sm }}>
+            <MealActions
+              log={log}
+              onRepeat={onRepeat}
+              sending={sending}
+              confirmed={confirmed}
+              error={error}
+            />
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -368,6 +491,7 @@ function CompactMealRow({ log, last, onOpen, onRepeat, sending, confirmed, error
 function PhotoMealRow({ log, last, onOpen, onRepeat, sending, confirmed, error }: MealRowProps) {
   const { colors, isDark, radius, spacing, type } = useTheme();
   const photo = usePhotoSource(log.id);
+  const justRefined = useJustRefined(log);
 
   const meta = [
     log.category?.name,
@@ -454,6 +578,7 @@ function PhotoMealRow({ log, last, onOpen, onRepeat, sending, confirmed, error }
 
       <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
         {log.estimate_source === 'local' ? <EstimateBadge /> : null}
+        {justRefined ? <RefinedTag /> : null}
         <MealActions
           log={log}
           onRepeat={onRepeat}

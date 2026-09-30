@@ -14,8 +14,9 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
+import { FlatList } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Jest hoists mock factories above these declarations, so the names they reach
@@ -288,6 +289,42 @@ describe('the diary', () => {
     fireEvent.press(getByText('Haleem'));
 
     expect(mockPush).toHaveBeenCalledWith('/logs/log-haleem');
+  });
+
+  it('tags a row "Refined" for one refetch when its number changes, and not before', async () => {
+    // Mutated in place between renders: mockedApi.get's closure returns this
+    // same object every call, so changing its fields is what a real
+    // background refinement landing between two fetches looks like.
+    // Distinct from NIHARI's and HALEEM's own calorie figures (both 820/540
+    // by default), so a text query for one number can only ever match this row.
+    BIRYANI.estimated_calories = 823;
+    BIRYANI.refined = false;
+
+    const screen = render(<HistoryScreen />, { wrapper });
+    const { getByText, queryByText } = screen;
+
+    await waitFor(() => expect(getByText('823')).toBeTruthy());
+    expect(queryByText('Refined')).toBeNull();
+
+    BIRYANI.estimated_calories = 751;
+    BIRYANI.refined = true;
+    // Pulled directly off the FlatList's own refreshControl prop rather than
+    // simulated as a gesture: nothing in this suite exercises pull-to-refresh
+    // as an actual touch, and RefreshControl's onRefresh is what the screen
+    // wires to logs.refetch() regardless of how it gets called.
+    const list = screen.UNSAFE_getByType(FlatList);
+    await act(async () => {
+      await list.props.refreshControl.props.onRefresh();
+    });
+
+    await waitFor(() => expect(getByText('751')).toBeTruthy());
+    await waitFor(() => expect(getByText('Refined')).toBeTruthy());
+
+    // A log that was already refined before this row ever mounted must never
+    // show the tag -- it is marking a change, not restating old news.
+    const { queryByText: queryFreshMount } = render(<HistoryScreen />, { wrapper });
+    await waitFor(() => expect(queryFreshMount('751')).toBeTruthy());
+    expect(queryFreshMount('Refined')).toBeNull();
   });
 });
 

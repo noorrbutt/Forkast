@@ -145,6 +145,24 @@ const CONFIDENCE_COPY: Record<PhotoEstimate['confidence'], string> = {
 };
 
 /**
+ * The calories and macros a photo estimate actually shows, portion chip
+ * included, in one place -- so the confirm screen's preview and submit's
+ * saved payload can never drift apart on the scaling arithmetic between them.
+ * Picking "large" has to move both the headline number and the macro line by
+ * the same ratio, since the model's macros describe its own single guess, not
+ * whichever portion chip ends up chosen.
+ */
+function scaledPhotoEstimate(estimate: PhotoEstimate, chosenCalories: number) {
+  const scale = estimate.calories > 0 ? chosenCalories / estimate.calories : 1;
+  return {
+    calories: chosenCalories,
+    protein_g: estimate.macros.protein_g * scale,
+    carbs_g: estimate.macros.carbs_g * scale,
+    fat_g: estimate.macros.fat_g * scale,
+  };
+}
+
+/**
  * How wide the form is allowed to get, and what centring it actually means.
  *
  * Centring every element would be worse than leaving it ragged: headings,
@@ -425,6 +443,18 @@ export default function LogScreen() {
     else if (restaurantName.trim().length > 0) input.restaurant_name = restaurantName.trim();
     if (area.trim().length > 0) input.area = area.trim();
 
+    // The number the confirm screen actually showed. Sent whenever a photo
+    // estimate exists in state at all, not only while still on the confirm
+    // screen, since switching to manual entry to fix a detail should not also
+    // throw away a calorie figure the photo already answered.
+    if (estimate) {
+      const scaled = scaledPhotoEstimate(estimate, portionCalories ?? estimate.calories);
+      input.estimated_calories = Math.round(scaled.calories);
+      input.protein_g = scaled.protein_g;
+      input.carbs_g = scaled.carbs_g;
+      input.fat_g = scaled.fat_g;
+    }
+
     createLog.mutate(input, {
       // The moment worth celebrating, and the only success haptic in the app.
       onSuccess: (log) => {
@@ -611,17 +641,12 @@ export default function LogScreen() {
 
     const photoBusy = estimatePhoto.isPending || photoPicker.preparing;
 
-    // Scaled together so the macro line never disagrees with the headline
-    // number: picking "large" moves both by the same ratio rather than the
-    // calories updating while the macros keep describing the model's
-    // original single guess.
-    const previewCalories = portionCalories ?? estimate.calories;
-    const portionScale = estimate.calories > 0 ? previewCalories / estimate.calories : 1;
-    const previewMacros = {
-      protein_g: estimate.macros.protein_g * portionScale,
-      carbs_g: estimate.macros.carbs_g * portionScale,
-      fat_g: estimate.macros.fat_g * portionScale,
-    };
+    // The same scaling submit() sends, so what this screen shows is
+    // provably what gets saved rather than two copies of the same arithmetic
+    // that could quietly drift apart.
+    const scaledPreview = scaledPhotoEstimate(estimate, portionCalories ?? estimate.calories);
+    const previewCalories = scaledPreview.calories;
+    const previewMacros = scaledPreview;
 
     return (
       <Screen title="Log a meal" onBack={resetForm}>
