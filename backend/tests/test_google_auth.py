@@ -697,3 +697,35 @@ async def test_the_database_refuses_an_account_with_no_way_in(session: AsyncSess
 
     assert "has_a_way_in" in str(caught.value)
     await session.rollback()
+
+
+async def test_a_returning_google_user_gains_a_missing_name_but_keeps_one_they_set(
+    client: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Google fills a gap in the name, never overwrites one.
+
+    The first sign in here arrives with no family name at all, and by the second
+    one the user has renamed themselves in Forkast. The second token carries a
+    family name and a different given name: the empty one is taken, the one the
+    user chose is left exactly as they chose it.
+    """
+    monkeypatch.setattr("app.api.v1.auth.verify_google_id_token", fake_google(identity(last=None)))
+    await client.post(GOOGLE, json={"id_token": "whatever"})
+
+    stored = await session.scalar(select(User).where(User.google_sub == "google-sub-1"))
+    assert stored is not None
+    assert stored.last_name is None
+    stored.first_name = "Sar"
+    await session.commit()
+
+    monkeypatch.setattr(
+        "app.api.v1.auth.verify_google_id_token",
+        fake_google(identity(first="Sara", last="Khan")),
+    )
+    again = await client.post(GOOGLE, json={"id_token": "whatever"})
+    assert again.status_code == 200
+
+    session.expire_all()
+    returning = await session.scalar(select(User).where(User.google_sub == "google-sub-1"))
+    assert returning is not None
+    assert (returning.first_name, returning.last_name) == ("Sar", "Khan")
