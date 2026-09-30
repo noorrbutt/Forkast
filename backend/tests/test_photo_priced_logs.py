@@ -85,9 +85,7 @@ async def test_a_wildly_high_photo_estimate_is_clamped_not_trusted(
 ) -> None:
     category = await _a_category(auth_client)
 
-    response = await auth_client.post(
-        LOGS, json=_payload(category, estimated_calories=19_999)
-    )
+    response = await auth_client.post(LOGS, json=_payload(category, estimated_calories=19_999))
 
     assert response.status_code == 201, response.text
     stored = response.json()["estimated_calories"]
@@ -123,9 +121,7 @@ async def test_repeating_a_photo_priced_log_carries_its_provenance_and_macros(
     created = (
         await auth_client.post(
             LOGS,
-            json=_payload(
-                category, estimated_calories=700, protein_g=30, carbs_g=50, fat_g=15
-            ),
+            json=_payload(category, estimated_calories=700, protein_g=30, carbs_g=50, fat_g=15),
         )
     ).json()
 
@@ -154,16 +150,12 @@ async def test_editing_the_category_of_a_photo_priced_log_re_prices_it_from_scra
     created = (
         await auth_client.post(
             LOGS,
-            json=_payload(
-                biryani, estimated_calories=900, protein_g=40, carbs_g=80, fat_g=20
-            ),
+            json=_payload(biryani, estimated_calories=900, protein_g=40, carbs_g=80, fat_g=20),
         )
     ).json()
     assert created["calorie_source"] == "photo"
 
-    updated = await auth_client.patch(
-        f"{LOGS}/{created['id']}", json={"category_id": fries["id"]}
-    )
+    updated = await auth_client.patch(f"{LOGS}/{created['id']}", json={"category_id": fries["id"]})
 
     assert updated.status_code == 200, updated.text
     body = updated.json()
