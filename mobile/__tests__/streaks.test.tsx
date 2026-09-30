@@ -23,6 +23,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 const mockNavigate = jest.fn();
 
 jest.mock('expo-router', () => ({
+  // A no-op is enough for every test here: nothing exercises what happens
+  // when a screen loses focus, only that rendering a screen using the real
+  // hook does not throw.
+  useFocusEffect: jest.fn(),
   useRouter: () => ({
     push: jest.fn(),
     back: jest.fn(),

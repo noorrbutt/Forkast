@@ -1,12 +1,13 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Image, Pressable, RefreshControl, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
-import { Button, Dialog, Empty, ErrorState, EstimateBadge, FormError, Icon, initialsOf, ListGroup, Loading, Screen, Skeleton, SkeletonText, useScreenInsets } from '../../components/ui';
-import { useInfiniteLogs, useRepeatLog } from '../../hooks/useLogs';
+import { Button, Dialog, Empty, ErrorState, EstimateBadge, FormError, Icon, initialsOf, ListGroup, Loading, Screen, Skeleton, SkeletonText, UndoSnackbar, useScreenInsets } from '../../components/ui';
+import { useDeleteLog, useInfiniteLogs, useRepeatLog } from '../../hooks/useLogs';
 import { usePhotoSource } from '../../hooks/usePhoto';
+import { useSoftDelete } from '../../hooks/useSoftDelete';
 import { describeError } from '../../lib/api';
 import { SERVING_LABELS, formatNumber } from '../../lib/format';
 import { haptics } from '../../lib/haptics';
@@ -204,6 +205,7 @@ type MealRowProps = {
    */
   onOpen: (id: Uuid) => void;
   onRepeat: (id: Uuid) => void;
+  onDelete: (id: Uuid) => void;
   sending: boolean;
   confirmed: boolean;
   error: string | null;
@@ -328,17 +330,22 @@ function PendingBadge() {
 function MealActions({
   log,
   onRepeat,
+  onDelete,
   sending,
   confirmed,
   error,
-}: Pick<MealRowProps, 'log' | 'onRepeat' | 'sending' | 'confirmed' | 'error'>) {
+}: Pick<MealRowProps, 'log' | 'onRepeat' | 'onDelete' | 'sending' | 'confirmed' | 'error'>) {
   const { colors, spacing, type } = useTheme();
 
   return (
     <View style={{ gap: spacing.sm }}>
       {/* Every row gets its own control rather than a swipe or a long press.
           The whole point of repeating is to skip the trip through the meal,
-          and a gesture nobody can see is not a shortcut, it is a secret. */}
+          and a gesture nobody can see is not a shortcut, it is a secret. The
+          same reasoning is why Delete lives here too, even though the row
+          also answers to a swipe: the swipe is a shortcut for the person who
+          already knows it exists, this button is how everyone else, and
+          anyone using a screen reader, finds the same action. */}
       <View
         style={{
           flexDirection: 'row',
@@ -361,6 +368,14 @@ function MealActions({
           accessibilityHint={`Adds ${log.dish_name} to today, with the time you tap it`}
         />
 
+        <Button
+          label="Delete"
+          variant="ghost"
+          icon="trash"
+          onPress={() => onDelete(log.id)}
+          accessibilityHint={`Removes ${log.dish_name} from your diary, with a few seconds to undo it`}
+        />
+
         {confirmed ? (
           <Text style={[type.caption, { color: colors.success, flex: 1 }]}>
             Logged again for today.
@@ -377,7 +392,7 @@ function MealActions({
  * A meal with no photo. Compact: a monogram, the dish, the figure to compare,
  * the way in.
  */
-function CompactMealRow({ log, last, onOpen, onRepeat, sending, confirmed, error }: MealRowProps) {
+function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, sending, confirmed, error }: MealRowProps) {
   const { colors, radius, spacing, type } = useTheme();
   const justRefined = useJustRefined(log);
 
@@ -469,6 +484,7 @@ function CompactMealRow({ log, last, onOpen, onRepeat, sending, confirmed, error
             <MealActions
               log={log}
               onRepeat={onRepeat}
+              onDelete={onDelete}
               sending={sending}
               confirmed={confirmed}
               error={error}
@@ -493,7 +509,7 @@ function CompactMealRow({ log, last, onOpen, onRepeat, sending, confirmed, error
  * `colors.text`, tuned to sit on this app's own two backgrounds, has no
  * reason to be legible against someone's dinner.
  */
-function PhotoMealRow({ log, last, onOpen, onRepeat, sending, confirmed, error }: MealRowProps) {
+function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, sending, confirmed, error }: MealRowProps) {
   const { colors, isDark, radius, spacing, type } = useTheme();
   const photo = usePhotoSource(log.id);
   const justRefined = useJustRefined(log);
@@ -587,6 +603,7 @@ function PhotoMealRow({ log, last, onOpen, onRepeat, sending, confirmed, error }
         <MealActions
           log={log}
           onRepeat={onRepeat}
+          onDelete={onDelete}
           sending={sending}
           confirmed={confirmed}
           error={error}
@@ -692,12 +709,14 @@ function DayGroup({
   day,
   onOpen,
   onRepeat,
+  onDelete,
   confirmed,
   repeat,
 }: {
   day: DiaryDay;
   onOpen: (id: Uuid) => void;
   onRepeat: (id: Uuid) => void;
+  onDelete: (id: Uuid) => void;
   confirmed: Uuid | null;
   repeat: ReturnType<typeof useRepeatLog>;
 }) {
@@ -707,6 +726,7 @@ function DayGroup({
   const rowProps = (log: FoodLog) => ({
     onOpen,
     onRepeat,
+    onDelete,
     sending: repeat.isPending && repeat.variables === log.id,
     confirmed: confirmed === log.id,
     error:
@@ -765,6 +785,7 @@ function DiaryList({
   confirmed,
   onOpen,
   onRepeat,
+  onDelete,
   onLogFirst,
 }: {
   days: DiaryDay[];
@@ -775,6 +796,7 @@ function DiaryList({
   confirmed: Uuid | null;
   onOpen: (id: Uuid) => void;
   onRepeat: (id: Uuid) => void;
+  onDelete: (id: Uuid) => void;
   onLogFirst: () => void;
 }) {
   const { colors, layout, spacing, type } = useTheme();
@@ -880,10 +902,10 @@ function DiaryList({
         // sizing to its own content -- otherwise a short day and a long one
         // paired together left a gap that read as a third, empty column.
         <View style={{ flex: 1 }}>
-          <DayGroup day={day} onOpen={onOpen} onRepeat={onRepeat} confirmed={confirmed} repeat={repeat} />
+          <DayGroup day={day} onOpen={onOpen} onRepeat={onRepeat} onDelete={onDelete} confirmed={confirmed} repeat={repeat} />
         </View>
       ) : (
-        <DayGroup day={day} onOpen={onOpen} onRepeat={onRepeat} confirmed={confirmed} repeat={repeat} />
+        <DayGroup day={day} onOpen={onOpen} onRepeat={onRepeat} onDelete={onDelete} confirmed={confirmed} repeat={repeat} />
       )
     }
     ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
@@ -895,8 +917,60 @@ export default function HistoryScreen() {
   const router = useRouter();
   const logs = useInfiniteLogs();
   const repeat = useRepeatLog();
+  const deleteLog = useDeleteLog();
 
   const [confirmed, setConfirmed] = useState<Uuid | null>(null);
+
+  /**
+   * The undo window a swiped-away (or "Delete" button) row sits in before
+   * it actually leaves the server. See useSoftDelete's own note on why
+   * flush has to be wired to more than just its own five second timer.
+   */
+  const softDelete = useSoftDelete<Uuid>(
+    useCallback((id: Uuid) => deleteLog.mutate(id), [deleteLog]),
+  );
+
+  // Leaving the tab is "navigation" the same way closing the app is
+  // "background": both are ways of looking away without pressing Undo, and
+  // expo-router keeps tab screens mounted across a switch, so unmounting
+  // alone would never catch this one.
+  useFocusEffect(
+    useCallback(() => {
+      return () => softDelete.flush();
+    }, [softDelete]),
+  );
+
+  /** What the snackbar at the bottom of the screen says right now, and what
+   * Undo undoes -- the most recently swiped row, not every pending one, so
+   * swiping three rows in a row and pressing Undo once has one clear,
+   * predictable target rather than an ambiguous "undo something". */
+  const [lastDeleted, setLastDeleted] = useState<{ id: Uuid; dishName: string } | null>(null);
+
+  const deleteMeal = useCallback(
+    (id: Uuid) => {
+      const log = itemsRef.current.find((item) => item.id === id);
+      if (!log) return;
+      softDelete.schedule(id);
+      setLastDeleted({ id, dishName: log.dish_name });
+      haptics.tap();
+    },
+    [softDelete],
+  );
+
+  const undoDelete = useCallback(() => {
+    if (!lastDeleted) return;
+    softDelete.cancel(lastDeleted.id);
+    setLastDeleted(null);
+    haptics.tap();
+  }, [lastDeleted, softDelete]);
+
+  // The snackbar clears itself once its own row has actually committed
+  // (the undo window elapsed, or a flush forced it sooner), rather than
+  // running a second timer of its own that could drift out of sync with
+  // useSoftDelete's.
+  useEffect(() => {
+    if (lastDeleted && !softDelete.isPending(lastDeleted.id)) setLastDeleted(null);
+  }, [lastDeleted, softDelete]);
 
   /**
    * The only thing stopping a meal being logged twice.
@@ -963,11 +1037,20 @@ export default function HistoryScreen() {
   const itemsRef = useRef<FoodLog[]>(items);
   itemsRef.current = items;
 
+  // Gone from the list the instant it's swiped, not merely greyed out: the
+  // server hasn't actually deleted it yet (see useSoftDelete), but showing
+  // a row that visually still exists while its own Delete button no longer
+  // does anything would read as broken rather than as undoable.
+  const visibleItems = useMemo(
+    () => items.filter((item) => !softDelete.isPending(item.id)),
+    [items, softDelete],
+  );
+
   // Today is read at grouping time rather than held in state: this query is the
   // only thing that moves the list, and it refetches when the screen comes back
   // into view, so a heading cannot sit on "Today" into the next morning without
   // the data under it being refreshed at the same moment.
-  const days = useMemo(() => groupByDay(items, new Date()), [items]);
+  const days = useMemo(() => groupByDay(visibleItems, new Date()), [visibleItems]);
 
   const loadMore = useCallback(() => {
     if (logs.hasNextPage && !logs.isFetchingNextPage) void logs.fetchNextPage();
@@ -989,12 +1072,18 @@ export default function HistoryScreen() {
         days={days}
         logs={logs}
         loadMore={loadMore}
-        items={items}
+        items={visibleItems}
         repeat={repeat}
         confirmed={confirmed}
         onOpen={openMeal}
         onRepeat={askToRepeat}
+        onDelete={deleteMeal}
         onLogFirst={() => router.navigate('/log')}
+      />
+
+      <UndoSnackbar
+        message={lastDeleted ? `Deleted ${lastDeleted.dishName}.` : null}
+        onUndo={undoDelete}
       />
 
       {/* At screen level rather than inside the row, which is what every other

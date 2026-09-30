@@ -10,6 +10,10 @@ const mockSignOut = jest.fn().mockResolvedValue(undefined);
 let mockParams: { token?: string; stage?: string } = {};
 
 jest.mock('expo-router', () => ({
+  // A no-op is enough for every test here: nothing exercises what happens
+  // when a screen loses focus, only that rendering a screen using the real
+  // hook does not throw.
+  useFocusEffect: jest.fn(),
   useLocalSearchParams: () => mockParams,
   useRouter: () => ({ back: jest.fn(), push: mockPush, replace: mockReplace }),
 }));

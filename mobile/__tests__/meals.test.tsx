@@ -27,6 +27,10 @@ const mockNavigate = jest.fn();
 const mockDetailId = 'log-nihari';
 
 jest.mock('expo-router', () => ({
+  // A no-op is enough for every test here: nothing exercises what happens
+  // when a screen loses focus, only that rendering a screen using the real
+  // hook does not throw.
+  useFocusEffect: jest.fn(),
   useRouter: () => ({
     push: mockPush,
     back: mockBack,
@@ -52,7 +56,7 @@ jest.mock('../lib/api', () => {
 
 import HistoryScreen from '../app/(tabs)/history';
 import MealScreen from '../app/logs/[id]';
-import { Skeleton } from '../components/ui';
+import { Button, Skeleton } from '../components/ui';
 import { AuthProvider } from '../hooks/useAuth';
 import { api, hydrateTokens } from '../lib/api';
 import { ThemeProvider } from '../theme';
@@ -358,6 +362,97 @@ describe('the diary', () => {
     const { queryByText: queryFreshMount } = render(<HistoryScreen />, { wrapper });
     await waitFor(() => expect(queryFreshMount('751')).toBeTruthy());
     expect(queryFreshMount('Refined')).toBeNull();
+  });
+});
+
+describe('deleting a meal from the diary', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  /**
+   * The diary lists three meals, so a bare `getAllByText('Delete')[0]` finds
+   * whichever row the server happened to list first (NIHARI, not BIRYANI) --
+   * not necessarily the one a test means to press. Button gives its
+   * accessibilityHint the dish name specifically so a screen reader can
+   * tell two "Delete" buttons apart, and that same hint is what disambiguates
+   * them here.
+   */
+  function deleteButtonFor(screen: ReturnType<typeof render>, dishName: string) {
+    const button = screen
+      .UNSAFE_queryAllByType(Button)
+      .find((node) => (node.props.accessibilityHint as string | undefined)?.startsWith(`Removes ${dishName}`));
+    if (!button) throw new Error(`no Delete button found for ${dishName}`);
+    return button;
+  }
+
+  it('removes the row immediately and offers Undo, without calling the server yet', async () => {
+    const screen = render(<HistoryScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(deleteButtonFor(screen, 'Chicken biryani'));
+    });
+
+    expect(screen.queryByText('Chicken biryani')).toBeNull();
+    expect(screen.getByText(/Deleted Chicken biryani/)).toBeTruthy();
+    expect(mockedApi.delete).not.toHaveBeenCalled();
+  });
+
+  it('actually deletes it from the server once the undo window elapses', async () => {
+    const screen = render(<HistoryScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(deleteButtonFor(screen, 'Chicken biryani'));
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(5000);
+    });
+
+    expect(mockedApi.delete).toHaveBeenCalledWith('/logs/log-biryani');
+  });
+
+  it('Undo brings the row back and never calls the server at all', async () => {
+    const screen = render(<HistoryScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(deleteButtonFor(screen, 'Chicken biryani'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByText('Undo'));
+    });
+
+    expect(screen.getByText('Chicken biryani')).toBeTruthy();
+
+    await act(async () => {
+      jest.advanceTimersByTime(5000);
+    });
+    expect(mockedApi.delete).not.toHaveBeenCalled();
+  });
+
+  it('the accessible, non-gesture Delete button reaches the same action the swipe does', async () => {
+    // Deleting is answered by a real, always-present Button in MealActions
+    // (see the row's own comment on why), not only by a swipe someone using
+    // a screen reader has no way to discover or perform. This is that path.
+    const screen = render(<HistoryScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+
+    const button = deleteButtonFor(screen, 'Chicken biryani');
+    // accessibilityRole lives on Button's own internal Pressable, not on
+    // this outer composite instance's props, so it's read off the subtree
+    // rather than off `button.props` directly.
+    expect(button.findByProps({ accessibilityRole: 'button' })).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(button);
+    });
+    expect(screen.queryByText('Chicken biryani')).toBeNull();
   });
 });
 

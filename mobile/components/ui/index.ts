@@ -10,6 +10,7 @@ export { Frosted } from './Frosted';
 export { Icon, type IconName } from './Icon';
 export { Loading } from './Loading';
 export { Skeleton, SkeletonCard, SkeletonText } from './Skeleton';
+export { UndoSnackbar } from './UndoSnackbar';
 export { Screen, useScreenInsets } from './Screen';
 export { ControlLabel } from './ControlLabel';
 export { Avatar, initialsOf } from './Avatar';
