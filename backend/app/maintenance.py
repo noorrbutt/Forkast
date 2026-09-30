@@ -11,17 +11,13 @@ from app.api.v1.logs import _refine_estimate
 from app.db import get_session_factory
 from app.models import FoodLog
 from app.services.ai.deps import get_ai_service
-from app.services.rate_limit import RateLimiter, prune_refresh_tokens
+from app.services.rate_limit import RateLimiter
 
 logger = logging.getLogger(__name__)
 
 
 async def _prune_all() -> tuple[int, int]:
-    session_factory = get_session_factory()
-    limiter = RateLimiter(session_factory)
-    rate_limit_rows = await limiter.prune()
-    refresh_rows = await prune_refresh_tokens(session_factory)
-    return rate_limit_rows, refresh_rows
+    return await RateLimiter(get_session_factory()).prune_all()
 
 
 # Refinement calls the AI provider, so unbounded concurrency here is

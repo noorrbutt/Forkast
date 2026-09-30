@@ -46,7 +46,7 @@ from app.schemas.auth import (
 from app.services.email import send_password_reset_email, send_verification_email
 from app.services.google import GoogleAuthError, GoogleIdentity, verify_google_id_token
 from app.services.password_check import is_password_breached
-from app.services.rate_limit import account_identity, client_identity, prune_refresh_tokens
+from app.services.rate_limit import account_identity, client_identity
 from app.services.security import (
     create_access_token,
     create_refresh_token,
@@ -102,8 +102,7 @@ async def _prune_if_due(limiter: RateLimiterDep) -> None:
     """Run both stale-data cleanups rarely enough to avoid churn on hot paths."""
     if random.randint(1, 50) != 1:  # noqa: S311 - non-crypto sampling for cleanup throttling
         return
-    await limiter.prune()
-    await prune_refresh_tokens(limiter._session_factory)
+    await limiter.prune_all()
 
 
 async def _throttle_login(limiter: RateLimiterDep, request: Request, email: str) -> None:

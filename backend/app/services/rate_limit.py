@@ -155,6 +155,19 @@ class RateLimiter:
             await session.commit()
             return result.rowcount or 0
 
+    async def prune_all(self) -> tuple[int, int]:
+        """Run both stale-data cleanups on the limiter's own connection.
+
+        Expired refresh tokens are not the limiter's data, but they fill up on
+        the same unauthenticated paths and are cleaned on the same schedule, so
+        the limiter is the one thing those paths already hold that can reach the
+        database outside the request's session. Returns the rate-limit and
+        refresh-token row counts, in that order.
+        """
+        rate_limit_rows = await self.prune()
+        refresh_rows = await prune_refresh_tokens(self._session_factory)
+        return rate_limit_rows, refresh_rows
+
 
 async def prune_refresh_tokens(
     session_factory: async_sessionmaker[AsyncSession] | None = None,
