@@ -11,7 +11,7 @@ import { describeError } from '../../lib/api';
 import { SERVING_LABELS, formatNumber } from '../../lib/format';
 import { haptics } from '../../lib/haptics';
 import type { FoodLog, Uuid } from '../../lib/types';
-import { useTheme } from '../../theme';
+import { useLayout, useTheme } from '../../theme';
 import { quick } from '../../theme/motion';
 import { elevation } from '../../theme/tokens';
 
@@ -744,10 +744,18 @@ function DiaryList({
 }) {
   const { colors, layout, spacing, type } = useTheme();
   const screenInsets = useScreenInsets();
+  const { isExpanded } = useLayout();
+  const numColumns = isExpanded ? 2 : 1;
 
   return (
   <FlatList<DiaryDay>
     testID="diary"
+    // FlatList remounts on a numColumns change rather than reflowing in
+    // place -- required by the library, not a choice made here -- so the
+    // key has to change with it or rotating a tablet mid-scroll throws.
+    key={numColumns}
+    numColumns={numColumns}
+    columnWrapperStyle={numColumns > 1 ? { gap: spacing.lg } : undefined}
     data={days}
     keyExtractor={(day) => day.key}
     refreshControl={
@@ -758,10 +766,13 @@ function DiaryList({
       />
     }
     // The column cap lives on the content container, which is the one box
-    // a list lets you centre.
+    // a list lets you centre. Widened at expanded for the same reason the
+    // dashboard's is: two real day cards side by side need more than the
+    // single-column measure, each one still individually readable rather
+    // than the pair stretching edge to edge.
     contentContainerStyle={{
       width: '100%',
-      maxWidth: layout.contentWidth,
+      maxWidth: isExpanded ? layout.contentWidth * 1.6 : layout.contentWidth,
       alignSelf: 'center',
       paddingTop: screenInsets.top,
       paddingHorizontal: layout.screenPadding,
@@ -823,9 +834,18 @@ function DiaryList({
        it would outweigh every dish name on the screen. The grouping is
        already carried by the surface and the space around it, so the
        heading only has to name the day and say what it came to. */
-    renderItem={({ item: day }) => (
-      <DayGroup day={day} onOpen={onOpen} onRepeat={onRepeat} confirmed={confirmed} repeat={repeat} />
-    )}
+    renderItem={({ item: day }) =>
+      numColumns > 1 ? (
+        // flex: 1 so two cards in a row share it evenly rather than each
+        // sizing to its own content -- otherwise a short day and a long one
+        // paired together left a gap that read as a third, empty column.
+        <View style={{ flex: 1 }}>
+          <DayGroup day={day} onOpen={onOpen} onRepeat={onRepeat} confirmed={confirmed} repeat={repeat} />
+        </View>
+      ) : (
+        <DayGroup day={day} onOpen={onOpen} onRepeat={onRepeat} confirmed={confirmed} repeat={repeat} />
+      )
+    }
     ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
   />
   );
