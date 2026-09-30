@@ -207,7 +207,7 @@ describe('a meal logged with no answer yet', () => {
     });
 
     await waitFor(() => expect(screen.queryByText('Pending sync')).toBeNull());
-    expect(screen.getByText('810')).toBeTruthy();
+    expect(screen.getByText('810 kcal')).toBeTruthy();
   });
 
   it('is pulled back out if the save genuinely fails', async () => {

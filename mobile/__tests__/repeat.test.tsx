@@ -159,7 +159,7 @@ describe('from the diary', () => {
 
   it('asks before it writes anything', async () => {
     const screen = render(<HistoryScreen />, { wrapper });
-    const buttons = await waitFor(() => screen.getAllByText('Log again'));
+    const buttons = await waitFor(() => screen.getAllByLabelText('Log again'));
 
     fireEvent.press(buttons[0]);
 
@@ -170,7 +170,7 @@ describe('from the diary', () => {
 
   it('names the meal and the figure it is about to add', async () => {
     const screen = render(<HistoryScreen />, { wrapper });
-    const buttons = await waitFor(() => screen.getAllByText('Log again'));
+    const buttons = await waitFor(() => screen.getAllByLabelText('Log again'));
 
     fireEvent.press(buttons[0]);
 
@@ -183,7 +183,7 @@ describe('from the diary', () => {
 
   it('writes nothing when the question is declined', async () => {
     const screen = render(<HistoryScreen />, { wrapper });
-    const buttons = await waitFor(() => screen.getAllByText('Log again'));
+    const buttons = await waitFor(() => screen.getAllByLabelText('Log again'));
 
     fireEvent.press(buttons[0]);
     fireEvent.press(screen.getByText('Cancel'));
@@ -194,7 +194,7 @@ describe('from the diary', () => {
 
   it('repeats the meal the button belongs to, not the first one on the list', async () => {
     const screen = render(<HistoryScreen />, { wrapper });
-    const buttons = await waitFor(() => screen.getAllByText('Log again'));
+    const buttons = await waitFor(() => screen.getAllByLabelText('Log again'));
 
     fireEvent.press(buttons[1]);
     confirm(screen);
@@ -214,8 +214,8 @@ describe('from the diary', () => {
     );
 
     const screen = render(<HistoryScreen />, { wrapper });
-    const { getByText } = screen;
-    const buttons = await waitFor(() => screen.getAllByText('Log again'));
+    const { getByLabelText } = screen;
+    const buttons = await waitFor(() => screen.getAllByLabelText('Log again'));
 
     fireEvent.press(buttons[0]);
     // The same confirm control twice, which is what an impatient thumb does.
@@ -227,7 +227,7 @@ describe('from the diary', () => {
     fireEvent.press(confirmButton);
     fireEvent.press(confirmButton);
 
-    await waitFor(() => expect(getByText('Logging')).toBeTruthy());
+    await waitFor(() => expect(getByLabelText('Logging again')).toBeTruthy());
     expect(mockedApi.post).toHaveBeenCalledTimes(1);
     expect(mockPush).not.toHaveBeenCalled();
 
@@ -242,7 +242,7 @@ describe('from the diary', () => {
   it('says the meal was logged, rather than leaving the tap unanswered', async () => {
     const screen = render(<HistoryScreen />, { wrapper });
     const { getByText } = screen;
-    const buttons = await waitFor(() => screen.getAllByText('Log again'));
+    const buttons = await waitFor(() => screen.getAllByLabelText('Log again'));
 
     fireEvent.press(buttons[0]);
     confirm(screen);
@@ -256,7 +256,7 @@ describe('from the diary', () => {
 
     const screen = render(<HistoryScreen />, { wrapper });
     const { getByText } = screen;
-    const buttons = await waitFor(() => screen.getAllByText('Log again'));
+    const buttons = await waitFor(() => screen.getAllByLabelText('Log again'));
 
     fireEvent.press(buttons[0]);
     confirm(screen);
@@ -268,7 +268,7 @@ describe('from the diary', () => {
   it('does not open the meal, which is what the rest of the row is for', async () => {
     const screen = render(<HistoryScreen />, { wrapper });
     const { getByText } = screen;
-    const buttons = await waitFor(() => screen.getAllByText('Log again'));
+    const buttons = await waitFor(() => screen.getAllByLabelText('Log again'));
 
     fireEvent.press(buttons[0]);
     confirm(screen);
