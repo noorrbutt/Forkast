@@ -100,3 +100,11 @@ jest.mock('@react-native-google-signin/google-signin', () => ({
     PLAY_SERVICES_NOT_AVAILABLE: 'PLAY_SERVICES_NOT_AVAILABLE',
   },
 }));
+
+// The library ships its own mock for exactly this purpose. Without it,
+// NetInfo reaches for native code at import time like every other native
+// module here, and lib/queryClient.ts imports it at module scope, so every
+// test in the suite would fail before a single one of them got to render.
+jest.mock('@react-native-community/netinfo', () =>
+  require('@react-native-community/netinfo/jest/netinfo-mock'),
+);
