@@ -18,6 +18,7 @@ from __future__ import annotations
 import datetime as dt
 import secrets
 import uuid
+from urllib.parse import quote
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, func, select, update
@@ -28,6 +29,7 @@ from app.config import get_settings
 from app.models import EmailVerificationToken, PasswordResetToken, RefreshToken, User
 from app.schemas.auth import SessionOut, TokenPair
 from app.services.google import GoogleIdentity
+from app.services.jobs import SEND_EMAIL, enqueue
 from app.services.security import (
     create_access_token,
     create_refresh_token,
@@ -98,6 +100,54 @@ async def _issue_one_time_token(
     return raw_token
 
 
+def deep_link(path: str, **params: str) -> str:
+    """An https App Link when the domain is configured, the bare custom
+    scheme otherwise.
+
+    Android lets any installed app claim a custom scheme, and most mail
+    clients don't even linkify one, so forkast://... alone is both
+    interceptable and often not clickable at all. An https link on a domain
+    verified against the two /.well-known files in app/web.py has neither
+    problem: the OS opens the app directly for a link on that domain, and
+    the same URL still works as an ordinary web link for anyone else, since
+    app/web.py serves a page there that hands off to the custom scheme
+    itself. Falling back to the bare scheme when no domain is configured
+    keeps local development, which has no public domain to verify, working
+    exactly as it always did.
+    """
+    settings = get_settings()
+    query = "&".join(f"{key}={quote(value, safe='')}" for key, value in params.items())
+    if settings.app_domain:
+        return f"https://{settings.app_domain}/{path}?{query}"
+    return f"forkast://{path}?{query}"
+
+
+def queue_verification_email(session: AsyncSession, user: User, raw_token: str) -> uuid.UUID:
+    """Queue the link email on the caller's transaction, beside the token row.
+
+    So the token and the email that carries it commit together: no email goes
+    out for a token that rolled back, and no token commits without its email
+    queued. The address is the one on the user right now, which for an email
+    change is the new one.
+    """
+    link = deep_link("check-email", token=raw_token, email=user.email)
+    return _queue_email(session, user, "verify_email", link)
+
+
+def queue_password_reset_email(session: AsyncSession, user: User, raw_token: str) -> uuid.UUID:
+    link = deep_link("reset-password", token=raw_token)
+    return _queue_email(session, user, "reset_password", link)
+
+
+def _queue_email(session: AsyncSession, user: User, template: str, link: str) -> uuid.UUID:
+    job = enqueue(
+        session,
+        SEND_EMAIL,
+        {"template": template, "to": user.email, "link": link, "user_id": str(user.id)},
+    )
+    return job.id
+
+
 async def issue_email_verification_token(session: AsyncSession, user: User) -> str:
     return await _issue_one_time_token(
         session, user, EmailVerificationToken, EMAIL_VERIFICATION_TTL
@@ -161,9 +211,9 @@ async def ensure_email_free(session: AsyncSession, email: str) -> None:
 
 async def register_user(
     session: AsyncSession, *, email: str, password: str, first_name: str, last_name: str
-) -> tuple[User, str, TokenPair]:
-    """Create a password account, and return it with its verification token and
-    a signed-in token pair."""
+) -> tuple[User, uuid.UUID, TokenPair]:
+    """Create a password account, and return it with the id of its queued
+    verification email and a signed-in token pair."""
     user = User(
         email=email,
         password_hash=await hash_password_async(password),
@@ -183,8 +233,10 @@ async def register_user(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_EMAIL_TAKEN) from exc
 
     verification_token = await issue_email_verification_token(session, user)
+    # Queued before issue_tokens, whose commit is the one that lands all three.
+    job_id = queue_verification_email(session, user, verification_token)
     tokens = await issue_tokens(session, user)
-    return user, verification_token, tokens
+    return user, job_id, tokens
 
 
 async def verify_email(session: AsyncSession, raw_token: str) -> None:
@@ -201,8 +253,9 @@ async def verify_email(session: AsyncSession, raw_token: str) -> None:
     await session.commit()
 
 
-async def start_email_verification(session: AsyncSession, email: str) -> tuple[User, str] | None:
-    """A new verification link for an unverified account, or None.
+async def start_email_verification(session: AsyncSession, email: str) -> uuid.UUID | None:
+    """Queue a new verification link for an unverified account, returning the
+    job's id, or None.
 
     None covers both an unknown address and an already verified one, and the
     route answers them identically so neither is revealed.
@@ -211,12 +264,14 @@ async def start_email_verification(session: AsyncSession, email: str) -> tuple[U
     if user is None or user.email_verified:
         return None
     raw_token = await issue_email_verification_token(session, user)
+    job_id = queue_verification_email(session, user, raw_token)
     await session.commit()
-    return user, raw_token
+    return job_id
 
 
-async def start_password_reset(session: AsyncSession, email: str) -> tuple[User, str] | None:
-    """A reset link for an account that can use one, or None.
+async def start_password_reset(session: AsyncSession, email: str) -> uuid.UUID | None:
+    """Queue a reset link for an account that can use one, returning the job's
+    id, or None.
 
     Only a verified address gets one, since a reset link is proof of owning the
     inbox and an unverified row has never shown that. An account with no
@@ -227,8 +282,9 @@ async def start_password_reset(session: AsyncSession, email: str) -> tuple[User,
     if user is None or not user.email_verified or user.password_hash is None:
         return None
     raw_token = await issue_password_reset_token(session, user)
+    job_id = queue_password_reset_email(session, user, raw_token)
     await session.commit()
-    return user, raw_token
+    return job_id
 
 
 async def reset_password(session: AsyncSession, raw_token: str, new_password: str) -> None:

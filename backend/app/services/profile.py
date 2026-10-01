@@ -20,7 +20,11 @@ from sqlalchemy.orm import selectinload
 from app.config import get_settings
 from app.models import BurnLog, FoodLog, RefreshToken, User, UserAvatar
 from app.schemas.auth import ExportBurnLog, ExportLog, ExportOut, UserUpdate
-from app.services.auth import issue_email_verification_token, user_by_email
+from app.services.auth import (
+    issue_email_verification_token,
+    queue_verification_email,
+    user_by_email,
+)
 from app.services.google import GoogleIdentity
 from app.services.rate_limit import RateLimiter, account_identity
 from app.services.security import hash_password_async, verify_password_async
@@ -117,9 +121,9 @@ def export_as_csv(export: ExportOut) -> bytes:
 
 async def _change_email(
     session: AsyncSession, limiter: RateLimiter, user: User, new_email: str
-) -> str:
-    """Move the account to a new address, unverified, and return the token to
-    mail there.
+) -> uuid.UUID:
+    """Move the account to a new address, unverified, and queue a verification
+    link to it on the same transaction, returning the job's id.
 
     email_verified means "this address was proved", which stops being true the
     instant the address changes. Google having verified the old one says
@@ -138,14 +142,15 @@ async def _change_email(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_EMAIL_TAKEN)
     user.email = new_email.strip()
     user.email_verified = False
-    return await issue_email_verification_token(session, user)
+    raw_token = await issue_email_verification_token(session, user)
+    return queue_verification_email(session, user, raw_token)
 
 
 async def update_profile(
     session: AsyncSession, limiter: RateLimiter, user: User, payload: UserUpdate
-) -> str | None:
-    """Apply exactly the fields sent, nulls included, and return a verification
-    token if the address changed.
+) -> uuid.UUID | None:
+    """Apply exactly the fields sent, nulls included, and return the id of the
+    verification email queued if the address changed.
 
     exclude_unset is what separates "leave this alone" from "clear this". An
     `if value is not None` on top of it once collapsed the two back together,
@@ -155,9 +160,9 @@ async def update_profile(
     changes = payload.model_dump(exclude_unset=True)
 
     new_email = changes.pop("email", None)
-    verification_token: str | None = None
+    email_job_id: uuid.UUID | None = None
     if new_email is not None and new_email.strip().lower() != user.email.lower():
-        verification_token = await _change_email(session, limiter, user, new_email)
+        email_job_id = await _change_email(session, limiter, user, new_email)
 
     for field, value in changes.items():
         setattr(user, field, value)
@@ -169,7 +174,7 @@ async def update_profile(
         # guards against.
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_EMAIL_TAKEN) from exc
-    return verification_token
+    return email_job_id
 
 
 async def throttle_password_check(limiter: RateLimiter, user: User) -> None:

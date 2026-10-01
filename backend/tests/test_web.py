@@ -96,26 +96,26 @@ async def test_fallback_page_escapes_a_token_that_looks_like_markup(
 def test_deep_link_helper_falls_back_to_the_custom_scheme_with_no_domain(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.api.v1 import auth as auth_module
+    from app.services import auth as auth_module
 
     monkeypatch.setattr(
         auth_module,
         "get_settings",
         lambda: type("S", (), {"app_domain": ""})(),
     )
-    link = auth_module._deep_link("reset-password", token="tok")
+    link = auth_module.deep_link("reset-password", token="tok")
     assert link == "forkast://reset-password?token=tok"
 
 
 def test_deep_link_helper_uses_https_when_a_domain_is_configured(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.api.v1 import auth as auth_module
+    from app.services import auth as auth_module
 
     monkeypatch.setattr(
         auth_module,
         "get_settings",
         lambda: type("S", (), {"app_domain": "forkast.app"})(),
     )
-    link = auth_module._deep_link("reset-password", token="tok")
+    link = auth_module.deep_link("reset-password", token="tok")
     assert link == "https://forkast.app/reset-password?token=tok"

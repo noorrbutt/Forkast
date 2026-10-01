@@ -16,14 +16,15 @@ import logging
 import random
 import uuid
 from typing import Annotated
-from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import CurrentUser, RateLimiterDep, SessionDep, bearer_scheme
 from app.config import get_settings
+from app.db import get_session_factory
 from app.models import User
 from app.schemas.auth import (
     ForgotPasswordRequest,
@@ -38,7 +39,7 @@ from app.schemas.auth import (
     VerifyEmailRequest,
 )
 from app.services import auth as auth_service
-from app.services.email import send_password_reset_email, send_verification_email
+from app.services import jobs
 from app.services.google import GoogleAuthError, verify_google_id_token
 from app.services.password_check import is_password_breached
 from app.services.rate_limit import account_identity, client_identity
@@ -46,6 +47,9 @@ from app.services.security import decode_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
+
+# Injected rather than imported, so tests can point it at the test database.
+SessionFactoryDep = Annotated["async_sessionmaker[AsyncSession]", Depends(get_session_factory)]
 
 
 async def _reject_breached_password(password: str) -> None:
@@ -147,47 +151,28 @@ def _caller_session_id(credentials: HTTPAuthorizationCredentials | None) -> uuid
     return claims.session_id if claims is not None else None
 
 
-def _deep_link(path: str, **params: str) -> str:
-    """An https App Link when the domain is configured, the bare custom
-    scheme otherwise.
+def run_job_behind_response(
+    background: BackgroundTasks, job_id: uuid.UUID, factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """Send the email this request just queued, once the response is out.
 
-    Android lets any installed app claim a custom scheme, and most mail
-    clients don't even linkify one, so forkast://... alone is both
-    interceptable and often not clickable at all. An https link on a domain
-    verified against the two /.well-known files in app/web.py has neither
-    problem: the OS opens the app directly for a link on that domain, and
-    the same URL still works as an ordinary web link for anyone else, since
-    app/web.py serves a page there that hands off to the custom scheme
-    itself. Falling back to the bare scheme when no domain is configured
-    keeps local development, which has no public domain to verify, working
-    exactly as it always did.
+    After the response, so an account that gets an email answers as fast as an
+    address that does not, and the delay does not reveal which one this is.
+    Only a fast path: the job is already committed, so a `python -m
+    app.worker` sends it if this process never gets the chance, and retries it
+    if the provider fails.
     """
-    settings = get_settings()
-    query = "&".join(f"{key}={quote(value, safe='')}" for key, value in params.items())
-    if settings.app_domain:
-        return f"https://{settings.app_domain}/{path}?{query}"
-    return f"forkast://{path}?{query}"
-
-
-async def _send_verification_email_safely(user: User, raw_token: str) -> None:
-    link = _deep_link("check-email", token=raw_token, email=user.email)
-    try:
-        await run_in_threadpool(send_verification_email, user.email, link)
-    except Exception:
-        logger.exception("Verification email delivery failed for user_id=%s", user.id)
-
-
-async def _send_password_reset_email_safely(user: User, raw_token: str) -> None:
-    link = _deep_link("reset-password", token=raw_token)
-    try:
-        await run_in_threadpool(send_password_reset_email, user.email, link)
-    except Exception:
-        logger.exception("Password reset email delivery failed for user_id=%s", user.id)
+    background.add_task(jobs.run_now, job_id, jobs.JobContext(factory=factory))
 
 
 @router.post("/register", response_model=TokenPair, status_code=status.HTTP_201_CREATED)
 async def register(
-    payload: RegisterRequest, session: SessionDep, request: Request, limiter: RateLimiterDep
+    payload: RegisterRequest,
+    session: SessionDep,
+    request: Request,
+    limiter: RateLimiterDep,
+    background_tasks: BackgroundTasks,
+    factory: SessionFactoryDep,
 ) -> TokenPair:
     email = payload.email.strip()
     # Counted per peer, NOT per address: enumeration walks a list and uses a
@@ -203,14 +188,14 @@ async def register(
     await auth_service.ensure_email_free(session, email)
     await _reject_breached_password(payload.password)
 
-    user, verification_token, tokens = await auth_service.register_user(
+    _, email_job_id, tokens = await auth_service.register_user(
         session,
         email=email,
         password=payload.password,
         first_name=payload.first_name,
         last_name=payload.last_name,
     )
-    await _send_verification_email_safely(user, verification_token)
+    run_job_behind_response(background_tasks, email_job_id, factory)
     return tokens
 
 
@@ -230,15 +215,14 @@ async def resend_verification(
     session: SessionDep,
     request: Request,
     limiter: RateLimiterDep,
+    factory: SessionFactoryDep,
 ) -> Response:
     email = str(payload.email).strip().lower()
     await _throttle_email_route(limiter, request, "resend-verification", email)
 
-    issued = await auth_service.start_email_verification(session, email)
-    if issued is not None:
-        # After the response, so an unverified account answers as fast as an
-        # unknown address and the delay does not reveal which one this is.
-        background_tasks.add_task(_send_verification_email_safely, *issued)
+    job_id = await auth_service.start_email_verification(session, email)
+    if job_id is not None:
+        run_job_behind_response(background_tasks, job_id, factory)
 
     return Response(status_code=status.HTTP_202_ACCEPTED)
 
@@ -289,14 +273,15 @@ async def forgot_password(
     session: SessionDep,
     request: Request,
     limiter: RateLimiterDep,
+    factory: SessionFactoryDep,
 ) -> Response:
     email = str(payload.email).strip().lower()
     await _throttle_email_route(limiter, request, "forgot-password", email)
 
-    issued = await auth_service.start_password_reset(session, email)
-    if issued is not None:
+    job_id = await auth_service.start_password_reset(session, email)
+    if job_id is not None:
         # After the response, for the same enumeration reason as resend.
-        background_tasks.add_task(_send_password_reset_email_safely, *issued)
+        run_job_behind_response(background_tasks, job_id, factory)
 
     return Response(status_code=status.HTTP_202_ACCEPTED)
 
