@@ -64,11 +64,17 @@ with httpx.Client(timeout=30.0) as http:
 
     section("auth")
     email = f"smoke-{int(time.time())}@forkast.app"
+    # Unique per run and nowhere near a real phrase, so the breach-check
+    # service (a live call, not stubbed here) never flags it the way a
+    # literal "password123" was -- that's the check doing its job, not a
+    # bug, but it means this script needs a password breach data has no
+    # reason to contain.
+    password = f"Sm0ke-{int(time.time())}-{email[:4]}!"
     register_body = {
         "first_name": "Smoke",
         "last_name": "Test",
         "email": email,
-        "password": "password123",
+        "password": password,
     }
     r = http.post(f"{API}/auth/register", json=register_body)
 
@@ -94,7 +100,7 @@ with httpx.Client(timeout=30.0) as http:
     r = http.post(f"{API}/auth/register", json=register_body)
     check("duplicate register is rejected", r.status_code == 409, r.text)
 
-    r = http.post(f"{API}/auth/login", json={"email": email, "password": "password123"})
+    r = http.post(f"{API}/auth/login", json={"email": email, "password": password})
     check("login returns 200", r.status_code == 200, r.text)
 
     r = http.post(f"{API}/auth/login", json={"email": email, "password": "wrong"})
@@ -116,7 +122,7 @@ with httpx.Client(timeout=30.0) as http:
     r = http.get(f"{API}/me", headers=auth)
     check("replaying a spent token kills the whole session", r.status_code == 401, r.text)
 
-    r = http.post(f"{API}/auth/login", json={"email": email, "password": "password123"})
+    r = http.post(f"{API}/auth/login", json={"email": email, "password": password})
     check("signing in again after a reuse revocation works", r.status_code == 200, r.text)
     tokens = r.json()
     access, rotated = tokens["access_token"], tokens["refresh_token"]
