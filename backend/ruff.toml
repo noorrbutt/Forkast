@@ -1,11 +1,16 @@
-[tool.ruff]
+# Not in pyproject.toml: Vercel's Python builder (uv) auto-detects any
+# pyproject.toml as a package manifest and tries to `uv lock` against it,
+# which fails outright on one with no [project] table -- exactly what this
+# file was. A standalone ruff.toml is just as valid a config source and
+# keeps the deploy from tripping over a linter's own settings file.
+
 # Matches the longest lines the codebase already runs to, rather than forcing a
 # reflow of every docstring in the repo to satisfy a number nobody chose.
 line-length = 100
 target-version = "py314"
 extend-exclude = ["alembic/versions"]
 
-[tool.ruff.lint]
+[lint]
 select = [
     "E",      # pycodestyle
     "F",      # pyflakes: undefined names, unused imports and variables
@@ -29,7 +34,7 @@ ignore = [
     "UP047",
 ]
 
-[tool.ruff.lint.per-file-ignores]
+[lint.per-file-ignores]
 # Tests assert, use fixed credentials, and shell out to alembic with
 # sys.executable, all of which bandit is right to flag in application code and
 # wrong to flag here.
@@ -44,7 +49,7 @@ ignore = [
 # token_type="bearer" is an OAuth field name, not a credential.
 "app/schemas/auth.py" = ["S105"]
 
-[tool.ruff.lint.isort]
+[lint.isort]
 known-first-party = ["app"]
 # Without this, the `backend/alembic/` directory makes isort read the installed
 # `alembic` package as local and file its import with app's, which is simply
