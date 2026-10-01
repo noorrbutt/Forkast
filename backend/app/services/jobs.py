@@ -24,6 +24,7 @@ die before marking the row done. Every handler has to be safe to repeat.
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import datetime as dt
 import logging
@@ -272,6 +273,53 @@ async def run_now(job_id: uuid.UUID, context: JobContext) -> None:
     except Exception:
         # The job is still in the table either way; a worker will get it.
         logger.warning("job_run_now_failed id=%s", job_id, exc_info=True)
+
+
+async def run_inline(job_id: uuid.UUID, context: JobContext, *, limit_seconds: float) -> None:
+    """run_now, awaited inside the request and bounded by `limit_seconds`. Never raises.
+
+    For SERVERLESS=true, where nothing scheduled behind the response is
+    guaranteed to run: the platform may freeze or kill the process as soon as
+    the response is sent. Whatever made the job necessary is already
+    committed, so a failure or a timeout here only means the job is left for
+    a worker (or the next backfill) to pick up.
+
+    On a timeout the claimed job is recorded as a failed attempt through
+    fail(), which puts it back to pending with the usual backoff rather than
+    leaving it "running" until job_stale_seconds pass.
+    """
+    try:
+        claimed = await claim(context.factory, limit=1, job_ids=[job_id])
+    except Exception:
+        logger.warning("job_run_inline_claim_failed id=%s", job_id, exc_info=True)
+        return
+    for job in claimed:
+        try:
+            await asyncio.wait_for(run_claimed(job, context), timeout=limit_seconds)
+        except TimeoutError:
+            logger.warning("job_run_inline_timeout id=%s kind=%s", job.id, job.kind)
+            try:
+                await fail(context.factory, job, f"timed out after {limit_seconds}s running inline")
+            except Exception:
+                # Still "running"; _requeue_stale puts it back eventually.
+                logger.warning("job_run_inline_requeue_failed id=%s", job.id, exc_info=True)
+        except Exception:
+            logger.warning("job_run_inline_failed id=%s", job.id, exc_info=True)
+
+
+async def run_for_request(background: Any, job_id: uuid.UUID, context: JobContext) -> None:
+    """Run a job a request just committed, the way this deployment needs.
+
+    By default it is scheduled behind the response on `background` (a FastAPI
+    BackgroundTasks), exactly as before. With SERVERLESS=true it is awaited
+    inline with a short timeout instead, since there may be no process left
+    to run anything after the response.
+    """
+    settings = get_settings()
+    if settings.serverless:
+        await run_inline(job_id, context, limit_seconds=settings.serverless_job_timeout_seconds)
+    else:
+        background.add_task(run_now, job_id, context)
 
 
 def default_handlers() -> dict[str, Handler]:

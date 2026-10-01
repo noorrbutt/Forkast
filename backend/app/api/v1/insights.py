@@ -35,7 +35,7 @@ from app.api.deps import CurrentUser, RateLimiterDep, SessionDep, bearer_scheme
 # Re-verification on an email change is the same mechanism registration
 # already uses -- issue a token, send the link -- so the sender is reused
 # rather than rebuilt here, after commit, from a background task.
-from app.api.v1.auth import SessionFactoryDep, run_job_behind_response
+from app.api.v1.auth import SessionFactoryDep, run_job_for_request
 from app.config import get_settings
 from app.models import MAX_AVATAR_BYTES, AIPlan, User
 from app.schemas.auth import AccountDelete, PasswordChange, UserOut, UserUpdate
@@ -126,7 +126,7 @@ async def update_me(
     """
     email_job_id = await profile_service.update_profile(session, limiter, user, payload)
     if email_job_id is not None:
-        run_job_behind_response(background_tasks, email_job_id, factory)
+        await run_job_for_request(background_tasks, email_job_id, factory)
     return user
 
 

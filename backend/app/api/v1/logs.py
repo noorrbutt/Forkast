@@ -55,11 +55,13 @@ EstimateSourceDep = Annotated[EstimateSource, Depends(get_estimate_source)]
 SessionFactoryDep = Annotated["async_sessionmaker[AsyncSession]", Depends(get_session_factory)]
 
 
-def _run_behind_response(
+async def _run_refinement(
     background: BackgroundTasks,
     job_id: uuid.UUID,
     ai: AIService,
     factory: async_sessionmaker[AsyncSession],
+    session: AsyncSession,
+    log: FoodLog,
 ) -> None:
     """Run the refinement job this request just committed, once the response
     is out, so the figure still settles a moment after a save.
@@ -67,8 +69,14 @@ def _run_behind_response(
     Only a fast path. The job is already a row in the jobs table, so if this
     process dies before getting to it, a `python -m app.worker` picks it up;
     the request's own `ai` is used here so a test's override applies to it.
+    With SERVERLESS=true it is awaited inline instead (jobs.run_for_request);
+    the log is committed either way, so a failure only leaves it provisional.
     """
-    background.add_task(jobs.run_now, job_id, jobs.JobContext(factory=factory, ai=ai))
+    await jobs.run_for_request(background, job_id, jobs.JobContext(factory=factory, ai=ai))
+    if get_settings().serverless:
+        # The job wrote through its own session, so reload the row to answer
+        # with the refined figure when it landed (the provisional one if not).
+        await session.refresh(log)
 
 
 def _food_log_out(log: FoodLog, estimate_source: EstimateSource) -> FoodLogOut:
@@ -99,7 +107,7 @@ async def create_log(
         # 200 rather than 201 because nothing new was made.
         response.status_code = status.HTTP_200_OK
     if job_id is not None:
-        _run_behind_response(background, job_id, ai, factory)
+        await _run_refinement(background, job_id, ai, factory, session, log)
     return _food_log_out(log, estimate_source)
 
 
@@ -179,7 +187,7 @@ async def update_log(
 ) -> FoodLog:
     updated, job_id = await logs_service.update_log(session, limiter, user, log_id, payload)
     if job_id is not None:
-        _run_behind_response(background, job_id, ai, factory)
+        await _run_refinement(background, job_id, ai, factory, session, updated)
     return _food_log_out(updated, estimate_source)
 
 

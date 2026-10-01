@@ -57,7 +57,7 @@ async def _reject_breached_password(password: str) -> None:
     if await run_in_threadpool(is_password_breached, password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This password has appeared in a data breach — please choose another.",
+            detail="This password has appeared in a data breach â€” please choose another.",
         )
 
 
@@ -151,7 +151,7 @@ def _caller_session_id(credentials: HTTPAuthorizationCredentials | None) -> uuid
     return claims.session_id if claims is not None else None
 
 
-def run_job_behind_response(
+async def run_job_for_request(
     background: BackgroundTasks, job_id: uuid.UUID, factory: async_sessionmaker[AsyncSession]
 ) -> None:
     """Send the email this request just queued, once the response is out.
@@ -161,8 +161,14 @@ def run_job_behind_response(
     Only a fast path: the job is already committed, so a `python -m
     app.worker` sends it if this process never gets the chance, and retries it
     if the provider fails.
+
+    With SERVERLESS=true it is awaited inline instead (jobs.run_for_request),
+    because nothing behind the response is guaranteed to run there. That
+    call never raises and is bounded by a timeout, so the request's own
+    outcome never depends on the email going out. The cost is the timing
+    point above: on serverless an address with an account answers slower.
     """
-    background.add_task(jobs.run_now, job_id, jobs.JobContext(factory=factory))
+    await jobs.run_for_request(background, job_id, jobs.JobContext(factory=factory))
 
 
 @router.post("/register", response_model=TokenPair, status_code=status.HTTP_201_CREATED)
@@ -195,7 +201,7 @@ async def register(
         first_name=payload.first_name,
         last_name=payload.last_name,
     )
-    run_job_behind_response(background_tasks, email_job_id, factory)
+    await run_job_for_request(background_tasks, email_job_id, factory)
     return tokens
 
 
@@ -222,7 +228,7 @@ async def resend_verification(
 
     job_id = await auth_service.start_email_verification(session, email)
     if job_id is not None:
-        run_job_behind_response(background_tasks, job_id, factory)
+        await run_job_for_request(background_tasks, job_id, factory)
 
     return Response(status_code=status.HTTP_202_ACCEPTED)
 
@@ -281,7 +287,7 @@ async def forgot_password(
     job_id = await auth_service.start_password_reset(session, email)
     if job_id is not None:
         # After the response, for the same enumeration reason as resend.
-        run_job_behind_response(background_tasks, job_id, factory)
+        await run_job_for_request(background_tasks, job_id, factory)
 
     return Response(status_code=status.HTTP_202_ACCEPTED)
 
