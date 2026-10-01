@@ -1,10 +1,10 @@
 """The refine-backfill maintenance task.
 
-Nothing schedules this in-process; it exists because BackgroundTasks-based
-refinement is lost on every restart, so a cron (or equivalent) is expected to
-run `python -m app.maintenance refine-backfill` on a schedule -- see the
-README's Deploy section. What is tested here is the task itself: that it
-actually refines the stale rows it finds, bounded concurrency included.
+Refinement is a durable job now, so this is no longer what catches work a
+restart lost; the worker is. It still catches what the queue gave up on or
+never got: a dead-lettered refinement, a log saved while the Groq circuit
+breaker was open, and logs older than the queue. It goes through the queue
+itself, and leaves alone any log a job is already pending or running for.
 """
 
 from __future__ import annotations
@@ -16,7 +16,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import maintenance
-from app.models import FoodCategory, FoodLog, User
+from app.models import FoodCategory, FoodLog, Job, User
+from app.models.enums import JobStatus
+from app.services import jobs
 from app.services.ai.fake import DeterministicAIService
 from app.services.security import hash_password
 
@@ -77,3 +79,38 @@ async def test_refine_backfill_refines_every_stale_row(
         refreshed = await session.get(FoodLog, log_id)
         assert refreshed is not None
         assert refreshed.estimate_refined_at is not None
+
+
+async def test_refine_backfill_requeues_dead_letters_but_leaves_live_jobs_alone(
+    session: AsyncSession, session_factory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    user = User(email="backfill-jobs@forkast.app", password_hash="x", timezone="Asia/Karachi")
+    session.add(user)
+    await session.flush()
+    category = await session.scalar(select(FoodCategory).limit(1))
+    assert category is not None
+
+    gave_up = await _stale_log(session, user, category)
+    in_backoff = await _stale_log(session, user, category)
+    for log, status in ((gave_up, JobStatus.dead_letter), (in_backoff, JobStatus.pending)):
+        job = jobs.enqueue(
+            session,
+            jobs.REFINE_CALORIE_ESTIMATE,
+            {"log_id": str(log.id), "category_id": category.id},
+            run_at=dt.datetime.now(dt.UTC) + dt.timedelta(hours=1),
+        )
+        job.status = status
+    gave_up_id, in_backoff_id = gave_up.id, in_backoff.id
+    await session.commit()
+
+    monkeypatch.setattr(maintenance, "get_session_factory", lambda: session_factory)
+    monkeypatch.setattr(maintenance, "get_ai_service", lambda: DeterministicAIService())
+
+    assert await maintenance._refine_backfill(limit=10) == 1
+
+    session.expire_all()
+    assert (await session.get(FoodLog, gave_up_id)).estimate_refined_at is not None
+    # Its job is still waiting out a backoff; the worker owns that one.
+    assert (await session.get(FoodLog, in_backoff_id)).estimate_refined_at is None
+    statuses = sorted(s.value for s in await session.scalars(select(Job.status)))
+    assert statuses == ["dead_letter", "done", "pending"]
