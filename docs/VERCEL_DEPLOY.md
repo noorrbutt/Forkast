@@ -115,9 +115,15 @@ Dockerfile (`python:3.12-slim`) and is Vercel's default Python version
 (3.12, 3.13 and 3.14 are supported). Vercel reads `.python-version`; there is no
 `runtime` field to set in `vercel.json` for Python any more.
 
-`backend/vercel.json` rewrites every path to `api/index.py`, which imports
-`app` from `app.main`, and gives the function `maxDuration: 60`. It also
-keeps `tests/` and `scripts/` out of the bundle.
+Vercel's native Python/FastAPI support already routes every path -- `/`,
+`/health`, `/api/v1/...`, all of it -- to `api/index.py` with the original
+path intact, so `backend/vercel.json` carries no `rewrites` entry. One was
+tried and removed: Vercel's internal rewrites now use the rewrite's
+*destination* as the literal request path rather than preserving the
+original URL, so a catch-all `"/(.*)" -> "/api/index"` rewrite made every
+request look like a request for `/api/index` from inside the app, and
+everything 404'd. `vercel.json` only sets `maxDuration: 60` on the function
+and keeps `tests/` and `scripts/` out of the bundle.
 
 ## 4. Environment variables (Vercel > Settings > Environment Variables)
 
