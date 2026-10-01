@@ -476,6 +476,29 @@ async def test_a_google_token_for_a_different_account_deletes_nothing(
     assert (await session.scalar(select(User).where(User.google_sub == "google-sub-1"))) is not None
 
 
+async def test_an_unbelievable_google_token_deletes_nothing_and_says_why(
+    client: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A token that fails verification is a 403 here, not the 401 sign-in
+    answers: the caller is signed in, they just have not proved it is them. The
+    verifier's own reason is kept, with the reassurance appended."""
+    monkeypatch.setattr("app.api.v1.auth.verify_google_id_token", fake_google(identity()))
+    tokens = (await client.post(GOOGLE, json={"id_token": "whatever"})).json()
+    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+
+    monkeypatch.setattr(
+        "app.api.v1.insights.verify_google_id_token",
+        fake_google(GoogleAuthError("That Google sign in has expired.")),
+    )
+    response = await client.request(
+        "DELETE", "/api/v1/me", headers=headers, json={"id_token": "stale"}
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "That Google sign in has expired. Nothing was deleted."
+    assert (await session.scalar(select(User).where(User.google_sub == "google-sub-1"))) is not None
+
+
 async def test_deleting_a_google_account_with_a_password_is_refused(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
