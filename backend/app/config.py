@@ -68,7 +68,12 @@ class Settings(BaseSettings):
     environment: Environment = Field(alias="ENVIRONMENT")
 
     database_url: str = Field(alias="DATABASE_URL")
-    test_database_url: str = Field(alias="TEST_DATABASE_URL")
+    # Read only by tests/conftest.py -- nothing in the application itself
+    # touches this. Required would mean every deploy, including a serverless
+    # one with no test database anywhere near it, has to set a variable the
+    # running app never reads. Optional, so it is there for local development
+    # and CI and simply absent in production without needing a dummy value.
+    test_database_url: str = Field(default="", alias="TEST_DATABASE_URL")
 
     jwt_secret: SecretStr = Field(alias="JWT_SECRET")
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
