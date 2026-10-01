@@ -390,3 +390,85 @@ describe('icons inside a group of rows', () => {
     expect(icons.length).toBe(rows.length);
   });
 });
+
+describe('logging a meal from a photo in a browser', () => {
+  /**
+   * The headline feature, so it is traced to the library rather than assumed.
+   *
+   * A browser has no camera API in the sense a phone does. expo-image-picker's
+   * web build answers both launch calls with a hidden <input type="file">, the
+   * camera one merely adding a capture attribute that a desktop browser
+   * ignores, and it grants both permissions without asking. So either button
+   * ends in a file picker, provided the screen still offers the library one and
+   * nothing between the press and the picker is native only.
+   */
+  it('still has a reason to trust the picker: its web build is a file input', () => {
+    const picker = readDep('expo-image-picker/src/ExponentImagePicker.web.ts');
+
+    expect(picker).toMatch(/setAttribute\('type', 'file'\)/);
+    // Both permission requests resolve granted, so pickImage never stops at
+    // the Alert that react-native-web would silently swallow.
+    expect(picker).toMatch(/requestMediaLibraryPermissionsAsync[\s\S]*?permissionGrantedResponse/);
+    expect(picker).toMatch(/requestCameraPermissionsAsync\(\)\s*\{\s*return permissionGrantedResponse/);
+  });
+
+  it('keeps a library button on the capture screen, not only a camera one', () => {
+    const log = code('app/(tabs)/log.tsx');
+
+    expect(log).toMatch(/label="Choose from library"/);
+    expect(log).toMatch(/captureAndEstimate\(false\)/);
+    expect(code('lib/pickImage.ts')).toMatch(/launchImageLibraryAsync\(/);
+  });
+
+  it('resizes with a module that exists in a browser', () => {
+    // pickImage re-encodes every pick through the manipulator before upload.
+    expect(code('lib/pickImage.ts')).toMatch(/ImageManipulator\.manipulateAsync\(/);
+    expect(() =>
+      readDep('expo-image-manipulator/src/NativeImageManipulatorModule.web.ts'),
+    ).not.toThrow();
+  });
+
+  it('sends the estimate request through the upload seam too', () => {
+    // The scan posts the same multipart body the attach does, so it needs the
+    // same Blob conversion or the server receives "[object Object]".
+    const uses = code('hooks/usePhoto.ts').match(/appendFile\(/g) ?? [];
+    expect(uses.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('the rest of the native only modules', () => {
+  it('hides Google on web exactly as on a phone: by the web client id', () => {
+    // The browser twin reports ready only when this build was given a client
+    // id, and both sign in screens render the button only when ready, so an
+    // unconfigured demo never shows a button that cannot work.
+    expect(code('lib/googleAuth.web.ts')).toMatch(/ready: googleConfigured/);
+    expect(code('app/(auth)/login.tsx')).toMatch(/google\.ready \?/);
+    expect(code('app/(auth)/register.tsx')).toMatch(/google\.ready \?/);
+  });
+
+  it('never lets a haptic failure escape, since the web build can throw', () => {
+    // expo-haptics throws UnavailabilityError where a method is missing, and
+    // its web build vibrates through navigator.vibrate where there is one.
+    // Every call goes through fire(), which turns either into nothing.
+    const source = code('lib/haptics.ts');
+    const calls = source.match(/Haptics\.\w+Async\(/g) ?? [];
+    const fired = source.match(/fire\(\(\) => Haptics\.\w+Async\(/g) ?? [];
+
+    expect(calls.length).toBeGreaterThan(0);
+    expect(fired.length).toBe(calls.length);
+  });
+
+  it('keeps tokens out of expo-secure-store on web, which has no web build', () => {
+    expect(code('lib/tokenStore.ts')).toMatch(/Platform\.OS !== 'web'/);
+    expect(code('lib/milestoneStore.ts')).toMatch(/Platform\.OS === 'web'/);
+  });
+
+  it('swaps the map for its list on web, and the map renders in one place', () => {
+    // MapCanvas is the only module that imports react-native-maps, and
+    // MapScreen is the only thing that imports MapCanvas, so one web twin
+    // covers every route that shows a map.
+    const web = code('components/MapCanvas.web.tsx');
+    expect(web).toMatch(/MAPS_UNAVAILABLE = true/);
+    expect(web).not.toMatch(/from 'react-native-maps'/);
+  });
+});
