@@ -354,7 +354,14 @@ class Settings(BaseSettings):
 
     @property
     def cors_origin_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        # CORSMiddleware matches an incoming Origin header by exact string
+        # equality, and a browser's Origin is always scheme+host+port with no
+        # trailing slash -- "https://example.com/" here would silently never
+        # match the real "https://example.com" it sends, blocking every
+        # cross-origin request with no error any caller would see short of
+        # the browser's own console. Easy to paste in by habit (copying a
+        # site's URL from the address bar), so stripped rather than trusted.
+        return [o.strip().rstrip("/") for o in self.cors_origins.split(",") if o.strip()]
 
     @property
     def google_client_id_list(self) -> list[str]:

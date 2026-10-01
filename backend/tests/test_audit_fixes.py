@@ -227,6 +227,25 @@ def test_a_sound_configuration_still_loads() -> None:
     assert settings.cors_origin_list == ["https://forkast.app", "https://www.forkast.app"]
 
 
+def test_a_trailing_slash_is_stripped_so_cors_actually_matches() -> None:
+    """A browser's Origin header is always scheme+host+port, never a path, so
+    it never carries a trailing slash -- "https://forkast.app/" pasted in
+    from an address bar would otherwise never match the real header and
+    block every cross-origin request with nothing louder than a browser
+    console to say why."""
+    settings = Settings(  # type: ignore[call-arg]
+        ENVIRONMENT="production",
+        DATABASE_URL="postgresql+asyncpg://u:strong@db:5432/forkast",
+        TEST_DATABASE_URL="postgresql+asyncpg://u:strong@db:5432/forkast_test",
+        JWT_SECRET="0" * 64,
+        AI_PROVIDER="fake",
+        CORS_ORIGINS="https://forkast.app/,https://www.forkast.app/",
+        TRUST_PROXY_HEADERS=True,
+    )
+
+    assert settings.cors_origin_list == ["https://forkast.app", "https://www.forkast.app"]
+
+
 # --------------------------------------------------------------------------
 # The guard that stops the suite truncating a real database
 # --------------------------------------------------------------------------
