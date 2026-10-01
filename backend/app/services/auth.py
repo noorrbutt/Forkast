@@ -510,9 +510,22 @@ async def _revoke_family_on_reuse(
 async def _is_timeout_retry(session: AsyncSession, reused: RefreshToken, now: dt.datetime) -> bool:
     """Whether a spent token being presented again looks like a client retry.
 
-    Only within the grace period, and only when the client is still using a
-    valid newer token either in the same session or in another live session.
-    If neither is true, the stale token is a leak.
+    Only within the grace period, and only when THIS SAME session already
+    rotated again after the token being replayed was revoked -- meaning the
+    server's own earlier response to this client actually landed and
+    succeeded, and the client simply never saw it (a dropped response, a
+    timeout) before retrying with the token it still had. That is the one
+    signal that speaks to whether this particular request was a benign
+    retry.
+
+    Used to ask whether the account merely had some OTHER live session
+    elsewhere -- any two normal devices signed in at once would have one --
+    and treated that as grounds for leniency too. It answers a different
+    question than the one this function asks and weakens RFC 9700 reuse
+    detection for exactly the common case it exists to catch: a token stolen
+    from one session while a second, unrelated session is still open
+    legitimately. A leaked chain now gets revoked regardless of what else
+    the account is signed into.
     """
     if reused.revoked_at is None:
         return False
@@ -529,15 +542,7 @@ async def _is_timeout_retry(session: AsyncSession, reused: RefreshToken, now: dt
             RefreshToken.revoked_at > reused.revoked_at,
         )
     )
-    other_live_session = await session.scalar(
-        select(RefreshToken).where(
-            RefreshToken.user_id == reused.user_id,
-            RefreshToken.session_id != reused.session_id,
-            RefreshToken.revoked_at.is_(None),
-            RefreshToken.expires_at > now,
-        )
-    )
-    return later_rotation is not None or other_live_session is not None
+    return later_rotation is not None
 
 
 async def _answer_unclaimable_token(
