@@ -22,6 +22,7 @@ from app.config import get_settings
 from app.models import FoodCategory, FoodLog, FoodLogPhoto, Restaurant, User
 from app.models.enums import ServingSize
 from app.schemas.logs import FoodLogCreate, FoodLogUpdate
+from app.services import circuit_breaker
 from app.services.ai.base import AIService
 from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import CalorieAdjustRequest, PhotoCalorieEstimate
@@ -145,14 +146,24 @@ async def refine_estimate(
         base_calorie_min = category.base_calorie_min
         base_calorie_max = category.base_calorie_max
 
-    refined = await estimate_calories(
-        ai,
-        dish_name=dish_name,
-        category_name=category_name,
-        base_calorie_min=base_calorie_min,
-        base_calorie_max=base_calorie_max,
-        serving_size=serving_size,
-    )
+    # Open breaker: no call, and the provisional figure stands. The job is
+    # done rather than retried; refine-backfill gets the log once it closes.
+    if not await circuit_breaker.allow(factory):
+        logger.info("refine_skipped_breaker_open log_id=%s", log_id)
+        return False
+    try:
+        refined = await estimate_calories(
+            ai,
+            dish_name=dish_name,
+            category_name=category_name,
+            base_calorie_min=base_calorie_min,
+            base_calorie_max=base_calorie_max,
+            serving_size=serving_size,
+        )
+    except Exception:
+        await circuit_breaker.record_failure(factory)
+        raise
+    await circuit_breaker.record_success(factory)
 
     async with factory() as session:
         result = await session.execute(
@@ -262,13 +273,17 @@ async def _restaurant_for(
     return restaurant.id
 
 
-def _queue_refinement(session: AsyncSession, log: FoodLog) -> uuid.UUID:
+async def _queue_refinement(session: AsyncSession, log: FoodLog) -> uuid.UUID | None:
     """Queue the model's refinement of this log, on the log's own transaction.
 
     Never committed here: the caller's commit of the log is what commits the
     job, so a refinement is never queued for a meal that did not save, and a
-    meal never saves without its refinement queued.
+    meal never saves without its refinement queued -- unless the breaker
+    around the model is open, when nothing is queued at all: the job could
+    only skip, and refine-backfill picks the log up after the outage.
     """
+    if await circuit_breaker.is_open(session):
+        return None
     job = enqueue(
         session,
         REFINE_CALORIE_ESTIMATE,
@@ -358,7 +373,7 @@ async def create_log(
             return existing, False, None
         raise
     # Skipped for a photo-priced log, whose figure is already the model's own.
-    job_id = _queue_refinement(session, log) if estimate_refined_at is None else None
+    job_id = await _queue_refinement(session, log) if estimate_refined_at is None else None
     created = await load_log(session, user.id, log.id)
     await session.commit()
     return created, True, job_id
@@ -416,7 +431,9 @@ async def update_log(
         log.fat_g = None
 
     await session.flush()
-    job_id = _queue_refinement(session, log) if refine and await may_refine(limiter, user) else None
+    job_id = None
+    if refine and await may_refine(limiter, user):
+        job_id = await _queue_refinement(session, log)
     updated = await load_log(session, user.id, log.id)
     await session.commit()
     return updated, job_id

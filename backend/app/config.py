@@ -82,6 +82,11 @@ class Settings(BaseSettings):
     # that died, and is put back. Comfortably past the slowest real handler: a
     # Groq call with its own retries is well under a minute.
     job_stale_seconds: float = Field(default=300.0, alias="JOB_STALE_SECONDS")
+    # The circuit breaker around the calorie model (services/circuit_breaker.py):
+    # open after this many consecutive failures, and let one probe through
+    # once it has been open this long.
+    ai_breaker_threshold: int = Field(default=5, alias="AI_BREAKER_THRESHOLD")
+    ai_breaker_cooldown_seconds: float = Field(default=60.0, alias="AI_BREAKER_COOLDOWN_SECONDS")
     worker_concurrency: int = Field(default=4, alias="WORKER_CONCURRENCY")
     worker_poll_seconds: float = Field(default=1.0, alias="WORKER_POLL_SECONDS")
     log_daily_limit: int = Field(default=300, alias="LOG_DAILY_LIMIT")

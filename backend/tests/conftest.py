@@ -127,6 +127,8 @@ MUTABLE_TABLES = (
     # Every log and every registration enqueues one, so a job left over from
     # the previous test would otherwise be claimed by the next one's drain.
     "jobs",
+    # Or one test's forced Groq failures leave the breaker open for the next.
+    "circuit_breakers",
 )
 
 
