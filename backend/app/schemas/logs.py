@@ -11,6 +11,7 @@ from app.models.enums import FriendScale, ServingSize
 from app.schemas.catalog import SMALLINT_MAX, CategoryOut, RestaurantOut
 from app.schemas.text import optional_text_field, text_field
 from app.services.ai.deps import EstimateSource
+from app.services.ai.schemas import PhotoCalorieEstimate
 
 
 class FoodLogCreate(BaseModel):
@@ -169,3 +170,21 @@ class FoodLogOut(BaseModel):
 class FoodLogPage(BaseModel):
     items: list[FoodLogOut]
     total: int
+
+
+class PhotoEstimateOut(PhotoCalorieEstimate):
+    """PhotoCalorieEstimate plus which estimator actually answered.
+
+    A route-level addition, not a field on PhotoCalorieEstimate itself:
+    that schema also validates Groq's own structured-output JSON reply (see
+    groq_service's module docstring), and a field the model is never asked
+    to fill in has no business inside the schema that constrains what it
+    returns. estimate_source is attached here, the same way FoodLogOut's own
+    copy of it is, so a client can tell a real vision call apart from the
+    deterministic local stub without needing to trust anything else on the
+    device -- see /ready and the startup warning in app.main for the other
+    half of this: AI_PROVIDER quietly not being "groq" in production should
+    never be a secret only server logs know.
+    """
+
+    estimate_source: EstimateSource

@@ -48,6 +48,21 @@ async def test_a_photo_returns_an_estimate_without_creating_a_log(
     assert (await auth_client.get("/api/v1/logs")).json()["total"] == before
 
 
+async def test_the_estimate_names_which_source_actually_answered(
+    auth_client: AsyncClient,
+) -> None:
+    """This suite runs on the fake provider (its own module docstring, above),
+    so this is the one place a photo estimate response can carry anything
+    but "local" -- proving the field is actually wired to the same signal
+    the rest of the app reads, not a hardcoded value that happens to always
+    be right here. Mobile shows a "Demo estimate" label off this exact
+    field."""
+    response = await auth_client.post(ESTIMATE, files=_upload(PNG))
+
+    assert response.status_code == 200, response.text
+    assert response.json()["estimate_source"] == "local"
+
+
 async def test_the_declared_content_type_is_not_trusted(auth_client: AsyncClient) -> None:
     response = await auth_client.post(
         ESTIMATE,

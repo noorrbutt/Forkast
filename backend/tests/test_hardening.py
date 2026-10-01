@@ -113,6 +113,70 @@ async def test_ready_reports_text_and_vision_separately(
     assert body["ai"] == "degraded"
 
 
+async def test_ready_reports_which_provider_and_estimate_source_are_actually_live(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A client should never have to trust a server log to know whether an
+    estimate came from a real model or the deterministic local stub -- these
+    two fields are the other half of _warn_if_production_is_not_really_ai_backed:
+    a server-side log only the operator sees, and a field any caller can
+    read for itself."""
+    import app.main as main_module
+    from app.config import AIProvider
+
+    monkeypatch.setattr(main_module.settings, "ai_provider", AIProvider.fake)
+
+    response = await client.get("/ready")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["ai_provider"] == "fake"
+    assert body["estimate_source"] == "local"
+
+
+async def test_production_with_a_non_groq_provider_boots_but_warns_loudly(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Running the local stub in production is a legitimate choice (a free
+    demo with no Groq key) and must never refuse to boot over it -- but it
+    must never be a silent choice either: every estimate quietly becomes the
+    deterministic stub the moment AI_PROVIDER drifts away from "groq", which
+    is exactly the kind of thing nobody notices until someone asks why the
+    numbers look suspiciously tidy."""
+    import logging
+
+    from app.config import AIProvider, Environment
+    from app.main import _warn_if_production_is_not_really_ai_backed, settings
+
+    monkeypatch.setattr(settings, "ai_provider", AIProvider.fake)
+    monkeypatch.setattr(settings, "environment", Environment.production)
+
+    with caplog.at_level(logging.WARNING, logger="app.main"):
+        _warn_if_production_is_not_really_ai_backed()
+
+    assert any(
+        "AI_PROVIDER" in record.message and "production" in record.message
+        for record in caplog.records
+    )
+
+
+async def test_production_with_groq_configured_stays_quiet(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import logging
+
+    from app.config import AIProvider, Environment
+    from app.main import _warn_if_production_is_not_really_ai_backed, settings
+
+    monkeypatch.setattr(settings, "ai_provider", AIProvider.groq)
+    monkeypatch.setattr(settings, "environment", Environment.production)
+
+    with caplog.at_level(logging.WARNING, logger="app.main"):
+        _warn_if_production_is_not_really_ai_backed()
+
+    assert caplog.records == []
+
+
 async def test_ready_returns_503_when_the_db_dependency_fails(client: AsyncClient) -> None:
     async def broken() -> None:
         raise RuntimeError("database down")

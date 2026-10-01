@@ -82,6 +82,18 @@ async def test_the_kill_switch_has_no_effect_on_the_fake_provider(
     assert response.status_code == 200, response.text
 
 
+async def test_the_response_names_ai_once_the_live_source_is_in_play(
+    auth_client: AsyncClient, live_estimate_source
+) -> None:
+    """The fake-provider case is covered in test_photo_estimation_endpoint.py;
+    this is the other branch, proving estimate_source on the response really
+    does track get_estimate_source() rather than being hardcoded to "local"."""
+    response = await auth_client.post(ESTIMATE, files=_upload(PNG))
+
+    assert response.status_code == 200, response.text
+    assert response.json()["estimate_source"] == "ai"
+
+
 # --- the short-window and daily rate limits ---
 
 

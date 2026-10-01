@@ -24,7 +24,7 @@ from sqlalchemy import text
 
 from app.api.deps import SessionDep
 from app.api.v1 import api_router
-from app.config import AIProvider, get_settings
+from app.config import AIProvider, Environment, get_settings
 from app.db import get_session
 from app.middleware import (
     BodySizeLimitMiddleware,
@@ -32,7 +32,7 @@ from app.middleware import (
     SecurityHeadersMiddleware,
 )
 from app.services import circuit_breaker, jobs
-from app.services.ai.deps import get_ai_service
+from app.services.ai.deps import get_ai_service, get_estimate_source
 from app.web import router as web_router
 
 settings = get_settings()
@@ -86,8 +86,37 @@ async def _probe_ai_in_background() -> None:
             )
 
 
+def _warn_if_production_is_not_really_ai_backed() -> None:
+    """Loud, not silent: a production deploy serving the deterministic stub.
+
+    DeterministicAIService needs no key and nothing running, which is
+    exactly why it is easy to leave in place by omission -- AI_PROVIDER
+    simply never gets set on a new deploy, the app boots fine, and every
+    estimate quietly becomes the local stub with nothing in the UI or the
+    logs to say so. This never refuses to boot: a production deploy running
+    on the local estimator on purpose, for a free demo with no Groq key, is
+    a legitimate choice this app supports deliberately (see AI_PROVIDER in
+    .env.example). What it must not be is a SILENT one. /ready's own
+    ai_provider and estimate_source fields are the other half of this: a
+    client can ask, not just a server log.
+    """
+    if (
+        settings.environment is Environment.production
+        and settings.ai_provider is not AIProvider.groq
+    ):
+        logger.warning(
+            'ENVIRONMENT is production but AI_PROVIDER is %r, not "groq" -- '
+            "every calorie estimate and plan this deploy serves is the "
+            "deterministic local stub, not a real model. Set AI_PROVIDER=groq "
+            "and GROQ_API_KEY if that is not deliberate.",
+            settings.ai_provider.value,
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _warn_if_production_is_not_really_ai_backed()
+
     # Skipped entirely on SERVERLESS=true, and deliberately not awaited
     # instead. A fire-and-forget task has no process to finish in once the
     # function is frozen. Awaiting it would put a Groq round trip on every
@@ -217,6 +246,12 @@ async def ready() -> dict[str, str]:
         "ai": combined_status,
         "ai_text": text_status,
         "ai_vision": vision_status,
+        # The configuration itself, not just whether it's reachable -- so a
+        # client (or whoever is looking at this deploy) can tell a real
+        # model apart from the deterministic local stub without trusting a
+        # server log. See _warn_if_production_is_not_really_ai_backed.
+        "ai_provider": settings.ai_provider.value,
+        "estimate_source": get_estimate_source(),
     }
 
 

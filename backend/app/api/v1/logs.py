@@ -28,12 +28,11 @@ from app.config import get_settings
 from app.db import get_session_factory
 from app.models import MAX_PHOTO_BYTES, FoodLog
 from app.schemas.insights import TrendOut
-from app.schemas.logs import FoodLogCreate, FoodLogOut, FoodLogPage, FoodLogUpdate
+from app.schemas.logs import FoodLogCreate, FoodLogOut, FoodLogPage, FoodLogUpdate, PhotoEstimateOut
 from app.services import jobs
 from app.services import logs as logs_service
 from app.services.ai.base import AIService
 from app.services.ai.deps import EstimateSource, get_ai_service, get_estimate_source
-from app.services.ai.schemas import PhotoCalorieEstimate
 from app.services.images import check_upload
 from app.services.insights import build_trend
 from app.services.rate_limit import account_identity
@@ -111,14 +110,14 @@ async def create_log(
     return _food_log_out(log, estimate_source)
 
 
-@logs_router.post("/estimate-photo", response_model=PhotoCalorieEstimate)
+@logs_router.post("/estimate-photo", response_model=PhotoEstimateOut)
 async def estimate_photo(
     user: CurrentUser,
     ai: AIDep,
     estimate_source: EstimateSourceDep,
     limiter: RateLimiterDep,
     file: Annotated[UploadFile, File()],
-) -> PhotoCalorieEstimate:
+) -> PhotoEstimateOut:
     """Read a photo and guess what is on it, without saving anything.
 
     The camera is the primary way to log a meal now, and nobody should have to
@@ -151,7 +150,8 @@ async def estimate_photo(
     # One byte of headroom, so check_upload can tell "on the limit" from "over".
     data = await file.read(MAX_PHOTO_BYTES + 1)
     content_type = check_upload(data, max_bytes=MAX_PHOTO_BYTES, noun="Photos")
-    return await logs_service.estimate_photo(ai, data, content_type, live=live)
+    estimate = await logs_service.estimate_photo(ai, data, content_type, live=live)
+    return PhotoEstimateOut(**estimate.model_dump(), estimate_source=estimate_source)
 
 
 @logs_router.get("", response_model=FoodLogPage)

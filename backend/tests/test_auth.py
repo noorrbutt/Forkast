@@ -259,9 +259,7 @@ async def test_retrying_a_recently_spent_refresh_within_the_same_session(
 
     # The session continues again, which is the later-rotation signal: proof
     # the chain kept working fine after first_refresh was spent.
-    continued = await client.post(
-        REFRESH, json={"refresh_token": rotated.json()["refresh_token"]}
-    )
+    continued = await client.post(REFRESH, json={"refresh_token": rotated.json()["refresh_token"]})
     assert continued.status_code == 200
 
     # The original, long-since-spent token is presented again -- the client's
@@ -270,9 +268,7 @@ async def test_retrying_a_recently_spent_refresh_within_the_same_session(
     assert replay.status_code == 200
     assert replay.json()["refresh_token"] != continued.json()["refresh_token"]
 
-    user = await session.scalar(
-        select(User).where(User.email == "retry-same-session@forkast.app")
-    )
+    user = await session.scalar(select(User).where(User.email == "retry-same-session@forkast.app"))
     assert user is not None
     live_rows = await session.scalars(
         select(RefreshToken).where(
