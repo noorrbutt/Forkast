@@ -43,11 +43,6 @@ from app.api.deps import CurrentUser, RateLimiterDep, SessionDep, bearer_scheme
 # rather than in a schema validator: it needs a session to check the new
 # address for uniqueness and a background task to send the mail after commit.
 from app.api.v1.auth import _send_verification_email_safely
-
-# The signature check that decides whether an upload really is an image, shared
-# with the meal photo route rather than written twice, so the two cannot drift
-# into accepting different files from each other.
-from app.api.v1.logs import _sniff
 from app.config import get_settings
 from app.models import (
     MAX_AVATAR_BYTES,
@@ -82,6 +77,7 @@ from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import PlanContext, PlanLogSummary, PlanRequest
 from app.services.auth import issue_email_verification_token
 from app.services.google import GoogleAuthError, verify_google_id_token
+from app.services.images import check_upload
 from app.services.insights import (
     build_dashboard,
     build_reminder_signal,
@@ -489,25 +485,9 @@ async def set_avatar(
     # anything over it is caught here rather than by the CHECK constraint, which
     # would surface as a 500.
     data = await file.read(MAX_AVATAR_BYTES + 1)
-    if len(data) > MAX_AVATAR_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=f"Avatars must be {MAX_AVATAR_BYTES // 1024} KB or smaller.",
-        )
-    if not data:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="That file was empty.",
-        )
-
     # The declared type is whatever the client typed. These bytes are served
     # back later with a content type of their own, so the signature decides.
-    content_type = _sniff(data)
-    if content_type is None:
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="Avatars must be JPEG, PNG or WebP.",
-        )
+    content_type = check_upload(data, max_bytes=MAX_AVATAR_BYTES, noun="Avatars")
 
     existing = await session.scalar(select(UserAvatar).where(UserAvatar.user_id == user.id))
     if existing is None:

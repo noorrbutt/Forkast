@@ -1,4 +1,9 @@
-"""Downscaling a photo before it is billed to a vision model.
+"""Checking an uploaded image, and downscaling a photo before it is billed to a
+vision model.
+
+The signature check is shared by the meal photo routes and the avatar route
+rather than written twice, so they cannot drift into accepting different files
+from each other.
 
 Server side, not client side: the endpoint has to apply regardless of what a
 particular build of the app happens to send, and a phone camera shot is
@@ -12,7 +17,62 @@ from __future__ import annotations
 
 import io
 
+from fastapi import HTTPException, status
 from PIL import Image, ImageOps
+
+# What a phone camera and an image picker actually produce. Checked by magic
+# bytes rather than by the declared content type, because the header is whatever
+# the client says it is and this content is served straight back to other users
+# of the same account.
+# Written as hex rather than as escaped byte strings. These signatures
+# contain CR, LF and SUB, which do not survive being copied through a text
+# editor intact, and a silently mangled signature here would reject every
+# valid PNG.
+_MAGIC: tuple[tuple[bytes, str], ...] = (
+    (bytes.fromhex("ffd8ff"), "image/jpeg"),
+    (bytes.fromhex("89504e470d0a1a0a"), "image/png"),
+    (bytes.fromhex("52494646"), "image/webp"),
+)
+
+
+def sniff(data: bytes) -> str | None:
+    """The real type of these bytes, or None if it is not an image we accept."""
+    for prefix, content_type in _MAGIC:
+        if not data.startswith(prefix):
+            continue
+        # RIFF alone is any RIFF container, including audio. Only WEBP counts.
+        if content_type == "image/webp" and data[8:12] != bytes.fromhex("57454250"):
+            return None
+        return content_type
+    return None
+
+
+def check_upload(data: bytes, *, max_bytes: int, noun: str) -> str:
+    """The content type of an uploaded image, or the 4xx that refuses it.
+
+    The caller reads with one byte of headroom, so a file exactly on the limit
+    passes and anything over it is caught here rather than by a CHECK
+    constraint, which would surface as a 500. `noun` is what the messages call
+    the file ("Photos", "Avatars").
+    """
+    if len(data) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"{noun} must be {max_bytes // 1024} KB or smaller.",
+        )
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="That file was empty.",
+        )
+    content_type = sniff(data)
+    if content_type is None:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"{noun} must be JPEG, PNG or WebP.",
+        )
+    return content_type
+
 
 # Long enough that a dish, its portion and its plate are all still legible;
 # short enough that a 4000px camera photo becomes a few hundred KB rather than
@@ -30,7 +90,7 @@ def compress_for_estimation(data: bytes) -> bytes:
     """Re-encode `data` as a downscaled JPEG, ready to send to a vision model.
 
     Never raises on a malformed image: the caller has already run this past
-    _sniff, which only accepts real JPEG, PNG or WebP signatures, so a failure
+    sniff, which only accepts real JPEG, PNG or WebP signatures, so a failure
     here means Pillow could not decode bytes that passed that check, which is
     a corrupt or truncated upload rather than a well-formed one this function
     should have handled. That is reported the same way a transport failure
