@@ -1,7 +1,8 @@
 """Live end to end smoke test against a running Forkast server.
 
     python -m scripts.smoke                       # defaults to 127.0.0.1:8010
-    python -m scripts.smoke http://192.168.1.5:8010
+    python -m scripts.smoke --base-url http://192.168.1.5:8010
+    python -m scripts.smoke --base-url https://your-project.vercel.app
 
 Hits every route over real HTTP, in the order a real client would, and exits
 non zero on the first thing that does not hold.
@@ -18,12 +19,19 @@ own restaurant, so nothing depends on state left by an earlier run.
 
 from __future__ import annotations
 
+import argparse
 import sys
 import time
 
 import httpx
 
-BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8010"
+_DEFAULT_BASE = "http://127.0.0.1:8010"
+_parser = argparse.ArgumentParser(description="Live end to end smoke test.")
+_parser.add_argument("--base-url", default=None, help=f"server to test (default {_DEFAULT_BASE})")
+# The old positional form, still accepted so existing invocations keep working.
+_parser.add_argument("legacy_base_url", nargs="?", default=None, help=argparse.SUPPRESS)
+_args = _parser.parse_args()
+BASE = (_args.base_url or _args.legacy_base_url or _DEFAULT_BASE).rstrip("/")
 API = f"{BASE}/api/v1"
 
 passed = 0
