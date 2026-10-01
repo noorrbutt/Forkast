@@ -47,3 +47,8 @@ mobile/.playwright-cli/
 !.vscode/extensions.json
 *.log
 pytest_*out.txt
+
+# A real photo for scripts/live_ai_check.py, added locally; see
+# backend/scripts/fixtures/README.md.
+backend/scripts/fixtures/*.jpg
+backend/scripts/fixtures/*.jpeg
