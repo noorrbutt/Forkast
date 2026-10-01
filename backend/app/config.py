@@ -72,6 +72,18 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = Field(default=30, alias="REFRESH_TOKEN_EXPIRE_DAYS")
     refresh_reuse_leeway_seconds: int = Field(default=30, alias="REFRESH_REUSE_LEEWAY_SECONDS")
     refine_rate_limit: int = Field(default=60, alias="REFINE_RATE_LIMIT")
+    # The jobs queue (services/jobs.py). A failed job waits roughly
+    # base * 2^attempts seconds, plus up to half that again as jitter so a
+    # burst of failures does not retry in lockstep, never more than the max.
+    job_max_attempts: int = Field(default=5, alias="JOB_MAX_ATTEMPTS")
+    job_backoff_base_seconds: float = Field(default=5.0, alias="JOB_BACKOFF_BASE_SECONDS")
+    job_backoff_max_seconds: float = Field(default=3600.0, alias="JOB_BACKOFF_MAX_SECONDS")
+    # A job still "running" this long after it was claimed belonged to a worker
+    # that died, and is put back. Comfortably past the slowest real handler: a
+    # Groq call with its own retries is well under a minute.
+    job_stale_seconds: float = Field(default=300.0, alias="JOB_STALE_SECONDS")
+    worker_concurrency: int = Field(default=4, alias="WORKER_CONCURRENCY")
+    worker_poll_seconds: float = Field(default=1.0, alias="WORKER_POLL_SECONDS")
     log_daily_limit: int = Field(default=300, alias="LOG_DAILY_LIMIT")
     photo_daily_limit: int = Field(default=100, alias="PHOTO_DAILY_LIMIT")
     # Separate from photo_daily_limit: attaching a photo to a saved meal is one
