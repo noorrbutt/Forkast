@@ -38,38 +38,52 @@ from app.web import router as web_router
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
-# Whether the configured Groq model answered the startup probe. None until the
-# background probe finishes, so /ready can tell "still checking" apart from
-# "checked and it's down" instead of reporting one as the other for however
-# long the first call takes.
-ai_probe_ok: bool | None = None
+# Whether the configured Groq models answered the startup probe, text and
+# vision tracked separately -- Groq has retired one without the other before
+# (see groq_service's module docstring), and a deploy with a working text
+# model and a dead vision model should report photos as degraded without
+# looking fully down. Both are None until the background probe finishes, so
+# /ready can tell "still checking" apart from "checked and it's down" instead
+# of reporting one as the other for however long the first call takes.
+ai_text_probe_ok: bool | None = None
+ai_vision_probe_ok: bool | None = None
 
 
 async def _probe_ai_in_background() -> None:
-    """Check the model without blocking startup on it.
+    """Check both models without blocking startup on it.
 
     get_settings() already fails fast -- and synchronously, before the app
     even starts -- when AI_PROVIDER=groq has no key, because that is a config
     mistake no request can route around. This is the other failure mode: the
-    key is fine but the model itself is down or was deprecated out from under
+    key is fine but a model itself is down or was deprecated out from under
     the config, same as the .env.example warning about Groq retiring models
     without notice. Logging and food search do not touch the model at all,
     and log creation already falls back to a provisional estimate when the
     call fails, so there is no reason an upstream outage should also take
     down login and every non-AI route with it.
     """
-    global ai_probe_ok
+    global ai_text_probe_ok, ai_vision_probe_ok
     try:
-        await get_ai_service().probe()
+        result = await get_ai_service().probe()
     except Exception:
-        ai_probe_ok = False
+        ai_text_probe_ok = False
+        ai_vision_probe_ok = False
         logger.warning(
-            "AI_PROVIDER is groq but the configured model failed its startup probe; "
+            "AI_PROVIDER is groq but the startup probe could not reach Groq at all; "
             "serving degraded (provisional estimates only) until it recovers.",
             exc_info=True,
         )
     else:
-        ai_probe_ok = True
+        ai_text_probe_ok = result.text_ok
+        ai_vision_probe_ok = result.vision_ok
+        if not (result.text_ok and result.vision_ok):
+            logger.warning(
+                "AI_PROVIDER is groq but the startup probe found a model missing "
+                "(text_ok=%s, vision_ok=%s); the affected feature will serve "
+                "provisional estimates until it recovers.",
+                result.text_ok,
+                result.vision_ok,
+            )
 
 
 @asynccontextmanager
@@ -170,16 +184,31 @@ async def ready() -> dict[str, str]:
     except Exception as exc:  # pragma: no cover - DB failure path
         raise HTTPException(status_code=503, detail="Database unavailable") from exc
 
-    if settings.ai_provider is not AIProvider.groq:
-        ai_status = "not_configured"
-    elif ai_probe_ok is None:
-        ai_status = "checking"
-    elif ai_probe_ok:
-        ai_status = "ok"
-    else:
-        ai_status = "degraded"
+    def _status(ok: bool | None) -> str:
+        if settings.ai_provider is not AIProvider.groq:
+            return "not_configured"
+        if ok is None:
+            return "checking"
+        return "ok" if ok else "degraded"
 
-    return {"status": "ready", "ai": ai_status}
+    text_status = _status(ai_text_probe_ok)
+    vision_status = _status(ai_vision_probe_ok)
+    # "ai" stays as the combined view existing callers already read: ok only
+    # when both models are, degraded if either is down, otherwise whichever
+    # of not_configured/checking applies to both alike.
+    if text_status == vision_status:
+        combined_status = text_status
+    elif "degraded" in (text_status, vision_status):
+        combined_status = "degraded"
+    else:
+        combined_status = "checking"
+
+    return {
+        "status": "ready",
+        "ai": combined_status,
+        "ai_text": text_status,
+        "ai_vision": vision_status,
+    }
 
 
 @app.get("/queue", tags=["meta"])

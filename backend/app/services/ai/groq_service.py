@@ -38,7 +38,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
-from typing import Any
+from typing import Any, NamedTuple
 
 from app.services.ai.prompts import (
     CALORIE_SYSTEM_PROMPT,
@@ -279,6 +279,20 @@ class GroqResponseError(RuntimeError):
     """Groq answered, but not with something usable."""
 
 
+class ModelProbeResult(NamedTuple):
+    """Which of the two models this account can actually reach right now.
+
+    Separate booleans, not one combined pass/fail: the text model backs
+    calorie adjustment and plans, VISION_MODEL backs photo estimation, and
+    Groq has a history of retiring one without the other (see this module's
+    docstring). A deploy with a working text model and a dead vision model
+    should still come up serving everything but photos, not look fully down.
+    """
+
+    text_ok: bool
+    vision_ok: bool
+
+
 def _calorie_prompt(req: CalorieAdjustRequest) -> str:
     return (
         f"Dish: {req.dish_name}\n"
@@ -381,8 +395,8 @@ class GroqAIService:
         self._client = client
         self._model = model
 
-    async def probe(self) -> None:
-        """Fail fast if the configured Groq model is unavailable.
+    async def probe(self) -> ModelProbeResult:
+        """Check both the text model and VISION_MODEL against one model list.
 
         Deliberately uses ``models.list()`` and not ``models.retrieve(id)``.
         ``retrieve`` puts the model id straight into the URL path
@@ -394,14 +408,18 @@ class GroqAIService:
         returns a 404 model_not_found even though the model exists and
         works fine for chat completions. ``list()`` has no id-in-path
         problem, so membership-check against it instead.
+
+        Raises only when the listing call itself fails -- a reachability
+        problem, not a per-model one. Either model simply missing from the
+        list is reported through the returned result instead, so the caller
+        can tell "down" apart from "the text model works but photos won't".
         """
         try:
             listed = await self._client.models.list()
-            names = {item.id for item in listed.data}
-            if self._model not in names:
-                raise GroqResponseError(f"Groq model {self._model} is not available")
         except Exception as exc:
-            raise GroqResponseError(f"Groq model probe failed for {self._model}: {exc}") from exc
+            raise GroqResponseError(f"Groq model probe failed: {exc}") from exc
+        names = {item.id for item in listed.data}
+        return ModelProbeResult(text_ok=self._model in names, vision_ok=VISION_MODEL in names)
 
     async def _attempt(
         self,
