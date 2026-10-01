@@ -64,7 +64,13 @@ with httpx.Client(timeout=30.0) as http:
 
     section("auth")
     email = f"smoke-{int(time.time())}@forkast.app"
-    r = http.post(f"{API}/auth/register", json={"email": email, "password": "password123"})
+    register_body = {
+        "first_name": "Smoke",
+        "last_name": "Test",
+        "email": email,
+        "password": "password123",
+    }
+    r = http.post(f"{API}/auth/register", json=register_body)
 
     if r.status_code == 429:
         # Registration is deliberately limited to a handful per window per
@@ -85,7 +91,7 @@ with httpx.Client(timeout=30.0) as http:
     access, refresh_token = tokens["access_token"], tokens["refresh_token"]
     auth = {"Authorization": f"Bearer {access}"}
 
-    r = http.post(f"{API}/auth/register", json={"email": email, "password": "password123"})
+    r = http.post(f"{API}/auth/register", json=register_body)
     check("duplicate register is rejected", r.status_code == 409, r.text)
 
     r = http.post(f"{API}/auth/login", json={"email": email, "password": "password123"})
