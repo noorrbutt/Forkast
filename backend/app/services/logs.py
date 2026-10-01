@@ -27,6 +27,7 @@ from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import CalorieAdjustRequest, PhotoCalorieEstimate
 from app.services.calories import clamp_photo_estimate, finalise_estimate
 from app.services.images import compress_for_estimation
+from app.services.jobs import REFINE_CALORIE_ESTIMATE, enqueue
 from app.services.rate_limit import RateLimiter, account_identity
 
 logger = logging.getLogger(__name__)
@@ -107,66 +108,78 @@ async def refine_estimate(
     category_id: int,
     ai: AIService,
     factory: async_sessionmaker[AsyncSession],
-) -> None:
+) -> bool:
     """Replace a provisional figure with the model's, after the response is out.
+
+    Run by the refine_calorie_estimate job (services/job_handlers.py), so it
+    raises on failure to ask for a retry, and has to be safe to run twice:
+    a worker can commit the refined figure and die before the job is marked
+    done. A row that is already refined is left alone, and the UPDATE itself
+    only touches a row that is still unrefined, so a second run, or two runs
+    at once, converge on one refinement rather than stacking them. An edit
+    clears estimate_refined_at and queues its own job, which is what makes a
+    re-refinement after an edit still happen.
 
     The first session only reads the values needed for the model, then closes
     before the Groq call so the DB pool is free for other requests. The second
     session updates the row only after the estimate is ready.
+
+    Returns whether the row was refined by this call.
     """
-    try:
-        async with factory() as session:
-            log = await session.get(FoodLog, log_id)
-            # Edited or deleted while the model was thinking, which is a race
-            # this has to lose rather than overwrite.
-            if log is None or log.category_id != category_id:
-                return
+    async with factory() as session:
+        log = await session.get(FoodLog, log_id)
+        # Edited or deleted while the model was thinking, which is a race
+        # this has to lose rather than overwrite.
+        if log is None or log.category_id != category_id:
+            return False
+        if log.estimate_refined_at is not None:
+            return False
 
-            category = await session.get(FoodCategory, category_id)
-            if category is None:
-                return
+        category = await session.get(FoodCategory, category_id)
+        if category is None:
+            return False
 
-            dish_name = log.dish_name
-            serving_size = log.serving_size
-            category_name = category.name
-            base_calorie_min = category.base_calorie_min
-            base_calorie_max = category.base_calorie_max
+        dish_name = log.dish_name
+        serving_size = log.serving_size
+        category_name = category.name
+        base_calorie_min = category.base_calorie_min
+        base_calorie_max = category.base_calorie_max
 
-        refined = await estimate_calories(
-            ai,
-            dish_name=dish_name,
-            category_name=category_name,
-            base_calorie_min=base_calorie_min,
-            base_calorie_max=base_calorie_max,
-            serving_size=serving_size,
+    refined = await estimate_calories(
+        ai,
+        dish_name=dish_name,
+        category_name=category_name,
+        base_calorie_min=base_calorie_min,
+        base_calorie_max=base_calorie_max,
+        serving_size=serving_size,
+    )
+
+    async with factory() as session:
+        result = await session.execute(
+            text(
+                """
+                UPDATE food_logs
+                SET estimated_calories = :value,
+                    estimate_refined_at = NOW()
+                WHERE id = :id
+                  AND category_id = :category_id
+                  AND dish_name = :dish_name
+                  AND serving_size = :serving_size
+                  AND estimate_refined_at IS NULL
+                """
+            ),
+            {
+                "value": refined,
+                "id": log_id,
+                "category_id": category_id,
+                "dish_name": dish_name,
+                "serving_size": serving_size,
+            },
         )
-
-        async with factory() as session:
-            result = await session.execute(
-                text(
-                    """
-                    UPDATE food_logs
-                    SET estimated_calories = :value,
-                        estimate_refined_at = NOW()
-                    WHERE id = :id
-                      AND category_id = :category_id
-                      AND dish_name = :dish_name
-                      AND serving_size = :serving_size
-                    """
-                ),
-                {
-                    "value": refined,
-                    "id": log_id,
-                    "category_id": category_id,
-                    "dish_name": dish_name,
-                    "serving_size": serving_size,
-                },
-            )
-            if result.rowcount == 0:
-                return
-            await session.commit()
-    except Exception:
-        logger.error("refine_failed log_id=%s", log_id, exc_info=True)
+        if result.rowcount == 0:
+            return False
+        await session.commit()
+    return True
 
 
 async def get_category(session: AsyncSession, category_id: int) -> FoodCategory:
@@ -249,6 +262,21 @@ async def _restaurant_for(
     return restaurant.id
 
 
+def _queue_refinement(session: AsyncSession, log: FoodLog) -> uuid.UUID:
+    """Queue the model's refinement of this log, on the log's own transaction.
+
+    Never committed here: the caller's commit of the log is what commits the
+    job, so a refinement is never queued for a meal that did not save, and a
+    meal never saves without its refinement queued.
+    """
+    job = enqueue(
+        session,
+        REFINE_CALORIE_ESTIMATE,
+        {"log_id": str(log.id), "category_id": log.category_id},
+    )
+    return job.id
+
+
 def _initial_estimate(
     payload: FoodLogCreate, category: FoodCategory
 ) -> tuple[int, str, dt.datetime | None]:
@@ -278,8 +306,9 @@ def _initial_estimate(
 
 async def create_log(
     session: AsyncSession, limiter: RateLimiter, user: User, payload: FoodLogCreate
-) -> tuple[FoodLog, bool]:
-    """Save a meal, and say whether this call created it.
+) -> tuple[FoodLog, bool, uuid.UUID | None]:
+    """Save a meal, say whether this call created it, and return the id of the
+    refinement job queued with it, if one was.
 
     False means a row with the same client_id was already there and is what
     comes back. That is checked before either quota is touched: an offline
@@ -289,7 +318,7 @@ async def create_log(
     """
     existing = await _already_saved(session, user, payload.client_id)
     if existing is not None:
-        return existing, False
+        return existing, False, None
 
     await _spend_daily(limiter, "log-day", user, get_settings().log_daily_limit)
     category = await get_category(session, payload.category_id)
@@ -326,11 +355,13 @@ async def create_log(
         await session.rollback()
         existing = await _already_saved(session, user, payload.client_id)
         if existing is not None:
-            return existing, False
+            return existing, False, None
         raise
+    # Skipped for a photo-priced log, whose figure is already the model's own.
+    job_id = _queue_refinement(session, log) if estimate_refined_at is None else None
     created = await load_log(session, user.id, log.id)
     await session.commit()
-    return created, True
+    return created, True, job_id
 
 
 async def list_logs(
@@ -351,9 +382,14 @@ async def list_logs(
 
 
 async def update_log(
-    session: AsyncSession, user: User, log_id: uuid.UUID, payload: FoodLogUpdate
-) -> tuple[FoodLog, bool]:
-    """Apply the sent fields, and say whether the estimate now needs refining."""
+    session: AsyncSession,
+    limiter: RateLimiter,
+    user: User,
+    log_id: uuid.UUID,
+    payload: FoodLogUpdate,
+) -> tuple[FoodLog, uuid.UUID | None]:
+    """Apply the sent fields, and return the id of the refinement job queued
+    with them, if the estimate needs redoing and the hourly cap allows it."""
     log = await load_log(session, user.id, log_id)
     changes = payload.model_dump(exclude_unset=True)
 
@@ -380,9 +416,10 @@ async def update_log(
         log.fat_g = None
 
     await session.flush()
+    job_id = _queue_refinement(session, log) if refine and await may_refine(limiter, user) else None
     updated = await load_log(session, user.id, log.id)
     await session.commit()
-    return updated, refine
+    return updated, job_id
 
 
 async def may_refine(limiter: RateLimiter, user: User) -> bool:

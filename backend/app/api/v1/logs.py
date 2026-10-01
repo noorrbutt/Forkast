@@ -29,6 +29,7 @@ from app.db import get_session_factory
 from app.models import MAX_PHOTO_BYTES, FoodLog
 from app.schemas.insights import TrendOut
 from app.schemas.logs import FoodLogCreate, FoodLogOut, FoodLogPage, FoodLogUpdate
+from app.services import jobs
 from app.services import logs as logs_service
 from app.services.ai.base import AIService
 from app.services.ai.deps import EstimateSource, get_ai_service, get_estimate_source
@@ -54,6 +55,22 @@ EstimateSourceDep = Annotated[EstimateSource, Depends(get_estimate_source)]
 SessionFactoryDep = Annotated["async_sessionmaker[AsyncSession]", Depends(get_session_factory)]
 
 
+def _run_behind_response(
+    background: BackgroundTasks,
+    job_id: uuid.UUID,
+    ai: AIService,
+    factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Run the refinement job this request just committed, once the response
+    is out, so the figure still settles a moment after a save.
+
+    Only a fast path. The job is already a row in the jobs table, so if this
+    process dies before getting to it, a `python -m app.worker` picks it up;
+    the request's own `ai` is used here so a test's override applies to it.
+    """
+    background.add_task(jobs.run_now, job_id, jobs.JobContext(factory=factory, ai=ai))
+
+
 def _food_log_out(log: FoodLog, estimate_source: EstimateSource) -> FoodLogOut:
     output = FoodLogOut.model_validate(log)
     return output.model_copy(
@@ -76,17 +93,13 @@ async def create_log(
     limiter: RateLimiterDep,
     response: Response,
 ) -> FoodLog:
-    log, created = await logs_service.create_log(session, limiter, user, payload)
+    log, created, job_id = await logs_service.create_log(session, limiter, user, payload)
     if not created:
         # A retry of a save that already landed: answered from that row, and
         # 200 rather than 201 because nothing new was made.
         response.status_code = status.HTTP_200_OK
-    elif payload.estimated_calories is None:
-        # After the commit, so the row is certainly there when the task opens
-        # its own session, and after the response is built, so nobody waits
-        # for it. Skipped entirely for a photo-priced log, whose figure is
-        # already the model's own.
-        background.add_task(logs_service.refine_estimate, log.id, log.category_id, ai, factory)
+    if job_id is not None:
+        _run_behind_response(background, job_id, ai, factory)
     return _food_log_out(log, estimate_source)
 
 
@@ -164,11 +177,9 @@ async def update_log(
     background: BackgroundTasks,
     limiter: RateLimiterDep,
 ) -> FoodLog:
-    updated, refine = await logs_service.update_log(session, user, log_id, payload)
-    if refine and await logs_service.may_refine(limiter, user):
-        background.add_task(
-            logs_service.refine_estimate, updated.id, updated.category_id, ai, factory
-        )
+    updated, job_id = await logs_service.update_log(session, limiter, user, log_id, payload)
+    if job_id is not None:
+        _run_behind_response(background, job_id, ai, factory)
     return _food_log_out(updated, estimate_source)
 
 
