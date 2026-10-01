@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Pressable, RefreshControl, Text, useWindowDimensions, View } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
@@ -261,7 +261,7 @@ function useJustRefined(log: FoodLog): boolean {
  * on screen the moment the background refinement landed, with nothing on the
  * row saying so.
  */
-function RefinedTag() {
+function RefinedTag({ overlay = false }: { overlay?: boolean }) {
   const { colors, radius, spacing, type } = useTheme();
   const opacity = useSharedValue(0);
 
@@ -273,6 +273,36 @@ function RefinedTag() {
   }, [opacity]);
 
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  if (overlay) {
+    // Same fixed-contrast treatment as EstimateBadge's own overlay variant,
+    // and the same reasoning: this sits on a photograph, not on either of
+    // the app's own backgrounds, so colors.successSoft/colors.text -- tuned
+    // for the page -- has no guarantee of reading here.
+    return (
+      <Animated.View
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel="Estimate refined"
+        style={[
+          {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            alignSelf: 'flex-start',
+            borderRadius: radius.pill,
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            paddingHorizontal: spacing.sm,
+            paddingVertical: spacing.xs,
+          },
+          style,
+        ]}
+      >
+        <Icon name="check" size={12} color="#FFFFFF" />
+        <Text style={[type.caption, { color: '#FFFFFF' }]}>Refined</Text>
+      </Animated.View>
+    );
+  }
 
   return (
     <Animated.View
@@ -393,26 +423,39 @@ function SwipeToDelete({
   );
 }
 
+/** The pills' own height. Short of the 44dp target on its own, which is why
+ * every pill below carries hitSlop rather than growing the row to meet it --
+ * over a hundred rows, the extra padding that would take doubles the row
+ * height for a touch target most people press within a few points of dead
+ * centre anyway. */
+const PILL_HEIGHT = 38;
+const PILL_HIT_SLOP = 6;
+
 /**
- * Log again, the confirmation and the error. A single 48dp icon button now,
- * not a row of pills: Delete used to sit right beside it wearing the same
- * weight as the everyday action, on a row that wrapped onto two lines the
- * moment either label grew past a phone's width. Delete has not gone away --
- * it is the swipe, the long-press menu below, and the detail screen's own
- * Delete -- it just no longer has to be a visible pill on every one of a
- * hundred rows to be reachable.
+ * Log again and Delete, the confirmation and the error -- the card's footer,
+ * a sibling of the row's own Pressable rather than a child of it (see
+ * CompactMealRow/PhotoMealRow). Delete calls the exact same onDelete the
+ * swipe and the long-press menu already do: this is a third way to reach
+ * it, not a different action.
  */
 function MealActions({
   log,
   onRepeat,
+  onDelete,
   sending,
   confirmed,
   error,
-}: Pick<MealRowProps, 'log' | 'onRepeat' | 'sending' | 'confirmed' | 'error'>) {
+}: Pick<MealRowProps, 'log' | 'onRepeat' | 'onDelete' | 'sending' | 'confirmed' | 'error'>) {
   const { colors, radius, spacing, type } = useTheme();
+  const { width } = useWindowDimensions();
+  // Below this, "Log again" and "Delete" together start to crowd a narrow
+  // phone. Delete's label is the one that gives way -- its trash icon alone
+  // still reads, and Log again is the action most worth spelling out since
+  // it is the one someone reaches for on every ordinary repeat visit.
+  const narrow = width < 360;
 
   return (
-    <View style={{ gap: spacing.sm }}>
+    <View style={{ gap: spacing.xs }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
         <Pressable
           // Deliberately never disabled, however much a spinner would suit
@@ -425,31 +468,64 @@ function MealActions({
           accessibilityRole="button"
           accessibilityLabel={sending ? 'Logging again' : 'Log again'}
           accessibilityHint={`Adds ${log.dish_name} to today, with the time you tap it`}
+          hitSlop={PILL_HIT_SLOP}
           style={({ pressed }) => ({
-            width: 48,
-            height: 48,
-            borderRadius: radius.pill,
+            flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: 'center',
+            gap: spacing.xs,
+            height: PILL_HEIGHT,
+            borderRadius: radius.pill,
             borderWidth: 1.5,
             borderColor: colors.outline,
+            paddingHorizontal: spacing.md,
             backgroundColor: pressed ? colors.surfaceAlt : 'transparent',
           })}
         >
           {sending ? (
-            <ActivityIndicator color={colors.text} />
+            <ActivityIndicator size="small" color={colors.accent} />
           ) : (
-            <Icon name="log" size={20} color={colors.text} />
+            <Icon name="repeat" size={16} color={colors.accent} />
           )}
+          <Text style={[type.caption, { color: colors.accent, fontWeight: '600' }]}>
+            {sending ? 'Logging' : 'Log again'}
+          </Text>
         </Pressable>
 
-        {confirmed ? (
-          <Text style={[type.caption, { color: colors.success, flex: 1 }]}>
-            Logged again for today.
-          </Text>
-        ) : null}
+        <Pressable
+          onPress={() => onDelete(log.id)}
+          accessibilityRole="button"
+          // Plain "Delete", not "Delete {dish}" -- the swipe reveal's own
+          // panel already uses that exact label (SwipeToDelete, above), and
+          // both controls exist in the tree at once now that this footer
+          // button is a standing fixture rather than hidden behind a
+          // gesture. Two controls announcing the identical label in one row
+          // is the real problem a repeated string would leave unsolved, not
+          // just a test ambiguity. "Delete" alone matches the long-press
+          // menu's own Delete action, which names the dish in its title
+          // instead.
+          accessibilityLabel="Delete"
+          accessibilityHint={`Removes ${log.dish_name} from your diary, with a few seconds to undo it`}
+          hitSlop={PILL_HIT_SLOP}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.xs,
+            height: PILL_HEIGHT,
+            borderRadius: radius.pill,
+            paddingHorizontal: spacing.md,
+            backgroundColor: pressed ? colors.dangerSoft : 'transparent',
+          })}
+        >
+          <Icon name="trash" size={16} color={colors.danger} />
+          {narrow ? null : (
+            <Text style={[type.caption, { color: colors.danger, fontWeight: '600' }]}>Delete</Text>
+          )}
+        </Pressable>
       </View>
 
+      {confirmed ? (
+        <Text style={[type.caption, { color: colors.success }]}>Logged again for today.</Text>
+      ) : null}
       {error ? <FormError>{error}</FormError> : null}
     </View>
   );
@@ -493,101 +569,127 @@ function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, onLongPress, se
       dishName={log.dish_name}
       onDelete={() => onDelete(log.id)}
     >
-    <Pressable
-      // No real id to open yet -- this row is the client_id, and the meal
-      // it names does not exist on the server until the save settles.
-      onPress={() => !log.pending && onOpen(log.id)}
-      onLongPress={() => !log.pending && onLongPress(log.id)}
-      disabled={log.pending}
-      accessibilityRole="button"
-      accessibilityLabel={
-        log.pending
-          ? `${log.dish_name}, saving`
-          : `${log.dish_name}, ${formatNumber(log.estimated_calories)} kcal`
-      }
-      accessibilityHint={log.pending ? undefined : 'Opens this meal'}
-      // The long press this row answers to is a shortcut; the custom action
-      // is the same menu reached without a gesture at all, the way VoiceOver's
-      // rotor and TalkBack's local context menu already expect one.
-      accessibilityActions={log.pending ? undefined : [{ name: 'longpress', label: 'Show actions' }]}
-      onAccessibilityAction={(event) => {
-        if (event.nativeEvent.actionName === 'longpress') onLongPress(log.id);
-      }}
-      style={({ pressed }) => ({
-        flexDirection: 'row',
-        gap: spacing.lg,
-        padding: spacing.lg,
-        borderBottomWidth: last ? 0 : 1,
-        borderBottomColor: colors.border,
-        backgroundColor: pressed && !log.pending ? colors.surfaceAlt : 'transparent',
-        opacity: log.pending ? 0.7 : 1,
-      })}
-    >
-      <View
-        style={{
-          width: THUMB,
-          height: THUMB,
-          borderRadius: radius.tile,
-          backgroundColor: categoryTileTone(colors, log.category).fill,
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-        }}
-      >
-        <Icon name="meal" size={26} color={categoryTileTone(colors, log.category).ink} />
-      </View>
-
-      <View style={{ flex: 1, gap: spacing.xs }}>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}>
-          {/* The primary line, and it wraps: a dish nobody can read is worse
-              than a row two lines tall. */}
-          <Text style={[type.subtitle, { color: colors.text, flex: 1 }]}>{log.dish_name}</Text>
-          <Text
-            style={[
-              type.body,
-              {
-                color: colors.text,
-                minWidth: CALORIES,
-                textAlign: 'right',
-                // Lining figures, so a column of digits stays a column. This
-                // lives here rather than on the token because `body` is the
-                // reading text token and sets prose everywhere else.
-                fontVariant: ['tabular-nums'],
-              },
-            ]}
+      {/* The footer below is a SIBLING of this Pressable, not a child of it:
+          nesting it would mean a tap on Log again or Delete has to fall
+          through this row's own touch responder first, and the day that
+          either button needs a disabled state (the never-disabled comment
+          on Log again's own Pressable explains why that is not hypothetical)
+          a disabled inner Pressable stops claiming the touch and the row
+          underneath opens the meal instead. Siblings inside one container
+          can never have that failure mode. */}
+      <View style={{ borderBottomWidth: last ? 0 : 1, borderBottomColor: colors.border }}>
+        <Pressable
+          // No real id to open yet -- this row is the client_id, and the meal
+          // it names does not exist on the server until the save settles.
+          onPress={() => !log.pending && onOpen(log.id)}
+          onLongPress={() => !log.pending && onLongPress(log.id)}
+          disabled={log.pending}
+          accessibilityRole="button"
+          accessibilityLabel={
+            log.pending
+              ? `${log.dish_name}, saving`
+              : `${log.dish_name}, ${formatNumber(log.estimated_calories)} kcal`
+          }
+          accessibilityHint={log.pending ? undefined : 'Opens this meal'}
+          // The long press this row answers to is a shortcut; the custom action
+          // is the same menu reached without a gesture at all, the way VoiceOver's
+          // rotor and TalkBack's local context menu already expect one.
+          accessibilityActions={log.pending ? undefined : [{ name: 'longpress', label: 'Show actions' }]}
+          onAccessibilityAction={(event) => {
+            if (event.nativeEvent.actionName === 'longpress') onLongPress(log.id);
+          }}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.lg,
+            padding: spacing.lg,
+            backgroundColor: pressed && !log.pending ? colors.surfaceAlt : 'transparent',
+            opacity: log.pending ? 0.7 : 1,
+          })}
+        >
+          <View
+            style={{
+              width: THUMB,
+              height: THUMB,
+              borderRadius: radius.tile,
+              backgroundColor: categoryTileTone(colors, log.category).fill,
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+            }}
           >
-            {`${formatNumber(log.estimated_calories)} kcal`}
-          </Text>
-          {log.estimate_source === 'local' ? <EstimateBadge /> : null}
+            <Icon name="meal" size={26} color={categoryTileTone(colors, log.category).ink} />
+          </View>
+
+          <View style={{ flex: 1, gap: spacing.xs }}>
+            {/* Up to two lines now that kcal and the chevron no longer share
+                this line fighting it for width -- a dish nobody can read is
+                worse than a row two lines tall, and a third line was never
+                the point, just what was left once two other things crowded
+                onto the same row. */}
+            <Text style={[type.subtitle, { color: colors.text }]} numberOfLines={2}>
+              {log.dish_name}
+            </Text>
+
+            {log.pending ? <PendingBadge /> : justRefined ? <RefinedTag /> : null}
+
+            {/* `text`, not `muted`: a caption that names the category, the
+                restaurant and the serving is read as often as the dish name
+                itself, and muted-on-surface was the quietest thing on the row
+                for content someone actually relies on. One line, truncated --
+                a row's height should not depend on how long a restaurant's
+                name happens to be. */}
+            {meta ? (
+              <Text numberOfLines={1} ellipsizeMode="tail" style={[type.caption, { color: colors.text }]}>
+                {meta}
+              </Text>
+            ) : null}
+          </View>
+
+          <View style={{ alignItems: 'flex-end', gap: spacing.xs }}>
+            <Text
+              style={[
+                type.body,
+                {
+                  color: colors.text,
+                  minWidth: CALORIES,
+                  textAlign: 'right',
+                  // Lining figures, so a column of digits stays a column. This
+                  // lives here rather than on the token because `body` is the
+                  // reading text token and sets prose everywhere else.
+                  fontVariant: ['tabular-nums'],
+                },
+              ]}
+            >
+              {`${formatNumber(log.estimated_calories)} kcal`}
+            </Text>
+            {/* Under the figure it qualifies, not beside it fighting the
+                dish name for room -- the whole reason this used to crowd
+                onto one line in the first place. */}
+            {!log.pending && log.estimate_source === 'local' ? <EstimateBadge /> : null}
+          </View>
+
           {/* The row is the way in to the meal, which nothing else here says
-              out loud -- except while pending, when there is nowhere to go yet.
-              Kept on its own at the far end of the row rather than beside the
-              actions below, so it reads as "this row opens" and not as a third
-              action next to Log again. */}
-          {log.pending ? null : <Icon name="forward" size={18} />}
-        </View>
-
-        {log.pending ? <PendingBadge /> : justRefined ? <RefinedTag /> : null}
-
-        {/* `text`, not `muted`: a caption that names the category, the
-            restaurant and the serving is read as often as the dish name
-            itself, and muted-on-surface was the quietest thing on the row for
-            content someone actually relies on. One line, truncated -- a
-            row's height should not depend on how long a restaurant's name
-            happens to be. */}
-        {meta ? (
-          <Text numberOfLines={1} ellipsizeMode="tail" style={[type.caption, { color: colors.text }]}>
-            {meta}
-          </Text>
-        ) : null}
+              out loud -- except while pending, when there is nowhere to go
+              yet. Off the title line and onto its own column so it stops
+              fighting the dish name and the kcal figure for width. */}
+          {log.pending ? null : <Icon name="forward" size={18} color={colors.muted} />}
+        </Pressable>
 
         {/* Repeating or acting on a meal that does not exist on the server
             yet has nothing to act on. */}
         {log.pending ? null : (
-          <View style={{ marginTop: spacing.sm }}>
+          <View
+            style={{
+              paddingHorizontal: spacing.lg,
+              paddingBottom: spacing.md,
+              paddingTop: spacing.xs,
+            }}
+          >
             <MealActions
               log={log}
               onRepeat={onRepeat}
+              onDelete={onDelete}
               sending={sending}
               confirmed={confirmed}
               error={error}
@@ -595,7 +697,6 @@ function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, onLongPress, se
           </View>
         )}
       </View>
-    </Pressable>
     </SwipeToDelete>
   );
 }
@@ -627,26 +728,21 @@ function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, onLongPress, send
     .join(' · ');
 
   return (
-    <View style={{ gap: spacing.md, paddingBottom: last ? 0 : spacing.lg }}>
-      {/* Same swipe and menu a photoless row answers to -- a photo is a
-          different surface, not a different set of actions. */}
-      <SwipeToDelete disabled={false} dishName={log.dish_name} onDelete={() => onDelete(log.id)}>
-      <Pressable
-        onPress={() => onOpen(log.id)}
-        onLongPress={() => onLongPress(log.id)}
-        accessibilityRole="button"
-        accessibilityLabel={`${log.dish_name}, ${formatNumber(log.estimated_calories)} kcal`}
-        accessibilityHint="Opens this meal"
-        accessibilityActions={[{ name: 'longpress', label: 'Show actions' }]}
-        onAccessibilityAction={(event) => {
-          if (event.nativeEvent.actionName === 'longpress') onLongPress(log.id);
-        }}
-        style={({ pressed }) => [
+    <View style={{ paddingBottom: last ? 0 : spacing.lg }}>
+      {/* The one rounded, elevated container for the whole card -- photo
+          AND footer both live inside it now, rather than the footer sitting
+          in a sibling View below a self-contained photo card the way it
+          used to. That was the bug: a badge and a lone button appearing to
+          float under the card is exactly what sitting outside its radius
+          and its surface looks like. overflow: hidden here is also what
+          clips SwipeToDelete's reveal panel to these same rounded corners
+          and lets it cover the full card height, not just the photo. */}
+      <View
+        style={[
           {
             borderRadius: radius.card,
             overflow: 'hidden',
             backgroundColor: colors.surfaceAlt,
-            opacity: pressed ? 0.92 : 1,
           },
           // Same primary-surface treatment Card reserves for prominent
           // content: this photo is the one piece of rich content the diary
@@ -655,81 +751,128 @@ function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, onLongPress, send
           !isDark ? elevation.light : null,
         ]}
       >
-        {/* Capped rather than left to a fixed 4:3, which on a wide phone or a
-            tablet's column made this card taller than the meal it was
-            showing warranted -- the photo is here to be recognised, not to
-            be the biggest thing on the screen. */}
-        <View style={{ width: '100%', aspectRatio: 4 / 3, maxHeight: 240 }}>
-          {photo ? (
-            <Image
-              source={photo}
-              style={ABSOLUTE_FILL}
-              resizeMode="cover"
-              accessibilityIgnoresInvertColors
-            />
-          ) : null}
+        {/* Same swipe and menu a photoless row answers to -- a photo is a
+            different surface, not a different set of actions. Wraps the
+            photo AND the footer together, so the reveal spans the whole
+            card rather than just the photo portion. */}
+        <SwipeToDelete disabled={false} dishName={log.dish_name} onDelete={() => onDelete(log.id)}>
+          <View>
+            <Pressable
+              onPress={() => onOpen(log.id)}
+              onLongPress={() => onLongPress(log.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`${log.dish_name}, ${formatNumber(log.estimated_calories)} kcal`}
+              accessibilityHint="Opens this meal"
+              accessibilityActions={[{ name: 'longpress', label: 'Show actions' }]}
+              onAccessibilityAction={(event) => {
+                if (event.nativeEvent.actionName === 'longpress') onLongPress(log.id);
+              }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.92 : 1 })}
+            >
+              {/* Capped rather than left to a fixed 4:3, which on a wide phone or a
+                  tablet's column made this card taller than the meal it was
+                  showing warranted -- the photo is here to be recognised, not to
+                  be the biggest thing on the screen. */}
+              <View style={{ width: '100%', aspectRatio: 4 / 3, maxHeight: 240 }}>
+                {photo ? (
+                  <Image
+                    source={photo}
+                    style={ABSOLUTE_FILL}
+                    resizeMode="cover"
+                    accessibilityIgnoresInvertColors
+                  />
+                ) : null}
 
-          {/* Only over the lower part of the photo, not the whole frame: the
-              food itself should read clearly, and the gradient exists solely
-              to buy the two lines of text at the bottom their contrast. */}
-          <LinearGradient
-            colors={['transparent', colors.scrim]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            locations={[0.4, 1]}
-            style={ABSOLUTE_FILL}
-          />
+                {/* Only over the lower part of the photo, not the whole frame: the
+                    food itself should read clearly, and the gradient exists solely
+                    to buy the two lines of text at the bottom their contrast. */}
+                <LinearGradient
+                  colors={['transparent', colors.scrim]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  locations={[0.4, 1]}
+                  style={ABSOLUTE_FILL}
+                />
 
-          <View
-            style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              bottom: 0,
-              padding: spacing.lg,
-              gap: spacing.xs,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.md }}>
-              <Text
-                style={[type.subtitle, { color: '#FFFFFF', flex: 1 }]}
-                numberOfLines={2}
-              >
-                {log.dish_name}
-              </Text>
-              <Text
-                style={[
-                  type.body,
-                  { color: '#FFFFFF', fontVariant: ['tabular-nums'] },
-                ]}
-              >
-                {`${formatNumber(log.estimated_calories)} kcal`}
-              </Text>
+                {/* Estimated and Refined never both apply at once -- one is
+                    "no category priced this yet" and the other is "a category
+                    already did, and the background call just adjusted it" --
+                    so the same top-left spot serves either. */}
+                {log.estimate_source === 'local' || justRefined ? (
+                  <View style={{ position: 'absolute', top: spacing.md, left: spacing.md }}>
+                    {log.estimate_source === 'local' ? (
+                      <EstimateBadge variant="overlay" />
+                    ) : (
+                      <RefinedTag overlay />
+                    )}
+                  </View>
+                ) : null}
+
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    padding: spacing.lg,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.md }}>
+                    <Text
+                      style={[type.subtitle, { color: '#FFFFFF', flex: 1 }]}
+                      numberOfLines={2}
+                    >
+                      {log.dish_name}
+                    </Text>
+                    <Text
+                      style={[
+                        type.body,
+                        { color: '#FFFFFF', fontVariant: ['tabular-nums'] },
+                      ]}
+                    >
+                      {`${formatNumber(log.estimated_calories)} kcal`}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </Pressable>
+
+            {/* The footer: a sibling of the Pressable above, inside this
+                same card, same reasoning as the compact row's own footer --
+                see its comment on why nesting it inside the Pressable would
+                be the wrong call the moment either button needed a disabled
+                state. */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.md,
+                paddingHorizontal: spacing.lg,
+                paddingVertical: spacing.md,
+              }}
+            >
+              {meta ? (
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={[type.caption, { color: colors.text, flex: 1 }]}
+                >
+                  {meta}
+                </Text>
+              ) : (
+                <View style={{ flex: 1 }} />
+              )}
+              <MealActions
+                log={log}
+                onRepeat={onRepeat}
+                onDelete={onDelete}
+                sending={sending}
+                confirmed={confirmed}
+                error={error}
+              />
             </View>
-            {meta ? (
-              // Raised from 0.85 to 0.92: on the lighter end of the scrim
-              // gradient this is the least opacity that still clears 4.5:1
-              // against a photo, not merely against the solid colour it
-              // fades into.
-              <Text numberOfLines={1} ellipsizeMode="tail" style={[type.caption, { color: 'rgba(255, 255, 255, 0.92)' }]}>
-                {meta}
-              </Text>
-            ) : null}
           </View>
-        </View>
-      </Pressable>
-      </SwipeToDelete>
-
-      <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
-        {log.estimate_source === 'local' ? <EstimateBadge /> : null}
-        {justRefined ? <RefinedTag /> : null}
-        <MealActions
-          log={log}
-          onRepeat={onRepeat}
-          sending={sending}
-          confirmed={confirmed}
-          error={error}
-        />
+        </SwipeToDelete>
       </View>
     </View>
   );

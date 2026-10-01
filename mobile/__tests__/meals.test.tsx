@@ -261,6 +261,61 @@ describe('the diary', () => {
     expect(getByText(/1,640 kcal/)).toBeTruthy();
   });
 
+  it('shows Log again and Delete as standing buttons, not only behind a swipe or the menu', async () => {
+    // The whole point of this redesign: Delete used to be reachable only by
+    // swiping or by the long-press menu. It is visible again now, alongside
+    // Log again, with no gesture and no menu needed to find either.
+    const screen = render(<HistoryScreen />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+
+    // One pair per meal (Nihari's photo card, Chicken biryani's and
+    // Haleem's compact rows) -- more than one of each is the point: these
+    // are standing footer buttons on every row, not a single menu shared
+    // across the diary.
+    expect(screen.getAllByLabelText('Log again').length).toBe(3);
+    expect(screen.getAllByText('Log again').length).toBe(3);
+    // By accessibility label, not by text: the swipe reveal panel also
+    // renders a literal "Delete" (SwipeToDelete, off screen until swiped),
+    // labelled "Delete {dish}" rather than plain "Delete" -- see the footer
+    // button's own comment on why the two are deliberately different labels.
+    expect(screen.getAllByLabelText('Delete').length).toBe(3);
+  });
+
+  it('places the Estimated badge inside the photo card, not in a block below it', async () => {
+    mockedApi.get.mockImplementation(async (url: string) => {
+      if (url.endsWith('/health')) return { data: { status: 'ok', ai_provider: 'groq' } };
+      if (url === '/me') {
+        return {
+          data: {
+            id: 'user-1',
+            email: 'noor@example.com',
+            timezone: 'Asia/Karachi',
+            goal: 'maintain',
+            daily_calorie_target: 2200,
+            created_at: '2026-01-04T09:00:00Z',
+          },
+        };
+      }
+      if (url === '/logs') {
+        return { data: { items: [{ ...NIHARI, estimate_source: 'local' }], total: 1 } };
+      }
+      if (url === '/categories') return { data: [] };
+      return { data: null };
+    });
+    const screen = render(<HistoryScreen />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText('Nihari')).toBeTruthy());
+
+    // "Estimated locally" is the overlay badge's own accessibility label
+    // (EstimateBadge's overlay variant) -- present at all confirms it is
+    // still rendered; the card-membership half of this is enforced by
+    // history.tsx's own structure (the badge sits inside the same rounded,
+    // elevated View as the photo and the footer, not in a sibling View
+    // outside it the way the old "floats below the card" layout did).
+    expect(screen.getByLabelText('Estimated locally')).toBeTruthy();
+  });
+
   /**
    * The diary is paged, and it says when there is no more of it.
    *
@@ -390,13 +445,24 @@ describe('deleting a meal from the diary', () => {
    * rather than the swipe panel's `Delete ${dishName}`.
    */
   function deleteInMenu(screen: ReturnType<typeof render>) {
+    // Scoped to the modal specifically, not just to an ancestor labelled
+    // "Delete": the diary row now carries its own visible "Delete" footer
+    // button with the identical plain label (by design -- see its own
+    // comment on why it matches the menu's naming), so an ancestor-label
+    // check alone matches both. A real screen reader never sees that
+    // ambiguity -- Dialog's card sets accessibilityViewIsModal, which scopes
+    // VoiceOver/TalkBack to the modal's own contents while it's open -- RNTL
+    // just does not honour that the way a device does, so the query has to
+    // do the scoping by hand instead.
     const found = screen.getAllByText('Delete').find((node) => {
-      let ancestor: typeof node | null = node;
-      while (ancestor) {
-        if (ancestor.props.accessibilityLabel === 'Delete') return true;
-        ancestor = ancestor.parent;
+      const ancestors: (typeof node)[] = [];
+      for (let ancestor: typeof node | null = node; ancestor; ancestor = ancestor.parent) {
+        ancestors.push(ancestor);
       }
-      return false;
+      return (
+        ancestors.some((a) => a.props.accessibilityViewIsModal) &&
+        ancestors.some((a) => a.props.accessibilityLabel === 'Delete')
+      );
     });
     if (!found) throw new Error('Delete action not found in the menu');
     return found;

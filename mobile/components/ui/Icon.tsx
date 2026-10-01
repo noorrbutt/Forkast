@@ -45,6 +45,13 @@ const GLYPHS = {
   empty: 'file-tray',
   edit: 'create',
   trash: 'trash',
+  // Log again: putting the same meal back on today, not creating a new kind
+  // of entry. A circular-arrows glyph reads as "do this again" everywhere it
+  // shows up, which is why it was picked over log's own plus -- that one
+  // already means "a new meal" on the tab bar and would say the wrong thing
+  // here.
+  repeat: 'repeat',
+  info: 'information-circle-outline',
   // The two halves of the reveal control on a password field. A pair would be
   // wrong here: outline and filled are two cuts of ONE meaning, and these are
   // two opposite meanings that happen to share a drawing. The eye means the
