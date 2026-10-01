@@ -16,11 +16,13 @@ import asyncio
 import inspect
 import logging
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+from app.api.deps import SessionDep
 from app.api.v1 import api_router
 from app.config import AIProvider, get_settings
 from app.db import get_session
@@ -29,6 +31,7 @@ from app.middleware import (
     RequestLoggingMiddleware,
     SecurityHeadersMiddleware,
 )
+from app.services import circuit_breaker, jobs
 from app.services.ai.deps import get_ai_service
 from app.web import router as web_router
 
@@ -177,3 +180,17 @@ async def ready() -> dict[str, str]:
         ai_status = "degraded"
 
     return {"status": "ready", "ai": ai_status}
+
+
+@app.get("/queue", tags=["meta"])
+async def queue(session: SessionDep) -> dict[str, Any]:
+    """Jobs queue depth, for whoever is watching the worker.
+
+    Pending is the backlog (by kind too, since a refinement backlog and an
+    email backlog mean different things), dead_letter is what gave up and
+    needs a person. Unauthenticated like /ready, and like it carries counts
+    only: no payloads, which can hold one-time links.
+    """
+    stats = await jobs.queue_stats(session)
+    stats["ai_breaker_open"] = await circuit_breaker.is_open(session)
+    return stats
