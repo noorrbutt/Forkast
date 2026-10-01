@@ -42,6 +42,10 @@ def _rewrite_database_url(raw_url: str, *, async_driver: bool) -> str:
 
     params = dict(parse_qsl(parsed.query, keep_blank_values=True))
     if async_driver:
+        # A libpq setting Neon puts in its connection strings. asyncpg.connect()
+        # has no such argument and refuses the URL, so it is dropped here; the
+        # sync (psycopg) URL keeps it, where it is valid.
+        params.pop("channel_binding", None)
         sslmode = params.pop("sslmode", None)
         if sslmode is not None and "ssl" not in params:
             params["ssl"] = sslmode
@@ -87,6 +91,15 @@ class Settings(BaseSettings):
     # once it has been open this long.
     ai_breaker_threshold: int = Field(default=5, alias="AI_BREAKER_THRESHOLD")
     ai_breaker_cooldown_seconds: float = Field(default=60.0, alias="AI_BREAKER_COOLDOWN_SECONDS")
+    # Running on a serverless platform (Vercel): no work may be left for after
+    # the response, since the process can be frozen the moment it is sent.
+    # Jobs a request commits are awaited inline (bounded by the timeout below)
+    # instead of run behind the response, the startup AI probe is skipped, and
+    # the engine uses NullPool. Off by default; see docs/VERCEL_DEPLOY.md.
+    serverless: bool = Field(default=False, alias="SERVERLESS")
+    serverless_job_timeout_seconds: float = Field(
+        default=8.0, gt=0, alias="SERVERLESS_JOB_TIMEOUT_SECONDS"
+    )
     worker_concurrency: int = Field(default=4, alias="WORKER_CONCURRENCY")
     worker_poll_seconds: float = Field(default=1.0, alias="WORKER_POLL_SECONDS")
     log_daily_limit: int = Field(default=300, alias="LOG_DAILY_LIMIT")
