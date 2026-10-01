@@ -83,6 +83,36 @@ async def test_ready_works_and_uses_the_database(client: AsyncClient) -> None:
     assert body["ai"] in ("not_configured", "checking", "ok", "degraded")
 
 
+async def test_ready_reports_text_and_vision_separately(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A dead vision model must not read the same as a dead text model: they
+    back different features (photo estimation versus everything else), and
+    collapsing them into one flag would make a photo-only outage look like
+    the whole integration is down, or hide it entirely behind a healthy text
+    model. See groq_service's ModelProbeResult for why they're probed apart."""
+    import app.main as main_module
+    from app.config import AIProvider
+
+    # /ready reads settings.ai_provider straight off the module-level
+    # singleton, which may legitimately be "fake" outside the suite's own
+    # .env -- forced to groq here since not_configured would otherwise mask
+    # the text/vision split this test exists to check.
+    monkeypatch.setattr(main_module.settings, "ai_provider", AIProvider.groq)
+    monkeypatch.setattr(main_module, "ai_text_probe_ok", True)
+    monkeypatch.setattr(main_module, "ai_vision_probe_ok", False)
+
+    response = await client.get("/ready")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["ai_text"] == "ok"
+    assert body["ai_vision"] == "degraded"
+    # The combined field existing callers already read: degraded if either
+    # model is, so a photo-only outage still surfaces there too.
+    assert body["ai"] == "degraded"
+
+
 async def test_ready_returns_503_when_the_db_dependency_fails(client: AsyncClient) -> None:
     async def broken() -> None:
         raise RuntimeError("database down")

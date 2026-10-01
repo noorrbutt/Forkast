@@ -17,8 +17,10 @@ from app.models.enums import Goal, ServingSize
 from app.services.ai.groq_service import (
     CALORIE_SCHEMA,
     PLAN_SCHEMA,
+    VISION_MODEL,
     GroqAIService,
     GroqResponseError,
+    ModelProbeResult,
     normalise_text,
 )
 from app.services.ai.schemas import (
@@ -485,3 +487,74 @@ async def test_the_plan_budget_has_room_for_the_long_tail() -> None:
     await GroqAIService(client, model=MODEL).generate_plan(_plan_request())
 
     assert client.completions.calls[0]["max_completion_tokens"] >= 6000
+
+
+class _FakeModelList:
+    def __init__(self, ids: list[str]) -> None:
+        self.data = [SimpleNamespace(id=model_id) for model_id in ids]
+
+
+class _FakeModels:
+    def __init__(self, ids: list[str] | None = None, error: Exception | None = None) -> None:
+        self._ids = ids or []
+        self.error = error
+
+    async def list(self):
+        if self.error is not None:
+            raise self.error
+        return _FakeModelList(self._ids)
+
+
+class _ProbeClient:
+    """A stand-in with just enough of the SDK's shape for probe(): a
+    ``models.list()`` and nothing else, since probe never touches chat."""
+
+    def __init__(self, ids: list[str] | None = None, error: Exception | None = None) -> None:
+        self.models = _FakeModels(ids, error)
+
+
+async def test_probe_reports_both_models_present() -> None:
+    client = _ProbeClient([MODEL, VISION_MODEL, "some-other-model"])
+
+    result = await GroqAIService(client, model=MODEL).probe()
+
+    assert result == ModelProbeResult(text_ok=True, vision_ok=True)
+
+
+async def test_probe_reports_the_vision_model_missing_without_failing_the_text_model() -> None:
+    """Groq has retired a model this file still names as current before (see
+    groq_service's own module docstring on the Llama models that 404 now).
+    The text model answering fine must not be hidden by the vision one being
+    gone, since that is the difference between "serving degraded on photos
+    only" and "reporting the whole integration as down"."""
+    client = _ProbeClient([MODEL])
+
+    result = await GroqAIService(client, model=MODEL).probe()
+
+    assert result == ModelProbeResult(text_ok=True, vision_ok=False)
+
+
+async def test_probe_reports_the_text_model_missing_without_failing_the_vision_model() -> None:
+    client = _ProbeClient([VISION_MODEL])
+
+    result = await GroqAIService(client, model=MODEL).probe()
+
+    assert result == ModelProbeResult(text_ok=False, vision_ok=True)
+
+
+async def test_probe_reports_both_models_missing() -> None:
+    client = _ProbeClient([])
+
+    result = await GroqAIService(client, model=MODEL).probe()
+
+    assert result == ModelProbeResult(text_ok=False, vision_ok=False)
+
+
+async def test_probe_raises_when_the_listing_call_itself_fails() -> None:
+    """A reachability failure is not a per-model status -- there is nothing
+    to report separately about text versus vision when the account can't be
+    reached at all, so this still raises rather than returning a result."""
+    client = _ProbeClient(error=RuntimeError("connection timed out"))
+
+    with pytest.raises(GroqResponseError, match="Groq model probe failed"):
+        await GroqAIService(client, model=MODEL).probe()
