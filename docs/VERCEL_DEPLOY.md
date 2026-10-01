@@ -89,7 +89,7 @@ Remove-Item Env:DATABASE_URL
 ```
 
 An environment variable overrides `backend/.env`, so the rest of your `.env`
-(JWT_SECRET, TEST_DATABASE_URL, ...) still satisfies `Settings`. If
+(JWT_SECRET, ...) still satisfies `Settings`. If
 `CORS_ORIGINS` is `*` in your `.env`, set it to a real origin for this command
 too: `Settings` refuses `*` with a non-local database. Run this again before
 every deploy that adds a migration, and deploy the code after.
@@ -128,7 +128,6 @@ Required:
 | `SERVERLESS` | `true` |
 | `ENVIRONMENT` | `production` |
 | `DATABASE_URL` | Neon **pooled** URL |
-| `TEST_DATABASE_URL` | Required by `Settings` though unused at runtime. Any valid Postgres URL; reusing the pooled URL is fine (only the test suite connects with it). |
 | `JWT_SECRET` | `openssl rand -hex 32`. At least 32 characters. |
 | `CORS_ORIGINS` | The real origin(s), comma separated. `*` is refused in production. |
 | `TRUST_PROXY_HEADERS` | `true`. Must be set explicitly in production; Vercel's edge sets `X-Forwarded-For`. |
