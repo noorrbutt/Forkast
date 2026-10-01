@@ -192,6 +192,22 @@ async def complete(factory: async_sessionmaker[AsyncSession], job: ClaimedJob) -
         await session.commit()
 
 
+async def release(factory: async_sessionmaker[AsyncSession], job: ClaimedJob) -> None:
+    """Hand a claimed job back untouched, as if it had never been claimed.
+
+    For a worker shutting down mid-job: the job did not fail, so it does not
+    spend an attempt or wait out a backoff.
+    """
+    async with factory() as session:
+        await session.execute(
+            update(Job)
+            .where(Job.id == job.id, Job.locked_at == job.locked_at)
+            .values(status=JobStatus.pending, locked_at=None, run_at=func.now())
+            .execution_options(synchronize_session=False)
+        )
+        await session.commit()
+
+
 async def fail(
     factory: async_sessionmaker[AsyncSession],
     job: ClaimedJob,
