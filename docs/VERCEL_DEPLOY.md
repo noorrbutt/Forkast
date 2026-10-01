@@ -105,7 +105,7 @@ Vercel project from the repo and, under **Settings > Build and Deployment**:
 
 - **Root Directory:** `backend`. Everything below is relative to it:
   `backend/requirements.txt` is the dependency file Vercel installs,
-  `backend/vercel.json` is the config it reads, and `backend/api/index.py` is
+  `backend/vercel.json` is the config it reads, and `backend/index.py` is
   the function. No top-level `vercel.json` is needed.
 - **Framework Preset:** Other.
 - Leave the build and install commands at their defaults.
@@ -115,15 +115,23 @@ Dockerfile (`python:3.12-slim`) and is Vercel's default Python version
 (3.12, 3.13 and 3.14 are supported). Vercel reads `.python-version`; there is no
 `runtime` field to set in `vercel.json` for Python any more.
 
-Vercel's native Python/FastAPI support already routes every path -- `/`,
-`/health`, `/api/v1/...`, all of it -- to `api/index.py` with the original
-path intact, so `backend/vercel.json` carries no `rewrites` entry. One was
-tried and removed: Vercel's internal rewrites now use the rewrite's
-*destination* as the literal request path rather than preserving the
-original URL, so a catch-all `"/(.*)" -> "/api/index"` rewrite made every
-request look like a request for `/api/index` from inside the app, and
-everything 404'd. `vercel.json` only sets `maxDuration: 60` on the function
-and keeps `tests/` and `scripts/` out of the bundle.
+`backend/index.py` is at the project root, not under `api/`, on purpose.
+Vercel auto-detects an entrypoint file named `index.py` (among a few other
+recognised root-level names) and routes every path -- `/`, `/health`,
+`/api/v1/...`, all of it -- to it with the original URL intact, so
+`backend/vercel.json` carries no `rewrites` entry and needs none. Two things
+that were tried first and do not work, if you are ever tempted to go back:
+- **`api/index.py` with no rewrite**: a file under `api/` only ever answers
+  `/api/*`. `/` and `/health` 404 at Vercel's edge without the function
+  even being invoked (0ms in the logs).
+- **`api/index.py` with a catch-all rewrite** (`"/(.*)" -> "/api/index"`):
+  Vercel's internal rewrites now use the rewrite's *destination* as the
+  literal request path rather than preserving the original URL, so the app
+  itself saw every request as a request for `/api/index` -- a path nothing
+  is registered at -- and 404'd on everything, including the real routes.
+
+`vercel.json` only sets `maxDuration: 60` on the function and keeps
+`tests/` and `scripts/` out of the bundle.
 
 ## 4. Environment variables (Vercel > Settings > Environment Variables)
 
