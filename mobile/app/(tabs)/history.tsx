@@ -206,7 +206,14 @@ type MealRowProps = {
    */
   onOpen: (id: Uuid) => void;
   onRepeat: (id: Uuid) => void;
+  /** The actual delete, no question asked first -- what the swipe and the
+   * long-press menu both call, since a swipe or a trip through the menu is
+   * already its own deliberate step. */
   onDelete: (id: Uuid) => void;
+  /** What the standing footer button calls instead: the one-tap path, which
+   * is why it asks first rather than deleting outright the way swipe and
+   * the menu do. */
+  onAskDelete: (id: Uuid) => void;
   /** Opens the non-gesture action menu (Log again / Delete) -- the accessible
    * equivalent of the swipe, reached by a long press or, for a screen reader,
    * the "Show actions" custom action. */
@@ -434,18 +441,20 @@ const PILL_HIT_SLOP = 6;
 /**
  * Log again and Delete, the confirmation and the error -- the card's footer,
  * a sibling of the row's own Pressable rather than a child of it (see
- * CompactMealRow/PhotoMealRow). Delete calls the exact same onDelete the
- * swipe and the long-press menu already do: this is a third way to reach
- * it, not a different action.
+ * CompactMealRow/PhotoMealRow). Delete asks first, the same way Log again
+ * does: both are one plain tap away on every row, which is exactly why
+ * neither should act immediately. Swipe and the long-press menu are their
+ * own deliberate steps already and skip the question (onDelete, not
+ * onAskDelete).
  */
 function MealActions({
   log,
   onRepeat,
-  onDelete,
+  onAskDelete,
   sending,
   confirmed,
   error,
-}: Pick<MealRowProps, 'log' | 'onRepeat' | 'onDelete' | 'sending' | 'confirmed' | 'error'>) {
+}: Pick<MealRowProps, 'log' | 'onRepeat' | 'onAskDelete' | 'sending' | 'confirmed' | 'error'>) {
   const { colors, radius, spacing, type } = useTheme();
   const { width } = useWindowDimensions();
   // Below this, "Log again" and "Delete" together start to crowd a narrow
@@ -492,7 +501,7 @@ function MealActions({
         </Pressable>
 
         <Pressable
-          onPress={() => onDelete(log.id)}
+          onPress={() => onAskDelete(log.id)}
           accessibilityRole="button"
           // Plain "Delete", not "Delete {dish}" -- the swipe reveal's own
           // panel already uses that exact label (SwipeToDelete, above), and
@@ -551,7 +560,7 @@ function categoryTileTone(
  * A meal with no photo. Compact: a category icon, the dish, the figure to
  * compare, the way in.
  */
-function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, onLongPress, sending, confirmed, error }: MealRowProps) {
+function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDelete, onLongPress, sending, confirmed, error }: MealRowProps) {
   const { colors, radius, spacing, type } = useTheme();
   const justRefined = useJustRefined(log);
 
@@ -689,7 +698,7 @@ function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, onLongPress, se
             <MealActions
               log={log}
               onRepeat={onRepeat}
-              onDelete={onDelete}
+              onAskDelete={onAskDelete}
               sending={sending}
               confirmed={confirmed}
               error={error}
@@ -714,7 +723,7 @@ function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, onLongPress, se
  * `colors.text`, tuned to sit on this app's own two backgrounds, has no
  * reason to be legible against someone's dinner.
  */
-function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, onLongPress, sending, confirmed, error }: MealRowProps) {
+function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDelete, onLongPress, sending, confirmed, error }: MealRowProps) {
   const { colors, isDark, radius, spacing, type } = useTheme();
   const photo = usePhotoSource(log.id);
   const justRefined = useJustRefined(log);
@@ -865,7 +874,7 @@ function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, onLongPress, send
               <MealActions
                 log={log}
                 onRepeat={onRepeat}
-                onDelete={onDelete}
+                onAskDelete={onAskDelete}
                 sending={sending}
                 confirmed={confirmed}
                 error={error}
@@ -975,6 +984,7 @@ function DayGroup({
   onOpen,
   onRepeat,
   onDelete,
+  onAskDelete,
   onLongPress,
   confirmed,
   repeat,
@@ -983,6 +993,7 @@ function DayGroup({
   onOpen: (id: Uuid) => void;
   onRepeat: (id: Uuid) => void;
   onDelete: (id: Uuid) => void;
+  onAskDelete: (id: Uuid) => void;
   onLongPress: (id: Uuid) => void;
   confirmed: Uuid | null;
   repeat: ReturnType<typeof useRepeatLog>;
@@ -994,6 +1005,7 @@ function DayGroup({
     onOpen,
     onRepeat,
     onDelete,
+    onAskDelete,
     onLongPress,
     sending: repeat.isPending && repeat.variables === log.id,
     confirmed: confirmed === log.id,
@@ -1054,6 +1066,7 @@ function DiaryList({
   onOpen,
   onRepeat,
   onDelete,
+  onAskDelete,
   onLongPress,
   onLogFirst,
 }: {
@@ -1066,6 +1079,7 @@ function DiaryList({
   onOpen: (id: Uuid) => void;
   onRepeat: (id: Uuid) => void;
   onDelete: (id: Uuid) => void;
+  onAskDelete: (id: Uuid) => void;
   onLongPress: (id: Uuid) => void;
   onLogFirst: () => void;
 }) {
@@ -1172,10 +1186,10 @@ function DiaryList({
         // sizing to its own content -- otherwise a short day and a long one
         // paired together left a gap that read as a third, empty column.
         <View style={{ flex: 1 }}>
-          <DayGroup day={day} onOpen={onOpen} onRepeat={onRepeat} onDelete={onDelete} onLongPress={onLongPress} confirmed={confirmed} repeat={repeat} />
+          <DayGroup day={day} onOpen={onOpen} onRepeat={onRepeat} onDelete={onDelete} onAskDelete={onAskDelete} onLongPress={onLongPress} confirmed={confirmed} repeat={repeat} />
         </View>
       ) : (
-        <DayGroup day={day} onOpen={onOpen} onRepeat={onRepeat} onDelete={onDelete} onLongPress={onLongPress} confirmed={confirmed} repeat={repeat} />
+        <DayGroup day={day} onOpen={onOpen} onRepeat={onRepeat} onDelete={onDelete} onAskDelete={onAskDelete} onLongPress={onLongPress} confirmed={confirmed} repeat={repeat} />
       )
     }
     ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
@@ -1279,11 +1293,24 @@ export default function HistoryScreen() {
   }, []);
 
   /**
+   * Which meal the footer's Delete button is asking about, or null when
+   * nothing is asked. The swipe and the long-press menu skip this and call
+   * deleteMeal directly -- both are already a deliberate step on their own,
+   * the same reasoning askToRepeat's own comment gives for why a standing,
+   * one-tap button is the one that needs the question in front of it.
+   */
+  const [confirmingDelete, setConfirmingDelete] = useState<FoodLog | null>(null);
+
+  const askToDelete = useCallback((id: Uuid) => {
+    setConfirmingDelete(itemsRef.current.find((log) => log.id === id) ?? null);
+  }, []);
+
+  /**
    * The non-gesture path to a row's actions: a long press, or the custom
-   * accessibility action every row also carries. Delete no longer has its
-   * own visible button, so this -- alongside the swipe and the detail
-   * screen's own Delete -- is how it stays reachable without either a
-   * gesture no one can see coming or a pill on every one of a hundred rows.
+   * accessibility action every row also carries -- alongside the swipe, the
+   * footer's own standing Delete button, and the detail screen's own
+   * Delete, this is one more way Delete stays reachable without a gesture
+   * no one can see coming.
    */
   const [menuLog, setMenuLog] = useState<FoodLog | null>(null);
   const askMenu = useCallback((id: Uuid) => {
@@ -1360,6 +1387,7 @@ export default function HistoryScreen() {
         onOpen={openMeal}
         onRepeat={askToRepeat}
         onDelete={deleteMeal}
+        onAskDelete={askToDelete}
         onLongPress={askMenu}
         onLogFirst={() => router.navigate('/log')}
       />
@@ -1397,6 +1425,38 @@ export default function HistoryScreen() {
             variant: 'secondary',
             onPress: () => setPending(null),
             disabled: repeat.isPending,
+          },
+        ]}
+      />
+
+      {/* Delete's own confirmation, the same reasoning as Log again's just
+          above: the footer button is one plain tap on every row, which is
+          exactly why it asks first. The swipe and the long-press menu don't
+          -- both are already a deliberate step, and the undo snackbar is
+          still there underneath this as the second safety net either way. */}
+      <Dialog
+        visible={confirmingDelete !== null}
+        onDismiss={() => setConfirmingDelete(null)}
+        title="Delete this meal?"
+        message={
+          confirmingDelete
+            ? `${confirmingDelete.dish_name} will be removed from your diary. You can undo it for a few seconds afterwards.`
+            : undefined
+        }
+        actions={[
+          {
+            label: 'Delete',
+            variant: 'danger',
+            icon: 'trash',
+            onPress: () => {
+              if (confirmingDelete) deleteMeal(confirmingDelete.id);
+              setConfirmingDelete(null);
+            },
+          },
+          {
+            label: 'Cancel',
+            variant: 'secondary',
+            onPress: () => setConfirmingDelete(null),
           },
         ]}
       />

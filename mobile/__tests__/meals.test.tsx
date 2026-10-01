@@ -14,7 +14,7 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { FlatList } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -423,11 +423,11 @@ describe('the diary', () => {
 
 describe('deleting a meal from the diary', () => {
   /**
-   * There is no longer a standing Delete pill on the row -- see this file's
-   * own note on why -- so the non-gesture path is the row's long-press menu.
-   * RNTL cannot perform a real long press, but `onAccessibilityAction` is the
-   * same code path a screen reader's custom action actually calls, so firing
-   * it here exercises the real thing rather than simulating a gesture.
+   * The non-gesture path to a row's actions: a long press, or, for a screen
+   * reader, the row's own custom accessibility action. RNTL cannot perform a
+   * real long press, but `onAccessibilityAction` is the same code path a
+   * screen reader's custom action actually calls, so firing it here
+   * exercises the real thing rather than simulating a gesture.
    */
   function openMenuFor(screen: ReturnType<typeof render>, dishName: string) {
     const row = screen
@@ -438,18 +438,20 @@ describe('deleting a meal from the diary', () => {
   }
 
   /**
-   * The menu's own "Delete", not the swipe panel's -- both render a literal
-   * "Delete" text node (the panel keeps its label even off screen, since
-   * RNTL never actually drags it out of the tree), so this walks up to the
-   * ancestor carrying the menu action's own, undecorated accessibilityLabel
-   * rather than the swipe panel's `Delete ${dishName}`.
+   * Whichever dialog's own "Delete" is open right now -- the long-press
+   * menu's or the footer button's own confirmation -- never the swipe
+   * panel's. All render a literal "Delete" text node (the swipe panel keeps
+   * its label even off screen, since RNTL never actually drags it out of
+   * the tree), so this walks up to an ancestor carrying a dialog action's
+   * own, undecorated accessibilityLabel rather than the swipe panel's
+   * `Delete ${dishName}` or the footer button's identical plain label.
    */
-  function deleteInMenu(screen: ReturnType<typeof render>) {
-    // Scoped to the modal specifically, not just to an ancestor labelled
-    // "Delete": the diary row now carries its own visible "Delete" footer
+  function deleteInDialog(screen: ReturnType<typeof render>) {
+    // Scoped to a modal specifically, not just to an ancestor labelled
+    // "Delete": the diary row also carries its own visible "Delete" footer
     // button with the identical plain label (by design -- see its own
-    // comment on why it matches the menu's naming), so an ancestor-label
-    // check alone matches both. A real screen reader never sees that
+    // comment on why it matches the dialogs' naming), so an ancestor-label
+    // check alone matches all three. A real screen reader never sees that
     // ambiguity -- Dialog's card sets accessibilityViewIsModal, which scopes
     // VoiceOver/TalkBack to the modal's own contents while it's open -- RNTL
     // just does not honour that the way a device does, so the query has to
@@ -464,9 +466,70 @@ describe('deleting a meal from the diary', () => {
         ancestors.some((a) => a.props.accessibilityLabel === 'Delete')
       );
     });
-    if (!found) throw new Error('Delete action not found in the menu');
+    if (!found) throw new Error('Delete action not found in any open dialog');
     return found;
   }
+
+  /**
+   * The footer's own standing Delete button -- distinct from the menu's
+   * identical "Delete" label (scoped out by not being inside a modal) and
+   * from the swipe panel's `Delete ${dishName}` label (a different string
+   * entirely, no ambiguity there).
+   */
+  function footerDeleteButtonFor(screen: ReturnType<typeof render>, dishName: string) {
+    const row = screen
+      .UNSAFE_queryAllByProps({ accessibilityRole: 'button' })
+      .find((node) => (node.props.accessibilityLabel as string | undefined)?.startsWith(`${dishName}, `));
+    if (!row || !row.parent) throw new Error(`no row found for ${dishName}`);
+    // The footer is a sibling of the row's own Pressable, not a descendant
+    // of it (by design -- see CompactMealRow/PhotoMealRow's own comment on
+    // why), but both sit inside the same immediate container either row
+    // shape wraps them in, so the row's own parent is exactly where to look
+    // for its footer's Delete button.
+    const texts = within(row.parent).getAllByText('Delete');
+    if (texts.length !== 1) {
+      throw new Error(`expected exactly one footer Delete for ${dishName}, found ${texts.length}`);
+    }
+    return texts[0];
+  }
+
+  it('asks before deleting from the footer button, and does nothing until answered', async () => {
+    const screen = render(<HistoryScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(footerDeleteButtonFor(screen, 'Chicken biryani'));
+    });
+
+    expect(screen.getByText('Delete this meal?')).toBeTruthy();
+    // Nothing happened yet: the row is still there and nothing was scheduled.
+    expect(screen.getByText('Chicken biryani')).toBeTruthy();
+    expect(screen.queryByText(/Deleted Chicken biryani/)).toBeNull();
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Cancel'));
+    });
+
+    expect(screen.queryByText('Delete this meal?')).toBeNull();
+    expect(screen.getByText('Chicken biryani')).toBeTruthy();
+    expect(mockedApi.delete).not.toHaveBeenCalled();
+  });
+
+  it('deletes once the footer button is confirmed, same as the menu does', async () => {
+    const screen = render(<HistoryScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(footerDeleteButtonFor(screen, 'Chicken biryani'));
+    });
+    await act(async () => {
+      fireEvent.press(deleteInDialog(screen));
+    });
+
+    expect(screen.queryByText('Chicken biryani')).toBeNull();
+    expect(screen.getByText(/Deleted Chicken biryani/)).toBeTruthy();
+    expect(mockedApi.delete).not.toHaveBeenCalled();
+  });
 
   it('removes the row immediately and offers Undo, without calling the server yet', async () => {
     const screen = render(<HistoryScreen />, { wrapper });
@@ -476,7 +539,7 @@ describe('deleting a meal from the diary', () => {
       openMenuFor(screen, 'Chicken biryani');
     });
     await act(async () => {
-      fireEvent.press(deleteInMenu(screen));
+      fireEvent.press(deleteInDialog(screen));
     });
 
     expect(screen.queryByText('Chicken biryani')).toBeNull();
@@ -499,7 +562,7 @@ describe('deleting a meal from the diary', () => {
       openMenuFor(screen, 'Chicken biryani');
     });
     await act(async () => {
-      fireEvent.press(deleteInMenu(screen));
+      fireEvent.press(deleteInDialog(screen));
     });
     await act(async () => {
       screen.unmount();
@@ -521,7 +584,7 @@ describe('deleting a meal from the diary', () => {
       openMenuFor(screen, 'Chicken biryani');
     });
     await act(async () => {
-      fireEvent.press(deleteInMenu(screen));
+      fireEvent.press(deleteInDialog(screen));
     });
     await act(async () => {
       fireEvent.press(screen.getByText('Undo'));
@@ -547,7 +610,7 @@ describe('deleting a meal from the diary', () => {
     await act(async () => {
       openMenuFor(screen, 'Chicken biryani');
     });
-    const deleteAction = deleteInMenu(screen);
+    const deleteAction = deleteInDialog(screen);
 
     await act(async () => {
       fireEvent.press(deleteAction);
