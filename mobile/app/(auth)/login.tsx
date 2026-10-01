@@ -15,6 +15,7 @@ import { useTheme } from '../../theme';
 import { useGoogleAuth, useLogin } from '../../hooks/useAuth';
 import { useContinueWithGoogle } from '../../hooks/useContinueWithGoogle';
 import { describeError } from '../../lib/api';
+import { demoAccount } from '../../lib/demoHint';
 
 /**
  * Self-critique, per the style guide section 13.
@@ -80,6 +81,7 @@ export default function LoginScreen() {
   const google = useContinueWithGoogle(googleAuth.mutateAsync);
 
   const busy = login.isPending || google.busy;
+  const demo = demoAccount();
 
   /**
    * The button stays live even with the fields empty, and says what is missing
@@ -126,6 +128,14 @@ export default function LoginScreen() {
           <Text style={[type.body, { color: colors.muted }]}>
             Pick up where your last meal left off.
           </Text>
+          {/* Only in a demo build, see lib/demoHint.ts. Inside the headline's
+              own block and in its muted body text, so a build without it lays
+              out exactly as it always did rather than around an empty box. */}
+          {demo ? (
+            <Text style={[type.body, { color: colors.muted }]}>
+              Demo account: {demo.email} / {demo.password}
+            </Text>
+          ) : null}
         </View>
 
         <View style={{ gap: spacing.lg }}>
