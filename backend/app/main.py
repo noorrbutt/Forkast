@@ -88,7 +88,14 @@ async def _probe_ai_in_background() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if settings.ai_provider is AIProvider.groq:
+    # Skipped entirely on SERVERLESS=true, and deliberately not awaited
+    # instead. A fire-and-forget task has no process to finish in once the
+    # function is frozen. Awaiting it would put a Groq round trip on every
+    # cold start, in front of a real request, to learn something no request
+    # needs: refinement already degrades to the provisional estimate, and the
+    # circuit breaker (shared in Postgres, shown on /queue) tracks real
+    # failures. /ready reports "not_probed" there rather than "checking" forever.
+    if settings.ai_provider is AIProvider.groq and not settings.serverless:
         task = asyncio.create_task(_probe_ai_in_background())
         try:
             yield
@@ -187,6 +194,8 @@ async def ready() -> dict[str, str]:
     def _status(ok: bool | None) -> str:
         if settings.ai_provider is not AIProvider.groq:
             return "not_configured"
+        if settings.serverless:
+            return "not_probed"
         if ok is None:
             return "checking"
         return "ok" if ok else "degraded"

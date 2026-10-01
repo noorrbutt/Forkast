@@ -3,21 +3,34 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.config import get_settings
 
 _settings = get_settings()
 
+
 # No Windows event-loop boilerplate here on purpose: asyncpg works on the
 # default ProactorEventLoop, and asyncio.set_event_loop_policy is deprecated on
 # Python 3.14 (removal in 3.16) and inert under uvicorn, which passes an
 # explicit loop_factory since 0.36.0.
+#
+# SERVERLESS=true uses NullPool: each checkout opens a fresh connection and
+# closes it on return. Neon's pooler (the "-pooler" host) does the pooling
+# there, and a function instance is frozen between requests and recreated on
+# every cold start, so a pool of our own would only hold connections that go
+# stale while frozen.
+def engine_options(*, serverless: bool) -> dict[str, Any]:
+    if serverless:
+        return {"poolclass": NullPool}
+    return {"pool_pre_ping": True}
+
+
 engine = create_async_engine(
-    _settings.database_url,
-    echo=False,
-    pool_pre_ping=True,
+    _settings.database_url, echo=False, **engine_options(serverless=_settings.serverless)
 )
 
 SessionLocal = async_sessionmaker(
