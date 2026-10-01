@@ -339,6 +339,23 @@ EXPO_PUBLIC_API_URL --value "http://<your LAN ip>:8010"`, the same pattern the
 Google client ids above already use, or read from mobile/.env.local for a run
 that never leaves the machine.
 
+### Jobs worker
+
+Calorie refinement and the auth emails are rows in a `jobs` table, inserted
+in the same transaction as the meal or token that needs them (see
+`app/services/jobs.py`). The request runs its own job right behind its
+response, but the worker is what retries failures, with exponential backoff,
+and picks up anything a restart interrupted. Run at least one, alongside the
+API:
+
+```bash
+python -m app.worker --concurrency 4   # or WORKER_CONCURRENCY
+```
+
+SIGTERM lets in-flight jobs finish and claims no more; a second SIGTERM puts
+the unfinished ones straight back in the queue. Several workers can share one
+database. `GET /queue` reports the pending backlog and the dead-letter count.
+
 ### Maintenance cron
 
 Two tasks in `app/maintenance.py` are meant to run on a schedule, not just
@@ -348,12 +365,10 @@ exist as a module a developer might remember to invoke by hand:
 # Stale rate-limit counters and expired refresh tokens. Cheap; hourly is fine.
 0 * * * *      cd /app && python -m app.maintenance prune
 
-# Retries any log estimate whose refinement never landed -- the process
-# restarted mid-flight, Groq timed out, whatever -- since refinement runs as
-# an in-process BackgroundTasks call and is lost, not retried, if the process
-# dies before it finishes. Bounded concurrency (see _REFINE_BACKFILL_CONCURRENCY
-# in maintenance.py) so a large backlog doesn't fire an unbounded burst of
-# calls at Groq all at once.
+# Re-queues refinement for logs the queue gave up on (dead-lettered) or never
+# had (saved while the Groq circuit breaker was open), and runs them with
+# bounded concurrency (see _REFINE_BACKFILL_CONCURRENCY in maintenance.py) so
+# a large backlog doesn't fire an unbounded burst of calls at Groq.
 */15 * * * *   cd /app && python -m app.maintenance refine-backfill
 ```
 
