@@ -124,6 +124,9 @@ MUTABLE_TABLES = (
     # Truncated like the rest, or one test's failed logins spend the next
     # test's allowance and the suite fails depending on ordering.
     "rate_limit_counters",
+    # Every log and every registration enqueues one, so a job left over from
+    # the previous test would otherwise be claimed by the next one's drain.
+    "jobs",
 )
 
 

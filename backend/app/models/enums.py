@@ -37,6 +37,20 @@ class EatingOutFrequency(str, enum.Enum):
     often = "often"
 
 
+class JobStatus(str, enum.Enum):
+    """Where a row in the jobs table is in its life.
+
+    pending waits for run_at; running is claimed by a worker (locked_at says
+    since when); done finished; dead_letter ran out of attempts and is left for
+    a person to look at rather than retried forever.
+    """
+
+    pending = "pending"
+    running = "running"
+    done = "done"
+    dead_letter = "dead_letter"
+
+
 class BiggestStruggle(str, enum.Enum):
     """What someone says trips them up most, asked once at onboarding. Feeds
     the plan generator's tone rather than any calculation: a cravings answer

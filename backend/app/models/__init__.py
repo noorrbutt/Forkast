@@ -5,6 +5,7 @@ from app.models.base import Base
 from app.models.burn_log import BurnLog
 from app.models.enums import FriendScale, Goal, ServingSize
 from app.models.food_log import FoodLog
+from app.models.job import Job
 from app.models.photo import MAX_PHOTO_BYTES, FoodLogPhoto
 from app.models.rate_limit import RateLimitCounter
 from app.models.reference import Cuisine, FoodCategory
@@ -32,6 +33,7 @@ __all__ = [
     "FoodLogPhoto",
     "FriendScale",
     "Goal",
+    "Job",
     "PasswordResetToken",
     "RateLimitCounter",
     "RefreshToken",
