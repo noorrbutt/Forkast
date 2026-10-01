@@ -1,15 +1,13 @@
 """Food log CRUD, plus the month over month trend read.
 
-This is the one feature area with real logic behind it. The trend lives here
-rather than beside the dashboard because it is a straight read over food_logs
-and nothing else, but it is not addressed under /logs, so this module exports
-one router carrying both and the v1 aggregation stays a single include.
+The trend lives here rather than beside the dashboard because it is a straight
+read over food_logs and nothing else, but it is not addressed under /logs, so
+this module exports one router carrying both and the v1 aggregation stays a
+single include. What the routes do with a log lives in services/logs.py.
 """
 
 from __future__ import annotations
 
-import datetime as dt
-import logging
 import uuid
 from typing import Annotated
 
@@ -18,31 +16,24 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     File,
-    HTTPException,
     Query,
     Response,
     UploadFile,
     status,
 )
-from sqlalchemy import func, select, text
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, RateLimiterDep, SessionDep
-from app.api.v1.catalog import upsert_restaurant
 from app.config import get_settings
 from app.db import get_session_factory
-from app.models import MAX_PHOTO_BYTES, FoodCategory, FoodLog, FoodLogPhoto, Restaurant
-from app.models.enums import ServingSize
+from app.models import MAX_PHOTO_BYTES, FoodLog
 from app.schemas.insights import TrendOut
 from app.schemas.logs import FoodLogCreate, FoodLogOut, FoodLogPage, FoodLogUpdate
+from app.services import logs as logs_service
 from app.services.ai.base import AIService
 from app.services.ai.deps import EstimateSource, get_ai_service, get_estimate_source
-from app.services.ai.groq_service import GroqResponseError
-from app.services.ai.schemas import CalorieAdjustRequest, PhotoCalorieEstimate
-from app.services.calories import clamp_photo_estimate, finalise_estimate
-from app.services.images import compress_for_estimation
+from app.services.ai.schemas import PhotoCalorieEstimate
+from app.services.images import check_upload
 from app.services.insights import build_trend
 from app.services.rate_limit import account_identity
 
@@ -62,8 +53,6 @@ EstimateSourceDep = Annotated[EstimateSource, Depends(get_estimate_source)]
 # app.dependency_overrides and open a connection to the real one.
 SessionFactoryDep = Annotated["async_sessionmaker[AsyncSession]", Depends(get_session_factory)]
 
-logger = logging.getLogger(__name__)
-
 
 def _food_log_out(log: FoodLog, estimate_source: EstimateSource) -> FoodLogOut:
     output = FoodLogOut.model_validate(log)
@@ -73,185 +62,6 @@ def _food_log_out(log: FoodLog, estimate_source: EstimateSource) -> FoodLogOut:
             "refined": log.estimate_refined_at is not None,
         }
     )
-
-
-def _provisional_estimate(category: FoodCategory, serving_size: ServingSize) -> int:
-    """The figure to store right now, with no model in the way.
-
-    The midpoint of the category's own range, clamped and scaled exactly as the
-    model's answer would be. It is the same arithmetic on a different input, so
-    a provisional figure and a refined one are never different kinds of number.
-
-    This exists because asking the model first made saving a meal take a median
-    of two seconds against thirty milliseconds for everything else the app does,
-    on the one action the whole product is for. It also made the estimator a
-    hard dependency of logging: a rate limit or an outage turned a save into a
-    502 and the meal was simply lost.
-
-    What the model adds is placement inside a range that is already known, so
-    the honest description of this number is "right kind of figure, not yet
-    refined", and the refinement lands a moment later without anyone waiting on
-    it.
-    """
-    midpoint = (category.base_calorie_min + category.base_calorie_max) / 2
-    return finalise_estimate(
-        midpoint, category.base_calorie_min, category.base_calorie_max, serving_size
-    )
-
-
-async def _refine_estimate(
-    log_id: uuid.UUID,
-    category_id: int,
-    ai: AIService,
-    factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Replace a provisional figure with the model's, after the response is out.
-
-    The first session only reads the values needed for the model, then closes
-    before the Groq call so the DB pool is free for other requests. The second
-    session updates the row only after the estimate is ready.
-    """
-    try:
-        async with factory() as session:
-            log = await session.get(FoodLog, log_id)
-            # Edited or deleted while the model was thinking, which is a race
-            # this has to lose rather than overwrite.
-            if log is None or log.category_id != category_id:
-                return
-
-            category = await session.get(FoodCategory, category_id)
-            if category is None:
-                return
-
-            dish_name = log.dish_name
-            serving_size = log.serving_size
-            category_name = category.name
-            base_calorie_min = category.base_calorie_min
-            base_calorie_max = category.base_calorie_max
-
-        refined = await _estimate_calories(
-            ai,
-            dish_name=dish_name,
-            category_name=category_name,
-            base_calorie_min=base_calorie_min,
-            base_calorie_max=base_calorie_max,
-            serving_size=serving_size,
-        )
-
-        async with factory() as session:
-            result = await session.execute(
-                text(
-                    """
-                    UPDATE food_logs
-                    SET estimated_calories = :value,
-                        estimate_refined_at = NOW()
-                    WHERE id = :id
-                      AND category_id = :category_id
-                      AND dish_name = :dish_name
-                      AND serving_size = :serving_size
-                    """
-                ),
-                {
-                    "value": refined,
-                    "id": log_id,
-                    "category_id": category_id,
-                    "dish_name": dish_name,
-                    "serving_size": serving_size,
-                },
-            )
-            if result.rowcount == 0:
-                return
-            await session.commit()
-    except Exception:
-        logger.error("refine_failed log_id=%s", log_id, exc_info=True)
-
-
-async def _get_category(session: SessionDep, category_id: int) -> FoodCategory:
-    category = await session.get(FoodCategory, category_id)
-    if category is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Unknown category_id {category_id}",
-        )
-    return category
-
-
-async def _require_restaurant(session: SessionDep, restaurant_id: uuid.UUID | None) -> None:
-    """A restaurant id that does not exist is a client error, not a server one.
-
-    Without this the value reaches the foreign key and the integrity error
-    surfaces as a 500.
-    """
-    if restaurant_id is None:
-        return
-    if await session.get(Restaurant, restaurant_id) is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=f"Unknown restaurant_id {restaurant_id}",
-        )
-
-
-async def _estimate_calories(
-    ai: AIService,
-    *,
-    dish_name: str,
-    category_name: str,
-    base_calorie_min: int,
-    base_calorie_max: int,
-    serving_size: ServingSize,
-) -> int:
-    """Ask the AI for an in-range figure, then clamp and scale it.
-
-    The clamp happens before the serving multiplier on purpose: the model's job
-    is only ever to place the dish inside the category range, while a large
-    portion is still allowed to exceed that range once scaled.
-    """
-    try:
-        adjustment = await ai.adjust_calories(
-            CalorieAdjustRequest(
-                dish_name=dish_name,
-                category_name=category_name,
-                base_calorie_min=base_calorie_min,
-                base_calorie_max=base_calorie_max,
-                serving_size=serving_size,
-            )
-        )
-    except GroqResponseError as exc:
-        # The AI provider is upstream of us, so its failure is a 502 rather than
-        # a 500. The log still gets written by the caller's retry; nothing here
-        # has been persisted yet.
-        logger.warning("Calorie estimation failed", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="The calorie estimator is unavailable.",
-        ) from exc
-    return finalise_estimate(
-        adjustment.calories,
-        base_calorie_min,
-        base_calorie_max,
-        serving_size,
-    )
-
-
-async def _load_log(session: SessionDep, user_id: uuid.UUID, log_id: uuid.UUID) -> FoodLog:
-    log = await session.scalar(
-        select(FoodLog)
-        .where(FoodLog.id == log_id, FoodLog.user_id == user_id)
-        .options(selectinload(FoodLog.category), selectinload(FoodLog.restaurant))
-        # populate_existing because assigning a raw foreign key column does not
-        # refresh the relationship that was already loaded beside it, and a
-        # plain reload resolves to the same identity-mapped object without
-        # overwriting it. Without this, PATCHing category_id returns the new id
-        # next to the old nested category, and a client rendering from the
-        # nested object shows the wrong thing. Safe at every call site: the two
-        # with pending changes flush first.
-        .execution_options(populate_existing=True)
-    )
-    if log is None:
-        # 404 rather than 403 for a log belonging to someone else: no reason to
-        # confirm that an id exists.
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Food log not found")
-    return log
 
 
 @logs_router.post("", response_model=FoodLogOut, status_code=status.HTTP_201_CREATED)
@@ -266,120 +76,18 @@ async def create_log(
     limiter: RateLimiterDep,
     response: Response,
 ) -> FoodLog:
-    settings = get_settings()
-
-    # Checked before either quota is touched: an offline client retries the
-    # same client_id until it sees a 2xx, and without this an ordinary spotty
-    # connection burned one real log_daily_limit slot per retry rather than
-    # the one meal it actually represents. A client_id collision is answered
-    # from the row that already exists, not created twice, so a retry must
-    # never cost quota, seen or not.
-    if payload.client_id is not None:
-        existing = await session.scalar(
-            select(FoodLog).where(
-                FoodLog.user_id == user.id, FoodLog.client_id == payload.client_id
-            )
-        )
-        if existing is not None:
-            response.status_code = status.HTTP_200_OK
-            return _food_log_out(await _load_log(session, user.id, existing.id), estimate_source)
-
-    await limiter.hit(
-        "log-day",
-        account_identity(user.id),
-        limit=settings.log_daily_limit,
-        window_seconds=86400,
-    )
-    category = await _get_category(session, payload.category_id)
-
-    restaurant_id = payload.restaurant_id
-    await _require_restaurant(session, restaurant_id)
-    if payload.restaurant_name:
-        await limiter.hit(
-            "restaurant-day",
-            account_identity(user.id),
-            limit=settings.restaurant_daily_limit,
-            window_seconds=86400,
-        )
-        restaurant, _ = await upsert_restaurant(
-            session,
-            name=payload.restaurant_name,
-            area=payload.area,
-            created_by=user.id,
-        )
-        restaurant_id = restaurant.id
-
-    # A photo estimate carries its own number, already answered for the real
-    # plate in the photo rather than for a category's nominal range. Using it
-    # is what makes the figure someone confirmed on the estimate screen the
-    # same figure that lands on the diary entry -- see clamp_photo_estimate's
-    # own note on why that clamp is not finalise_estimate's clamp. Absent, this
-    # is the same provisional-then-refined path as before.
-    now = dt.datetime.now(dt.UTC)
-    if payload.estimated_calories is not None:
-        estimated = clamp_photo_estimate(
-            payload.estimated_calories, category.base_calorie_min, category.base_calorie_max
-        )
-        calorie_source = "photo"
-        # Already the model's own answer for this exact photo, not a category
-        # midpoint waiting to be improved -- scheduling _refine_estimate below
-        # would risk replacing a real vision-model figure with a worse,
-        # text-only guess. Marking it refined now is what keeps refine-backfill
-        # (app/maintenance.py) from ever picking this row up either.
-        estimate_refined_at = now
-    else:
-        # Saved with a figure that needs nobody's permission, and refined
-        # behind the response. See _provisional_estimate.
-        estimated = _provisional_estimate(category, payload.serving_size)
-        calorie_source = "category"
-        estimate_refined_at = None
-
-    log = FoodLog(
-        user_id=user.id,
-        dish_name=payload.dish_name,
-        category_id=category.id,
-        restaurant_id=restaurant_id,
-        area=payload.area,
-        rating=payload.rating,
-        fun_scale=payload.fun_scale,
-        friend_scale=payload.friend_scale,
-        serving_size=payload.serving_size,
-        estimated_calories=estimated,
-        calorie_source=calorie_source,
-        protein_g=payload.protein_g,
-        carbs_g=payload.carbs_g,
-        fat_g=payload.fat_g,
-        estimate_refined_at=estimate_refined_at,
-        client_id=payload.client_id,
-    )
-    if payload.created_at is not None:
-        log.created_at = payload.created_at
-
-    session.add(log)
-    try:
-        await session.flush()
-    except IntegrityError:
-        await session.rollback()
-        if payload.client_id is not None:
-            existing = await session.scalar(
-                select(FoodLog).where(
-                    FoodLog.user_id == user.id, FoodLog.client_id == payload.client_id
-                )
-            )
-            if existing is not None:
-                response.status_code = status.HTTP_200_OK
-                return _food_log_out(
-                    await _load_log(session, user.id, existing.id), estimate_source
-                )
-        raise
-    created = await _load_log(session, user.id, log.id)
-    await session.commit()
-    if payload.estimated_calories is None:
+    log, created = await logs_service.create_log(session, limiter, user, payload)
+    if not created:
+        # A retry of a save that already landed: answered from that row, and
+        # 200 rather than 201 because nothing new was made.
+        response.status_code = status.HTTP_200_OK
+    elif payload.estimated_calories is None:
         # After the commit, so the row is certainly there when the task opens
         # its own session, and after the response is built, so nobody waits
-        # for it. Skipped entirely for a photo-priced log; see above.
-        background.add_task(_refine_estimate, created.id, created.category_id, ai, factory)
-    return _food_log_out(created, estimate_source)
+        # for it. Skipped entirely for a photo-priced log, whose figure is
+        # already the model's own.
+        background.add_task(logs_service.refine_estimate, log.id, log.category_id, ai, factory)
+    return _food_log_out(log, estimate_source)
 
 
 @logs_router.post("/estimate-photo", response_model=PhotoCalorieEstimate)
@@ -407,13 +115,6 @@ async def estimate_photo(
     be reached, Starlette would try to parse "estimate-photo" as a UUID first
     and 422 before this function ever ran.
 
-    The rate limiting, the kill switch and the downscale below all exist for
-    one reason: unlike every other AI call in this app, a vision request bills
-    for a whole image rather than a few hundred bytes of JSON, and a camera is
-    now the default way to log a meal. None of that is a real cost while the
-    fake estimator is in use -- it does not look at the bytes at all -- so all
-    three are skipped outright in that mode.
-
     Gated on `estimate_source` rather than reading settings.ai_provider
     directly, and that is not a style choice: get_estimate_source is a
     dependency, so the test suite's deterministic_ai fixture (conftest.py)
@@ -423,81 +124,13 @@ async def estimate_photo(
     actually injected below and rate-limit, kill-switch and compress against a
     live setting while `ai` itself was quietly the deterministic stub.
     """
-    settings = get_settings()
     live = estimate_source == "ai"
+    await logs_service.guard_photo_estimate(limiter, user, live=live)
 
-    if live and not settings.photo_estimate_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Photo scanning is temporarily unavailable. Try typing this one in.",
-        )
-
-    if live:
-        # Short window first: it is the one that actually stops a burst, and
-        # failing fast on it means a caller who is about to be blocked by the
-        # daily cap anyway does not also pay for a second counter increment.
-        await limiter.hit(
-            "photo-estimate",
-            account_identity(user.id),
-            limit=settings.photo_estimate_rate_limit,
-            window_seconds=settings.photo_estimate_rate_window_seconds,
-        )
-        await limiter.hit(
-            "photo-estimate-day",
-            account_identity(user.id),
-            limit=settings.photo_estimate_daily_limit,
-            window_seconds=86400,
-        )
-
-    # Read with one byte of headroom so a file exactly on the limit passes and
-    # anything over it is caught here rather than deep inside an upload to a
-    # provider that will never see it.
+    # One byte of headroom, so check_upload can tell "on the limit" from "over".
     data = await file.read(MAX_PHOTO_BYTES + 1)
-    if len(data) > MAX_PHOTO_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=f"Photos must be {MAX_PHOTO_BYTES // 1024} KB or smaller.",
-        )
-    if not data:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="That file was empty.",
-        )
-
-    content_type = _sniff(data)
-    if content_type is None:
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="Photos must be JPEG, PNG or WebP.",
-        )
-
-    send_data, send_content_type = data, content_type
-    if live:
-        try:
-            send_data = compress_for_estimation(data)
-            send_content_type = "image/jpeg"
-        except Exception as exc:
-            # _sniff already confirmed a real signature, so a decode failure
-            # here means the file is truncated or otherwise corrupt past its
-            # header rather than genuinely not an image.
-            logger.warning("Could not downscale an uploaded photo", exc_info=True)
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="That photo could not be read. Try another one.",
-            ) from exc
-
-    try:
-        return await ai.estimate_from_photo(send_data, send_content_type)
-    except GroqResponseError as exc:
-        # Same reasoning as _estimate_calories: the provider is upstream of us,
-        # so its failure is a 502. Nothing has been persisted, so there is
-        # nothing to roll back and no meal at risk of being lost, unlike a
-        # provider outage during a text log.
-        logger.warning("Photo calorie estimation failed", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="The photo estimator is unavailable.",
-        ) from exc
+    content_type = check_upload(data, max_bytes=MAX_PHOTO_BYTES, noun="Photos")
+    return await logs_service.estimate_photo(ai, data, content_type, live=live)
 
 
 @logs_router.get("", response_model=FoodLogPage)
@@ -508,28 +141,15 @@ async def list_logs(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> FoodLogPage:
-    total = await session.scalar(
-        select(func.count()).select_from(FoodLog).where(FoodLog.user_id == user.id)
-    )
-    rows = await session.scalars(
-        select(FoodLog)
-        .where(FoodLog.user_id == user.id)
-        .order_by(FoodLog.created_at.desc())
-        .limit(limit)
-        .offset(offset)
-        .options(selectinload(FoodLog.category), selectinload(FoodLog.restaurant))
-    )
-    return FoodLogPage(
-        items=[_food_log_out(row, estimate_source) for row in rows],
-        total=total or 0,
-    )
+    rows, total = await logs_service.list_logs(session, user, limit=limit, offset=offset)
+    return FoodLogPage(items=[_food_log_out(row, estimate_source) for row in rows], total=total)
 
 
 @logs_router.get("/{log_id}", response_model=FoodLogOut)
 async def get_log(
     log_id: uuid.UUID, session: SessionDep, user: CurrentUser, estimate_source: EstimateSourceDep
 ) -> FoodLogOut:
-    return _food_log_out(await _load_log(session, user.id, log_id), estimate_source)
+    return _food_log_out(await logs_service.load_log(session, user.id, log_id), estimate_source)
 
 
 @logs_router.patch("/{log_id}", response_model=FoodLogOut)
@@ -544,58 +164,17 @@ async def update_log(
     background: BackgroundTasks,
     limiter: RateLimiterDep,
 ) -> FoodLog:
-    log = await _load_log(session, user.id, log_id)
-    changes = payload.model_dump(exclude_unset=True)
-
-    if "category_id" in changes:
-        await _get_category(session, changes["category_id"])
-    if "restaurant_id" in changes:
-        await _require_restaurant(session, changes["restaurant_id"])
-
-    for field, value in changes.items():
-        setattr(log, field, value)
-
-    # Anything that feeds the estimate means the estimate has to be redone,
-    # otherwise the stored calories quietly stop matching the log.
-    refine = bool({"dish_name", "category_id", "serving_size"} & changes.keys())
-    if refine:
-        category = await _get_category(session, log.category_id)
-        log.estimated_calories = _provisional_estimate(category, log.serving_size)
-        log.estimate_refined_at = None
-        # The dish name, category or serving size just changed, so a photo
-        # estimate from a previous save no longer describes this row -- the
-        # figure is a fresh category-derived guess now, not the number a
-        # photo confirmed, and the macros were for the old dish/serving.
-        log.calorie_source = "category"
-        log.protein_g = None
-        log.carbs_g = None
-        log.fat_g = None
-
-    await session.flush()
-    updated = await _load_log(session, user.id, log.id)
-    await session.commit()
-    if refine:
-        settings = get_settings()
-        try:
-            await limiter.hit(
-                "refine",
-                account_identity(user.id),
-                limit=settings.refine_rate_limit,
-                window_seconds=3600,
-            )
-        except HTTPException as exc:
-            if exc.status_code != status.HTTP_429_TOO_MANY_REQUESTS:
-                raise
-        else:
-            background.add_task(_refine_estimate, updated.id, updated.category_id, ai, factory)
+    updated, refine = await logs_service.update_log(session, user, log_id, payload)
+    if refine and await logs_service.may_refine(limiter, user):
+        background.add_task(
+            logs_service.refine_estimate, updated.id, updated.category_id, ai, factory
+        )
     return _food_log_out(updated, estimate_source)
 
 
 @logs_router.delete("/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_log(log_id: uuid.UUID, session: SessionDep, user: CurrentUser) -> Response:
-    log = await _load_log(session, user.id, log_id)
-    await session.delete(log)
-    await session.commit()
+    await logs_service.delete_log(session, user, log_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -609,114 +188,9 @@ async def repeat_log(
     estimate_source: EstimateSourceDep,
     limiter: RateLimiterDep,
 ) -> FoodLog:
-    """Log the same thing again, now, without retyping any of it.
-
-    A new row rather than a counter on the old one: two chai at nine and at four
-    are two meals on two parts of the day, and collapsing them would flatten the
-    calorie chart and the streak alike.
-    """
-    settings = get_settings()
-    await limiter.hit(
-        "log-day",
-        account_identity(user.id),
-        limit=settings.log_daily_limit,
-        window_seconds=86400,
-    )
-    original = await _load_log(session, user.id, log_id)
-
-    repeated = FoodLog(
-        user_id=user.id,
-        dish_name=original.dish_name,
-        category_id=original.category_id,
-        restaurant_id=original.restaurant_id,
-        area=original.area,
-        rating=original.rating,
-        fun_scale=original.fun_scale,
-        friend_scale=original.friend_scale,
-        serving_size=original.serving_size,
-        # Copied, not re-estimated. The estimate is a function of dish name,
-        # category range and serving size, and all three are carried over
-        # unchanged, so asking again can only return the same number or, once a
-        # real model is behind the seam, a different one for an identical meal;
-        # the user would see the same dish costing two different amounts. It
-        # also keeps this route a pure database copy, so a one tap repeat cannot
-        # fail with a 502 or wait on an upstream call.
-        estimated_calories=original.estimated_calories,
-        estimate_refined_at=original.estimate_refined_at,
-        # Same reasoning as the calorie figure above: a repeat of a
-        # photo-priced meal is still describing that same photographed
-        # plate, not a fresh guess, so its provenance and macros travel with
-        # it rather than reading as an unexplained category-priced log.
-        calorie_source=original.calorie_source,
-        protein_g=original.protein_g,
-        carbs_g=original.carbs_g,
-        fat_g=original.fat_g,
-    )
-    # created_at is deliberately left to the column default. That is the whole
-    # point of a repeat: same meal, this moment.
-    session.add(repeated)
-    await session.flush()
-
-    """Carry the picture over too.
-
-    A repeat that loses the photo is a repeat of the text only, and the diary
-    then shows yesterday's biryani with a picture and today's identical one
-    without, which reads as the photo having failed to upload.
-
-    Copied rather than shared, and the schema leaves no choice: food_log_photos
-    has a unique index on food_log_id, so a row belongs to exactly one meal.
-    Sharing would mean inverting the ownership and then deciding what happens
-    when one of the two meals is deleted, which is a lot of machinery to avoid
-    duplicating a file the server already caps at 1000 KB.
-
-    Selected explicitly rather than through original.photo, because that
-    relationship is lazy="raise_on_sql" and _load_log does not eager load it, so
-    touching the attribute raises instead of quietly issuing a query.
-    """
-    photo = await session.scalar(
-        select(FoodLogPhoto).where(FoodLogPhoto.food_log_id == original.id)
-    )
-    if photo is not None:
-        session.add(
-            FoodLogPhoto(
-                food_log_id=repeated.id,
-                content_type=photo.content_type,
-                byte_size=photo.byte_size,
-                data=photo.data,
-            )
-        )
-        await session.flush()
-
-    created = await _load_log(session, user.id, repeated.id)
-    await session.commit()
+    """Log the same thing again, now, without retyping any of it."""
+    created = await logs_service.repeat_log(session, limiter, user, log_id)
     return _food_log_out(created, estimate_source)
-
-
-# What a phone camera and an image picker actually produce. Checked by magic
-# bytes rather than by the declared content type, because the header is whatever
-# the client says it is and this content is served straight back to other users
-# of the same account.
-# Written as hex rather than as escaped byte strings. These signatures
-# contain CR, LF and SUB, which do not survive being copied through a text
-# editor intact, and a silently mangled signature here would reject every
-# valid PNG.
-_MAGIC: tuple[tuple[bytes, str], ...] = (
-    (bytes.fromhex("ffd8ff"), "image/jpeg"),
-    (bytes.fromhex("89504e470d0a1a0a"), "image/png"),
-    (bytes.fromhex("52494646"), "image/webp"),
-)
-
-
-def _sniff(data: bytes) -> str | None:
-    """The real type of these bytes, or None if it is not an image we accept."""
-    for prefix, content_type in _MAGIC:
-        if not data.startswith(prefix):
-            continue
-        # RIFF alone is any RIFF container, including audio. Only WEBP counts.
-        if content_type == "image/webp" and data[8:12] != bytes.fromhex("57454250"):
-            return None
-        return content_type
-    return None
 
 
 @logs_router.put("/{log_id}/photo", response_model=FoodLogOut)
@@ -734,54 +208,18 @@ async def set_photo(
     the same state instead of stacking a second image. A retry after a dropped
     connection is then safe by construction.
     """
-    settings = get_settings()
     await limiter.hit(
         "photo-day",
         account_identity(user.id),
-        limit=settings.photo_daily_limit,
+        limit=get_settings().photo_daily_limit,
         window_seconds=86400,
     )
-    log = await _load_log(session, user.id, log_id)
+    log = await logs_service.load_log(session, user.id, log_id)
 
-    # Read with one byte of headroom so a file on the limit passes and anything
-    # over it is caught here rather than by the CHECK constraint, which would
-    # surface as a 500.
     data = await file.read(MAX_PHOTO_BYTES + 1)
-    if len(data) > MAX_PHOTO_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=f"Photos must be {MAX_PHOTO_BYTES // 1024} KB or smaller.",
-        )
-    if not data:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="That file was empty.",
-        )
-
-    content_type = _sniff(data)
-    if content_type is None:
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail="Photos must be JPEG, PNG or WebP.",
-        )
-
-    existing = await session.scalar(select(FoodLogPhoto).where(FoodLogPhoto.food_log_id == log.id))
-    if existing is None:
-        session.add(
-            FoodLogPhoto(
-                food_log_id=log.id,
-                content_type=content_type,
-                byte_size=len(data),
-                data=data,
-            )
-        )
-    else:
-        existing.content_type = content_type
-        existing.byte_size = len(data)
-        existing.data = data
-
-    await session.commit()
-    return _food_log_out(await _load_log(session, user.id, log_id), estimate_source)
+    content_type = check_upload(data, max_bytes=MAX_PHOTO_BYTES, noun="Photos")
+    await logs_service.set_photo(session, log, data, content_type)
+    return _food_log_out(await logs_service.load_log(session, user.id, log_id), estimate_source)
 
 
 @logs_router.get("/{log_id}/photo")
@@ -792,14 +230,7 @@ async def get_photo(log_id: uuid.UUID, session: SessionDep, user: CurrentUser) -
     decision behind this route: moving the bytes to object storage later becomes
     a redirect from here, and no client changes.
     """
-    # Goes through _load_log first, so a meal belonging to someone else 404s on
-    # the same path reading it does and never reveals that the id exists.
-    await _load_log(session, user.id, log_id)
-
-    photo = await session.scalar(select(FoodLogPhoto).where(FoodLogPhoto.food_log_id == log_id))
-    if photo is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No photo on that meal")
-
+    photo = await logs_service.get_photo(session, user, log_id)
     return Response(
         content=photo.data,
         media_type=photo.content_type,
@@ -814,13 +245,7 @@ async def get_photo(log_id: uuid.UUID, session: SessionDep, user: CurrentUser) -
 
 @logs_router.delete("/{log_id}/photo", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_photo(log_id: uuid.UUID, session: SessionDep, user: CurrentUser) -> Response:
-    await _load_log(session, user.id, log_id)
-    photo = await session.scalar(select(FoodLogPhoto).where(FoodLogPhoto.food_log_id == log_id))
-    # Deleting a photo that is not there is the state the caller asked for, so
-    # it is not an error.
-    if photo is not None:
-        await session.delete(photo)
-        await session.commit()
+    await logs_service.delete_photo(session, user, log_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

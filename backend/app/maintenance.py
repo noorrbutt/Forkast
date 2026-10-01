@@ -7,10 +7,10 @@ import logging
 
 from sqlalchemy import select
 
-from app.api.v1.logs import _refine_estimate
 from app.db import get_session_factory
 from app.models import FoodLog
 from app.services.ai.deps import get_ai_service
+from app.services.logs import refine_estimate
 from app.services.rate_limit import RateLimiter
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ async def _refine_backfill(limit: int = 100) -> int:
 
     async def _refine_one(log_id, category_id) -> None:
         async with semaphore:
-            await _refine_estimate(log_id, category_id, ai, session_factory)
+            await refine_estimate(log_id, category_id, ai, session_factory)
 
     await asyncio.gather(*(_refine_one(log_id, category_id) for log_id, category_id in rows_list))
     return len(rows_list)

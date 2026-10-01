@@ -222,7 +222,7 @@ async def test_a_slow_refine_does_not_overwrite_a_newer_serving_size_edit(
         await release.wait()
         return 9999
 
-    monkeypatch.setattr("app.api.v1.logs._estimate_calories", delayed_estimate)
+    monkeypatch.setattr("app.services.logs.estimate_calories", delayed_estimate)
 
     created = (
         await auth_client.post(
