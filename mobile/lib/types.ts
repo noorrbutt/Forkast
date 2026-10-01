@@ -121,6 +121,11 @@ export type PhotoEstimate = {
   /** 2 or 3 entries when portion_ambiguous is true, otherwise empty. */
   portion_options: PortionOption[];
   reasoning: string | null;
+  /** Which estimator actually answered this one photo -- "local" is the
+   * deterministic stub, never a real vision call. Drives the "Demo estimate"
+   * label on the confirm screen, so a stubbed guess can never be mistaken
+   * for a real one just because AI_PROVIDER quietly isn't "groq". */
+  estimate_source: EstimateSource;
 };
 
 export type Restaurant = {

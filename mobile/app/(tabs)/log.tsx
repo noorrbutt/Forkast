@@ -656,6 +656,23 @@ export default function LogScreen() {
             <Text style={[type.body, { color: colors.muted }]}>
               {CONFIDENCE_COPY[estimate.confidence]}
             </Text>
+            {/* AI_PROVIDER not being "groq" is a deploy-config choice the
+                server makes (a free demo with no Groq key is legitimate --
+                see app.main's own startup warning), not something this
+                screen can prevent. What it can do is make sure a stubbed
+                guess is never mistaken for a real one: estimate_source
+                travels with the response specifically so this label never
+                depends on this build's own env vars agreeing with the
+                server's. */}
+            {estimate.estimate_source === 'local' ? (
+              <Text
+                accessibilityRole="text"
+                accessibilityLabel="Demo estimate, from an offline model, not a real AI guess"
+                style={[type.caption, { color: colors.muted }]}
+              >
+                Demo estimate (offline model)
+              </Text>
+            ) : null}
           </View>
 
           <View style={group}>

@@ -103,6 +103,9 @@ const ESTIMATE = {
   portion_ambiguous: false,
   portion_options: [],
   reasoning: 'full slice, visible cheese',
+  // The suite's default AI_PROVIDER=fake would make this true of a real
+  // server response too -- not a value invented just for this fixture.
+  estimate_source: 'local',
 };
 
 // Confidence about the dish and ambiguity about its portion are independent,
@@ -214,6 +217,31 @@ describe('the confirm screen', () => {
     expect(screen.getByDisplayValue('pepperoni pizza')).toBeTruthy();
     expect(screen.getByText('About 780 kcal')).toBeTruthy();
     expect(screen.getByText(/32g protein/)).toBeTruthy();
+  });
+
+  it('labels a local estimate as a demo so it is never mistaken for a real AI guess', async () => {
+    // ESTIMATE's own estimate_source is "local" -- the suite's default
+    // AI_PROVIDER=fake, same as a real server would answer with.
+    const screen = openLogScreen();
+
+    await takeAPhoto(screen);
+
+    expect(screen.getByText('Demo estimate (offline model)')).toBeTruthy();
+  });
+
+  it('shows no demo label once a real model actually answered', async () => {
+    mockedApi.post.mockImplementation(async (url: string) => {
+      if (url === '/logs/estimate-photo') {
+        return { data: { ...ESTIMATE, estimate_source: 'ai' } };
+      }
+      if (url === '/logs') return { data: SAVED };
+      return { data: null };
+    });
+    const screen = openLogScreen();
+
+    await takeAPhoto(screen);
+
+    expect(screen.queryByText('Demo estimate (offline model)')).toBeNull();
   });
 
   it('resolves a category from a quick-tap match and saves through it', async () => {
