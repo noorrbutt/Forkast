@@ -20,44 +20,17 @@ import { GOALS, type Goal } from '../../lib/types';
 import { useTheme } from '../../theme';
 
 /**
- * Self-critique, per the style guide section 13.
+ * The profile: who is signed in, then settings.
  *
- * What it was: a centred identity block, four grouped lists of rows, and a
- * centred version line. The grouped rows are the right pattern and they stay.
+ * A 72pt picture with the address beside it leads, left aligned on the same
+ * edge as everything below. There is no `hero`: a profile has no focal number,
+ * and inventing one to fill the slot would be worse than none. The address
+ * wraps rather than truncating.
  *
- * What it broke. Section 2, alignment: the scroll changed edge three times,
- * centred identity, then left aligned groups, then a centred footer, and the
- * rule is one content column and one left edge unless there is a reason.
- * Section 3, accessibility: the email carried `numberOfLines={1}`, so a long
- * address rendered as "verylongaddress@exa...", which is the truncation the
- * guide names as a failure rather than a cosmetic issue. Section 2, contrast:
- * the largest thing in the content was the email at 21, exactly the size of the
- * title in the bar above it, so the first and second elements were zero steps
- * apart. Section 10: eight icons drawn inside discs, five 32pt discs on the
- * rows and three 52pt ones sitting directly above a dialog title, which is both
- * the decorative disc and the icon beside a heading. Section 12: an eyebrow
- * reading "Your account" above a title reading "Profile", which says one thing
- * twice. Section 5: no cap on the column. Section 3, usability: the target
- * dialog disabled its own primary action until the number was valid, which is
- * the one failure this app has already shipped once and the guide names
- * outright.
- *
- * What the one thing is now: who is signed in. A 72pt picture with the address
- * beside it, left aligned on the same edge as everything below, with 32 of
- * space under it against 24 between the groups. No `hero` on this screen, and
- * that is correct: a profile has no focal number, and the guide asks for none
- * rather than for something invented to fill the slot.
- *
- * What was demoted, and why that is correct: every row lost its icon. The
- * labels, "Goal", "Daily calorie target", "Timezone", "Reminders", "Change
- * password", "Sign out", "Delete my account", already say what they are, and an
- * icon carrying meaning a word carries is what the guide bans. Section 10 does
- * allow one on a navigation row that names where it goes, but nothing here
- * navigates: every row opens a dialog or flips a setting in place. Change
- * password and Delete my account kept theirs for a while and sat in groups
- * beside rows that had none, which left their labels 44pt further right than
- * their neighbours' and broke the group's left edge. The version line moved to
- * the left edge and stayed at 12.
+ * The rows carry no icons. Their labels already say what they are, and an icon
+ * on a row is only for one that navigates somewhere -- every row here opens a
+ * dialog or flips a setting in place. Within one group it has to be all or
+ * none anyway, or the bare rows' labels sit 44pt left of their neighbours'.
  */
 
 

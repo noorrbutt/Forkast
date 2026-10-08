@@ -5,51 +5,25 @@ import { ArchHero, Button, Hero, Mark, Screen, TextLink } from '../../components
 import { useTheme } from '../../theme';
 
 /**
- * Self-critique, per the style guide section 13.
+ * The first screen a stranger sees.
  *
- * What it was, immediately before this: a 177pt wash starting 39pt down the
- * page, a left aligned 64pt "Welcome.", three left aligned pitch items, and two
- * full width buttons of equal size.
+ * A full bleed field of colour takes a little over half the screen, its lower
+ * edge curving through the middle, with the app's own mark centred in it.
+ * Everything else is small, centred and below it, with one button: the way
+ * back to signing in is a line of prose with "Sign in" tinted, so "Get
+ * started" is the only shape on the lower half.
  *
- * What it broke, measured. The wash was 21 percent of an 844pt screen and did
- * not reach the top edge, because Screen's top padding is unconditional and
- * HeroWash only pulled up 24 against 63, so the one element meant to set the
- * tone arrived as a band floating in the middle of nothing. Section 1: the
- * three pitch items were six text elements carrying 167pt of the screen, which
- * is more weight than the promise they were evidence for. Section 7: both
- * buttons were `size="lg"`, `full` and saffron, so the way in and the way back
- * looked equally likely. There is one button on this screen now. The way back
- * is a line of prose with "Sign in" tinted, which is the arrangement every
- * other first screen uses, and it leaves "Get started" as the only shape on the
- * lower half.
+ * No photograph: the only images in this app are the user's own meals. The
+ * wash is what gives the rest of the app its warmth, and it carries the fork
+ * the native splash showed a second earlier, so it continues something
+ * rather than decorating nothing. The mark is ink, never saffron -- a large
+ * saffron shape would spend the one colour that means "you can press this"
+ * on decoration.
  *
- * What the one thing is now: a full bleed field of colour taking a little over
- * half the screen, its lower edge curving down through the middle, with the
- * app's own mark centred in it. Everything else is small, centred and below it.
- *
- * On the picture. The reference this was designed against leads with a
- * photograph. Forkast has never shipped one: every image in the repo is flat
- * launcher art, and section 10 bans stock photography twice by name, on the
- * grounds that the only images in this app are the user's own meals. So the top
- * half is the warm wash that already gives the rest of the app its character,
- * carrying the fork the native splash has already shown this person one second
- * earlier. It continues something rather than decorating nothing.
- *
- * The mark is ink and never saffron, at reduced opacity so the field reads
- * through it. A large saffron shape here would be the brand spent on decoration
- * and would leave the button below with no claim on the one colour that means
- * "you can press this".
- *
- * On centring. Section 2 asks for one left edge because content is read rather
- * than admired, and names welcome as the exception: centring is for a screen
- * with a single focal object. The failure it bans is alternating, and nothing
- * here alternates. Both auth screens centre their lower block already.
- *
- * What was demoted, and why that is correct: the three pitch items are gone as
- * items and survive as one sentence. The honest cost is specificity, three
- * concrete claims traded for one compound one. They were the evidence for the
- * promise, and on a screen whose job is to make a stranger read the promise
- * first, evidence that outweighs it is evidence in the wrong place.
+ * Centred, unlike content screens, because this one has a single focal
+ * object and nothing on it alternates between centred and left aligned. The
+ * pitch is one sentence rather than three items, so the evidence for the
+ * promise does not outweigh the promise itself.
  */
 
 /**

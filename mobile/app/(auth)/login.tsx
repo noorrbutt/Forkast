@@ -18,41 +18,19 @@ import { describeError } from '../../lib/api';
 import { demoAccount } from '../../lib/demoHint';
 
 /**
- * Self-critique, per the style guide section 13.
+ * Sign in.
  *
- * What it was: a frosted bar titled "Sign in", a 48pt headline saying something
- * else, two fields, and two identical full width buttons.
+ * "Sign in." at `display` names the screen with the same words as the button
+ * that reached it, and the header bar keeps its back chevron but drops its
+ * title so the name is said once. The way to registration is one line of
+ * prose with the action tinted, "New to Forkast? Sign up", rather than a
+ * second full width button -- two controls of identical size leave someone
+ * working out which one they came here for. TextLink carries the rest of
+ * that reasoning.
  *
- * What it broke. Section 3, consistency: the screen carried two titles, and the
- * larger one, at 48 against the bar's 21, was not the name of the action that
- * led here. One name per action means the biggest words on this screen are the
- * ones on the button that opened it. Section 7: the primary and the escape
- * hatch were both `size="lg"` and
- * both `full`, which is near equal weight between the one thing this screen is
- * for and a route away from it. Section 5: no cap on the column, so the form
- * ran the full width of a browser.
- *
- * What the one thing is now: "Sign in." at `display`, 48 against a next largest
- * of 16, naming the screen with the same words as the button that reaches it.
- * The bar keeps the back chevron and drops its title, so the name is said once.
- *
- * What was demoted, and why that is correct: the way to registration is one
- * line of prose with the action tinted at the end, "New to Forkast? Sign up".
- * It was briefly a full width outlined button, which made the screen offer two
- * controls of identical size and left someone scanning it to work out which of
- * the two they came here for. Prose with a coloured verb is the arrangement
- * every sign in screen already uses, and a convention costs less attention than
- * a second slab. TextLink carries the rest of the reasoning.
- *
- * On the alignment, which changed twice. This block was first centred, then
- * pulled left because a centred line between left aligned blocks changed the
- * scroll's edge three times, and is now centred again because the user asked
- * for it. The earlier objection was to a caption centred while the button under
- * it was not, which is a different thing: the caption and the button move
- * together now, and they sit on the centre line of the primary button directly
- * above, so the column has one axis rather than two competing ones.
- *
- * ---
+ * That line is centred on the same axis as the primary button above it, so
+ * the lower block has one centre line rather than a centred caption over a
+ * left aligned button.
  *
  * On why Google is here as well as on the sign up screen.
  *

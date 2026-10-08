@@ -17,31 +17,14 @@ import { useContinueWithGoogle } from '../../hooks/useContinueWithGoogle';
 import { describeError } from '../../lib/api';
 
 /**
- * Self-critique, per the style guide section 13.
+ * Sign up.
  *
- * What it was: a frosted bar titled "Sign up", a 48pt headline saying something
- * else, two fields, and two identical full width buttons.
- *
- * What it broke. The same three things as its twin, which is the point: two
- * screens with one job each were solving the same problem two ways in the
- * details. Section 3, consistency: two titles, and the 48pt one was not the
- * name of the action. Section 7: primary and escape hatch both `size="lg"` and
- * both `full`. Section 5: no cap on the column.
- *
- * What the one thing is now: "Sign up." at `display`, 48 against a next largest
- * of 16, the same words as the button that reaches it.
- *
- * What was demoted, and why that is correct: the way back to signing in is one
- * line of prose with the action tinted, "Already have an account? Sign in".
- * Someone who already has an account is the exception on this screen, and the
- * exception gets a findable control rather than an equally sized one. It was
- * briefly a full width outlined button, and that made the two read as a choice.
- *
- * It sits centred, on the same axis as the primary button above it. Its twin on
- * the sign in screen is the same component with the words swapped, which is the
- * point: these two screens have one job each and should not solve it two ways.
- *
- * ---
+ * The twin of the sign in screen, and deliberately built the same way: "Sign
+ * up." at `display`, the same words as the button that reaches it, and the
+ * way back to signing in as one line of prose with the action tinted rather
+ * than an equally sized button. Someone who already has an account is the
+ * exception here, and the exception gets a findable control rather than one
+ * that reads as an equal choice.
  *
  * What the form asks for now, and why each one is here.
  *
