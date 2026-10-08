@@ -164,6 +164,12 @@ describe('reminders', () => {
     // import matches the name too, which is exactly how this went unnoticed.
     expect(code('app/(tabs)/profile.tsx')).toMatch(/if \(!REMINDERS_AVAILABLE\)/);
   });
+
+  it('explains itself without naming developer tooling', () => {
+    // The row read "Expo Go and the browser cannot schedule them", which names
+    // a tool nobody using the app has heard of. Comments may say it; copy may not.
+    expect(code('app/(tabs)/profile.tsx')).not.toMatch(/Expo Go/);
+  });
 });
 
 describe('a row of three buttons', () => {
@@ -222,15 +228,15 @@ describe('a row of three buttons', () => {
 });
 
 describe('icons name a destination, never a heading', () => {
-  it('puts one on each of the three dashboard navigation rows', () => {
+  it('puts one on each of the dashboard navigation rows', () => {
     const source = code('app/(tabs)/index.tsx');
 
-    expect(source).toMatch(/icon="history"/);
+    // Two rows now. The diary row went, because Diary is a tab in the bar.
     expect(source).toMatch(/icon="map"/);
     expect(source).toMatch(/icon="plan"/);
   });
 
-  it('gives all three or none, because a bare row breaks the group edge', () => {
+  it('gives every row an icon or none, because a bare row breaks the group edge', () => {
     // ListRow lays the icon out beside the text column, so a row without one
     // starts its label 44pt further left than its neighbours.
     const group = /<ListGroup>[\s\S]*?<\/ListGroup>/.exec(code('app/(tabs)/index.tsx'));

@@ -654,8 +654,10 @@ function RemindersSection() {
         <ListGroup title="Notifications">
           <ListRow
             label="Reminders"
-            value="Not here"
-            hint="Reminders need the installed app. Expo Go and the browser cannot schedule them."
+            // Said in terms of the device in the user's hand. "Expo Go" is the
+            // name of a developer tool, and nobody reading this row has one.
+            value="Phone app only"
+            hint="Reminders work in the Forkast app on your phone. They can't be set from here."
             last
           />
         </ListGroup>
