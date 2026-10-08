@@ -5,14 +5,15 @@ Consumer protection law limits what these terms can do, and it varies by
 country. The limitation of liability and the governing-law clause in particular
 are the two a court is most likely to strike out if they are written wrongly.
 
-**Last updated:** [[FILL: date you publish this]]
+**Last updated:** 2026-10-08
 
 ---
 
 ## 1. Who you are agreeing with
 
-Forkast is provided by [[FILL: legal entity name or your own full name]],
-[[FILL: address]] ("we", "us").
+Forkast is provided by Noor Butt, operating as an individual (sole trader),
+[[FILL: address -- not supplied yet, required before publishing]] ("we",
+"us").
 
 By creating an account you agree to these terms. If you do not agree, do not
 create one.
@@ -48,15 +49,13 @@ or a registered dietitian.** If you are worried about your relationship with
 food or your eating, please speak to a professional; a calorie counter is not
 the right tool and may make things worse.
 
-[[FILL: consider adding a signposting line here to an eating disorder helpline
-in your primary market. Several app stores look favourably on it, and more to
-the point it is the decent thing to include in an app that counts calories. For
-the UK: Beat, beateatingdisorders.org.uk. For the US: NEDA.]]
+If food is difficult for you right now, two places to start: in the US,
+NEDA (nationaleatingdisorders.org); in the UK, Beat
+(beateatingdisorders.org.uk).
 
 ## 4. Who may use it
 
-You must be [[FILL: the age you chose in the privacy policy, and the two must
-match]] or older, and able to enter a contract where you live.
+You must be 13 or older, and able to enter a contract where you live.
 
 One person, one account. Do not share your password. You are responsible for
 what happens under your account while it is signed in, unless it is signed in
@@ -114,11 +113,16 @@ Subject to that: we are not liable for any decision you make about your diet or
 your health on the basis of anything Forkast showed you, nor for indirect or
 consequential loss.
 
-[[FILL: liability caps and exclusions are heavily constrained by consumer law,
-and an unfair clause is void rather than merely unenforceable. In the UK the
-Consumer Rights Act 2015 governs this; in the EU the Unfair Contract Terms
-Directive does. Have a lawyer write this clause. Do not copy one from another
-app: most of the ones you would copy are also unenforceable.]]
+To the fullest extent the law allows, our total liability for any claim
+relating to Forkast is limited to the amount you paid us in the past 12
+months, or 50 USD if you have paid us nothing -- which, since Forkast is
+currently free, means this cap is effectively 50 USD for everyone today.
+
+This is a draft, not a reviewed clause: liability caps and exclusions are
+heavily constrained by consumer law, and an unfair clause is void rather
+than merely unenforceable (the UK's Consumer Rights Act 2015 and the EU's
+Unfair Contract Terms Directive both govern this). Have a lawyer confirm
+this before publishing rather than relying on it as written.
 
 ## 10. Changes to these terms
 
@@ -128,11 +132,15 @@ agreement to the new version. If you do not agree, delete your account.
 
 ## 11. Law and disputes
 
-[[FILL: governing law and jurisdiction. Note that you generally cannot deprive a
-consumer of the protection of the law of the country they live in, whatever this
-clause says, so a bare "the laws of X apply" is often partly ineffective. Your
-lawyer should write this.]]
+These terms are governed by the laws of the State of Ohio, United States,
+without regard to its conflict-of-laws rules. If you live somewhere that
+gives you mandatory consumer protections under your own country's or
+state's law, this clause does not take those away from you -- a bare "the
+laws of X apply" clause is generally only partly effective against a
+consumer for exactly that reason. This is a default choice, not a reviewed
+one; a lawyer should confirm it, particularly if Forkast is offered outside
+the United States.
 
 ## 12. Contact
 
-[[FILL: email address]]
+noorbbutt@gmail.com

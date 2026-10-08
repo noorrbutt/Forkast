@@ -1,6 +1,6 @@
 # Refund Policy
 
-**Last updated:** [[FILL: date you publish this]]
+**Last updated:** 2026-10-08
 
 ---
 
@@ -21,7 +21,7 @@ something.
 ## If you were charged anything
 
 You should not have been. If a charge appears that you did not expect, tell us
-at [[FILL: email address]] and we will help you get it back.
+at noorbbutt@gmail.com and we will help you get it back.
 
 Where a charge went through Apple or Google rather than through us, they hold
 the money and they process the refund, so the fastest route is directly to them:
@@ -69,4 +69,4 @@ first.
 
 ## Contact
 
-[[FILL: email address]]
+noorbbutt@gmail.com

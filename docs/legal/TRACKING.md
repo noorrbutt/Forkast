@@ -1,10 +1,12 @@
 # Tracking and Storage Disclosure
 
-*The mobile equivalent of a cookie policy. Forkast has no website and sets no
-cookies, so this describes what it stores on your device and what it tracks,
-which is the question a cookie policy is really answering.*
+*The mobile equivalent of a cookie policy. The browser build of Forkast sets
+no cookies either -- it keeps the same tokens described below in the
+browser's local storage instead of the device keychain. This describes what
+Forkast stores and what it tracks, on either platform, which is the
+question a cookie policy is really answering.*
 
-**Last updated:** [[FILL: date you publish this]]
+**Last updated:** 2026-10-08
 
 ---
 
