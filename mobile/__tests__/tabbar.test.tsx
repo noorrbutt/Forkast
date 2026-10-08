@@ -174,6 +174,15 @@ describe('the raised centre button', () => {
     );
   });
 
+  it('is not drawn on the Log screen, where it could only lead back to itself', () => {
+    const { screen } = mountBar(2);
+
+    expect(screen.queryByLabelText('Log a meal')).toBeNull();
+    // The other four keep their places.
+    expect(screen.getByLabelText('Home')).toBeTruthy();
+    expect(screen.getByLabelText('Profile')).toBeTruthy();
+  });
+
   it('does not sit in the row it is raised above, so the other tabs stay even', () => {
     // The centre route renders a spacer in the row and the button over it, so
     // there is no fourth pressable label in the strip.

@@ -195,6 +195,11 @@ export function FloatingTabBar({ state, descriptors, navigation, insets }: Botto
       {state.routes.map((route, index) => {
         if (route.name !== RAISED_ROUTE) return null;
         const focused = state.index === index;
+        // Not drawn on the Log screen itself. There it could only navigate to
+        // where you already are, so it was a large saffron button that did
+        // nothing, sitting over the form it was supposed to lead to. The
+        // spacer in the row stays, so the other four tabs do not shift.
+        if (focused) return null;
         return (
           <Pressable
             key={route.key}

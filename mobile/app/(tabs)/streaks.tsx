@@ -296,8 +296,12 @@ export default function StreaksScreen() {
                 <Text style={[type.caption, { color: colors.muted }]}>{data.message}</Text>
               ) : null}
             </View>
-
-            <Button label="Log a meal" icon="log" size="lg" full onPress={() => router.navigate('/log')} />
+            {/* No "Log a meal" button here. The raised button in the tab bar
+                sits directly under this point on the same screen and does the
+                same thing; a second one turned the end of the reading into two
+                saffron calls to the same action. The empty branch above keeps
+                its button, because an empty state offers the one action that
+                fills it. */}
           </>
         ) : null}
       </View>

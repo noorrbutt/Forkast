@@ -314,14 +314,14 @@ describe('a run in progress', () => {
     expect(shouting).toHaveLength(0);
   });
 
-  it('draws one icon, and it belongs to the button rather than to a heading', async () => {
+  it('draws no icon of its own, and no second log button under the tab bar one', async () => {
     const view = await show(RUNNING);
     await waitFor(() => view.getByText('7'));
 
-    const icons = view.UNSAFE_queryAllByType(Icon);
-
-    expect(icons).toHaveLength(1);
-    expect(icons[0].props.name).toBe('log');
+    // The raised button in the tab bar already logs a meal from this screen.
+    // A full width one here as well was two calls to the same action.
+    expect(view.UNSAFE_queryAllByType(Icon)).toHaveLength(0);
+    expect(view.queryByText('Log a meal')).toBeNull();
   });
 });
 
