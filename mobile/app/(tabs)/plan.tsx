@@ -181,7 +181,10 @@ export default function PlanRoute() {
               <View style={heroSpace}>
                 <Hero
                   value={formatNumber(perDay)}
-                  caption={`kcal a day, across ${days.length} ${days.length === 1 ? 'day' : 'days'}`}
+                  // "On average" in so many words: the days below are each
+                  // their own total, and a bare "kcal a day" over a Day 1 of
+                  // 1,700 read as a promise the plan itself did not keep.
+                  caption={`kcal a day on average, across ${days.length} ${days.length === 1 ? 'day' : 'days'}`}
                 />
                 {plan.estimate_source === 'local' ? <EstimateBadge /> : null}
               </View>

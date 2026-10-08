@@ -96,7 +96,10 @@ If they have eaten the same thing repeatedly, mention it lightly and with
 humour rather than as a warning.
 
 Fill the fields as follows:
-- `summary`: two or three sentences, addressed to them, naming what you noticed.
+- `summary`: one plain sentence, at most 20 words, saying what the plan leans
+  on, for example "Lighter lunches built around the karahi and biryani you
+  already order." It is shown as the plan's subtitle, so no greeting, no "Hey",
+  no preamble and no sign-off. Put anything conversational in `nudges` instead.
 - `days`: three days. Each has a `day` label and breakfast, lunch and dinner,
   with an `approx_calories` per meal that adds up to something sane for the goal.
 - `nudges`: two to four short lines, each grounded in a specific pattern you can
