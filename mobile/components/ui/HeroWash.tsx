@@ -47,11 +47,18 @@ export function HeroWash({ children, bleed = 24, pullUp = true }: HeroWashProps)
     <View style={{ marginHorizontal: -bleed, marginTop: pullUp ? -bleed : 0 }}>
       <LinearGradient
         colors={(isDark ? heroWash.dark : heroWash.light) as [string, string, ...string[]]}
-        // Off axis rather than straight down, so the light has a direction and
-        // the field does not read as a flat band.
+        // Slightly off axis, so the light has a direction and the field does
+        // not read as a flat band, but mostly downward, and the last stop is
+        // reached before the bottom edge.
+        //
+        // It ran corner to corner (0.1,0 to 0.9,1), which put the bottom-left
+        // corner only 56% of the way along the gradient: the bottom edge was
+        // still mid-wash on the left and met the page in a hard horizontal
+        // line. Now every point on the bottom edge projects past 0.9, where
+        // the colour is already exactly the page.
         start={{ x: 0.1, y: 0 }}
-        end={{ x: 0.9, y: 1 }}
-        locations={[0, 0.55, 1]}
+        end={{ x: 0.3, y: 1 }}
+        locations={[0, 0.5, 0.9]}
         style={{
           paddingHorizontal: bleed,
           // The reclaimed margin is paid back as padding when it was taken, so
