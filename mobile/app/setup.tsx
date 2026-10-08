@@ -19,16 +19,10 @@ const FIRST_GOAL: Goal = 'maintain';
 /**
  * The one time setup, shown once immediately after an account is created.
  *
- * THE ONE THING: the question it asks, "What are you after?", at `display` over
- * the three answers. Nothing else on the screen is above 16, which is more than
- * the one full step of the type scale the guide asks for.
- *
- * No `hero` here, and that is deliberate rather than an omission. A hero is a
- * number or a short headline on one line, and the component holds it to one
- * line so it can never truncate. This screen leads with a question that wraps
- * to two lines on a phone, so forcing it into `hero` would risk exactly the
- * truncation the guide bans. `display` at 48/300 wraps, and the next largest
- * thing on the screen is 16, so it is dominant without it.
+ * It leads with the question "What are you after?" at `display` over the
+ * three answers. Not `hero`: Hero holds its text to one line so it can never
+ * truncate, and this question wraps to two lines on a phone. `display` wraps,
+ * and with nothing else on the screen above 16 it is dominant without it.
  *
  * It still asks for the two things that are expensive to get wrong and free to
  * get right at the start. Timezone decides which calendar day every meal and
@@ -38,57 +32,14 @@ const FIRST_GOAL: Goal = 'maintain';
  * reports every day against, and then leaves that number alone for the user
  * to set.
  *
+ * The timezone is a caption line rather than a control: it is detected from
+ * the device and sent whether the user finishes or skips, so there is nothing
+ * to decide. The target field sits in the same group as the goal that
+ * proposes it. There are no cards; space does the grouping -- 8 inside a
+ * question, 16 between questions in a group, 24 between groups.
+ *
  * Everything here is skippable. Nothing on this screen is worth blocking
  * someone from logging their first meal.
- *
- * Section 13 critique of what this replaced.
- *
- * 1. What it was. An 11px uppercase eyebrow over a 48pt two line headline,
- *    then three cards of identical radius, padding and border stacked at one
- *    gap of 24, each carrying an icon, a heading and either one paragraph or
- *    one control, then two buttons.
- *
- * 2. Which rules it broke.
- *    - Section 4: `type.label`, the 11px uppercase letterspaced style, used as
- *      "One quick thing" above the headline. That style is restricted to the
- *      tab bar and to chart axis and legend text, and a tracked out eyebrow
- *      above a block is one of the named tells this guide exists to remove.
- *    - Section 10: an icon beside all three section headings, clock, trophy
- *      and chart.
- *    - Section 6 and Section 7: three same size cards on a screen that asks one
- *      question. The first held no control at all, just a sentence about the
- *      detected timezone, given the same surface and the same weight as the
- *      goal picker. Equal weight everywhere, which is the failure mode the
- *      guide exists to prevent.
- *    - Section 2 hierarchy: the largest thing on the screen said "Set your
- *      pace", which names nothing the screen does, while the question it
- *      actually asks sat inside card two at `subtitle`, 16. The dominant
- *      element and the point of the screen disagreed, so a stranger could not
- *      have named the one thing correctly.
- *    - Section 5: the content column was uncapped, which the guide calls out by
- *      name. A form running the full width of a tablet or a browser is not a
- *      design.
- *    - Section 3 accessibility: the goal chips carried selection as a border, a
- *      fill and an ink colour, with no tick. Selection has to change the border
- *      and add a tick so that it is never carried by colour alone.
- *
- * 3. What the one thing is now. "What are you after?" at 48, with one body line
- *    under it and the three answers immediately below that, 32 of space beneath
- *    the question against 24 between the groups under it.
- *
- * 4. What was demoted, and why that is correct.
- *    The timezone card is now one caption line near the bottom. It is not a
- *    decision: it is detected from the device, it is sent whether the user
- *    finishes or skips, and there is no control in it. A box around a sentence
- *    that asks nothing was the clearest case in the app of a card used as a
- *    container rather than as a surface.
- *    The daily target keeps its field and loses its card and its heading. The
- *    field already prints "Calories per day" above itself, so a heading saying
- *    "Daily target" directly over it was the same words twice, and the target
- *    belongs in the same group as the goal that proposes it rather than in a
- *    box of its own.
- *    All three cards are gone and space does the grouping: 8 inside a question,
- *    16 between questions in a group, 24 between groups.
  */
 export default function SetupScreen() {
   const { colors, layout, spacing, type } = useTheme();
@@ -178,7 +129,7 @@ export default function SetupScreen() {
           paddingTop: spacing.lg,
         }}
       >
-        {/* The one thing, and the only element on the screen above 16. */}
+        {/* The question, and the only element on the screen above 16. */}
         <View style={{ gap: spacing.sm, paddingBottom: spacing.sm }}>
           <Text style={[type.display, { color: colors.text }]}>What are you after?</Text>
           <Text style={[type.body, { color: colors.muted }]}>
