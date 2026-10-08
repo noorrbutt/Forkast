@@ -430,6 +430,32 @@ describe('the chart', () => {
   });
 });
 
+describe('the month trend', () => {
+  it('compares a pace per day, never a part month total against a whole one', async () => {
+    const screen = await open(UNDER);
+    await waitFor(() => expect(screen.getByText('Calories a day')).toBeTruthy());
+
+    // 12 days of September against 31 of August. The totals differ by 2,600
+    // kcal and 6 meals almost entirely because September is not over yet.
+    expect(screen.queryByText(/Down 2,600/)).toBeNull();
+    expect(screen.queryByText(/Down 6 meals/)).toBeNull();
+
+    expect(screen.getByText('1,530')).toBeTruthy();
+    expect(screen.getByText('Down 150 kcal a day on August')).toBeTruthy();
+    // 12 / 12 = 1.0 against 18 / 31 = 0.6.
+    expect(screen.getByText('1.0')).toBeTruthy();
+    expect(screen.getByText('Up 0.4 a day on August')).toBeTruthy();
+    expect(screen.getByText(/12 days of September so far and all 31 of August/)).toBeTruthy();
+  });
+
+  it('promises the plan length the plan actually has', async () => {
+    const screen = await open(UNDER);
+
+    expect(screen.getByText('Three days of meals shaped around your goal.')).toBeTruthy();
+    expect(screen.queryByText(/a week of suggestions/i)).toBeNull();
+  });
+});
+
 describe('while the day is still loading', () => {
   it('shows a skeleton that matches the layout, not a spinner', async () => {
     mockedHydrate.mockResolvedValue({ access_token: 'a', refresh_token: 'r' });

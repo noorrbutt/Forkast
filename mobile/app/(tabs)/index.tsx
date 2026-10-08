@@ -352,6 +352,12 @@ function describeChange(change: number, unit: string, against: string): string {
   return `${change > 0 ? 'Up' : 'Down'} ${formatNumber(Math.abs(change))} ${unit} on ${against}`;
 }
 
+/** Meals logged per day of the period, to one decimal place. */
+function mealsPerDay(period: { meals_logged: number; days_counted: number }): number {
+  if (period.days_counted <= 0) return 0;
+  return Math.round((period.meals_logged / period.days_counted) * 10) / 10;
+}
+
 /**
  * This calendar month against the last one.
  *
@@ -393,21 +399,31 @@ function TrendCard({ trend }: { trend: ReturnType<typeof useTrend> }) {
   // words can never disagree about which way the month went.
   const junkPoints = Math.round(now.junk_ratio * 100) - Math.round(before.junk_ratio * 100);
 
+  // Calories and meals are compared as a pace per day, never as totals. The
+  // current month is only as old as today, so its total against a whole
+  // finished month always read as a collapse ("Down 11,113 kcal" on the 8th)
+  // that a footnote then had to walk back. Both periods are divided by their
+  // own days_counted, which the server sends for exactly this, so the two
+  // figures cover equal footing whatever the date.
+  const caloriesPace = Math.round(now.avg_calories_per_day);
+  const caloriesChange = caloriesPace - Math.round(before.avg_calories_per_day);
+  const nowMeals = mealsPerDay(now);
+  const mealsChange = Math.round((nowMeals - mealsPerDay(before)) * 10) / 10;
+
   const rows: { label: string; value: string; change: string; verdict: Verdict }[] = [
     {
-      label: 'Calories',
-      value: formatNumber(now.total_calories),
-      change: describeChange(data.change.total_calories, 'kcal', lastName),
+      label: 'Calories a day',
+      value: formatNumber(caloriesPace),
+      change: describeChange(caloriesChange, 'kcal a day', lastName),
       verdict: 'none',
     },
     {
-      label: 'Meals',
-      value: formatNumber(now.meals_logged),
-      change: describeChange(
-        data.change.meals_logged,
-        Math.abs(data.change.meals_logged) === 1 ? 'meal' : 'meals',
-        lastName
-      ),
+      label: 'Meals a day',
+      value: nowMeals.toFixed(1),
+      change:
+        mealsChange === 0
+          ? `Level with ${lastName}`
+          : `${mealsChange > 0 ? 'Up' : 'Down'} ${Math.abs(mealsChange).toFixed(1)} a day on ${lastName}`,
       verdict: 'none',
     },
     {
@@ -487,7 +503,7 @@ function TrendCard({ trend }: { trend: ReturnType<typeof useTrend> }) {
 
             <Text style={[type.caption, { color: colors.muted }]}>
               {comparable
-                ? `Counting ${formatNumber(now.days_counted)} ${now.days_counted === 1 ? 'day' : 'days'} of ${thisName} against all of ${lastName}.`
+                ? `Daily averages from the ${formatNumber(now.days_counted)} ${now.days_counted === 1 ? 'day' : 'days'} of ${thisName} so far and all ${formatNumber(before.days_counted)} of ${lastName}.`
                 : `Nothing logged in ${lastName}, so there is nothing to compare against. Next month this fills in.`}
             </Text>
           </>
@@ -669,7 +685,9 @@ export default function DashboardScreen() {
             <ListRow
               icon="plan"
               label="AI meal plan"
-              hint="A week of suggestions shaped around your goal."
+              // Three, because that is what the plan prompt asks for and what
+              // the plan screen draws. This said "a week" and the plan never was.
+              hint="Three days of meals shaped around your goal."
               onPress={() => router.push('/plan')}
               last
             />
