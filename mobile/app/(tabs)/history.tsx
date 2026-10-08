@@ -15,75 +15,13 @@ import type { FoodLog, Uuid } from '../../lib/types';
 import { useLayout, useTheme } from '../../theme';
 
 /**
- * The diary.
+ * The diary: every logged meal, newest first, grouped by day.
  *
- * THE ONE THING: the newest meal, at the head of a single column, carried by
- * its own photo. There is deliberately no hero figure here, and that is the
- * whole argument of this file.
- *
- * Why this screen is a list and must stay one. Section 6 says lead with a focal
- * element when the screen answers a single question, and use a list when the
- * items are genuinely repetitive and of equal weight. A diary is the second
- * case by definition: every meal is one meal, the twentieth is worth exactly
- * what the first is, and nothing in the payload ranks them. Promoting one to a
- * hero would invent a hierarchy the content does not have, and it would push
- * the rest below the fold to make room for a number nobody asked this screen
- * for. The guide names a diary of past meals as a list in so many words. So the
- * work here was never to find a hero. It was to stop the rows being a hundred
- * identical cards and make the column readable down its length.
- *
- * Section 13 critique of what this replaced.
- *
- * 1. What it was. One Card per meal, up to a hundred of them, every one at
- *    radius 28, padding 24 and a 1pt border, each carrying its own date
- *    heading, a dish name at `title`, a calorie figure at `numeral` in accent,
- *    a chevron, a meta line and a button row.
- *
- * 2. Which rules it broke.
- *    - Section 6: a hundred cards against a ceiling of six. A card exists to
- *      give a group its own surface, and one meal is a row, not a group. The
- *      repetition was real but the container was wrong, which is what made a
- *      legitimate list read as a stack.
- *    - Section 5 proximity: the date sat inside the card with its meal at a gap
- *      of `xs`, so five meals over two days printed a date five times and
- *      grouped nothing. The gap inside the group equalled the gap around it, so
- *      the grouping said nothing.
- *    - Section 2 contrast: the dish name at 21 and the calorie figure at 26 sat
- *      adjacent, with the smaller of the two carrying the name. The number was
- *      the loudest thing on every row and the only accent coloured thing on the
- *      screen, so a hundred meals read as a column of orange numerals.
- *    - Section 3 and Section 14: `numberOfLines={1}` on both the dish name and
- *      the meta line, so any dish or restaurant past roughly twenty characters
- *      was cut rather than wrapped.
- *    - Section 10: the user's own photos are the only images this app has, and
- *      the diary did not show them at all, although `has_photo` arrives on
- *      every row of the payload already.
- *
- * 3. What the one thing is now. The newest meal row, at the top of one column,
- *    with its photo beside it. Below it the rows repeat identically, which is
- *    what the guide asks for when two things genuinely are equal.
- *
- * 4. What was demoted, and why that is correct. The calorie figure drops from
- *    `numeral` in accent to `body` in ink, right aligned in a shared column: it
- *    is there to be compared down the page rather than read as a headline, and
- *    alignment does that job better than size ever did. The date leaves the row
- *    and becomes one quiet heading per day, which is also where the day's total
- *    now lives, so the repetition buys something. The cards are gone: a day is
- *    one surface with hairlines between its meals, so the screen holds one
- *    surface per day rather than one per meal.
- *
- * 5. The one exception to "every row is equal weight", and why it is not one.
- *    A meal WITH a photo now renders as a full width photo card instead of the
- *    compact row, taller than its neighbours. That is not a rank between
- *    meals -- the guide's argument in section 3 above still holds, and a
- *    photoless meal is not treated as lesser content. It is a rank between
- *    the two things a row can be MADE OF: a photograph is the one piece of
- *    genuinely rich content this app has anywhere, thumbnail-sized it was
- *    being thrown away, and letting it stay small was the actual default no
- *    one had decided on. The list is still one column of meals in the order
- *    they happened; it is only the row's own height that now follows what it
- *    has to show, which FlatList already handles per item without any of the
- *    fixed-height assumptions a `getItemLayout` would have needed.
+ * Deliberately a plain list with no hero figure. Every meal carries equal
+ * weight and nothing in the payload ranks them, so promoting one would invent
+ * a hierarchy the content does not have and push the rest below the fold.
+ * The row components live in components/diary/; this file owns the data,
+ * the list, and the screen-level dialogs.
  */
 
 /** How long the confirmation stays on a row before the row goes quiet again. */
