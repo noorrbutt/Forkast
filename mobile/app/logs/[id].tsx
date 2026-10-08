@@ -34,60 +34,17 @@ import {
 import { useTheme } from '../../theme';
 
 /**
- * One meal.
+ * One meal: the answer to "what was this meal", then the form that can
+ * change it.
  *
- * THE ONE THING: the photograph of the meal, and when there is none, the
- * calorie figure as the screen's only `hero`. The screen answers "what was
- * this meal", so the answer leads and the form that can change it follows.
- *
- * Section 13 critique of what this replaced.
- *
- * 1. What it was. A card holding a heading and a 48pt number, a second card
- *    holding the photo control, a repeat button, then six form blocks and two
- *    full width buttons: a vertical stack titled "Edit log", with the eyebrow
- *    "Fix anything" over it.
- *
- * 2. Which rules it broke.
- *    - Section 6: the screen answers a single question and so must lead with a
- *      focal element, and it led with a form instead. The photograph, which is
- *      the actual answer and the only image this app has, sat in the second
- *      card down, inside a labelled control, at the same width and radius as
- *      the estimate card above it.
- *    - Section 4: the largest thing on the screen was `display` at 48, spent on
- *      a figure introduced by the words "Current estimate". `hero` at 64 was
- *      never used, so the screen had a second level and no first one.
- *    - Section 10: an icon beside the "Photo" heading, drawn from inside the
- *      photo control.
- *    - Section 2 repetition: 38 categories rendered as a wrapping wall of
- *      chips, when the guide says a choice among few is a chip and a choice
- *      among many is a `Select`. The log form had already moved to a `Select`,
- *      so the same choice was being made two ways on two screens.
- *    - Section 3 usability: Save was disabled until the form was valid, which
- *      is the exact pattern the guide calls the worst version of the rule, and
- *      it hid the affordance behind the action that invites it.
- *    - Section 3 accessibility: selecting a chip changed its fill and its
- *      border colour and nothing else, so selection was carried by colour
- *      alone.
- *    - Section 12: "Fix anything" is filler above a screen whose title already
- *      said what it was.
- *
- * 3. What the one thing is now. The photo, at the top, at the full width of
- *    the content column and nothing else near it. A meal with no photo leads
- *    with its calorie figure at `hero` on a wash instead, which is the one
- *    place on this screen a large field of colour is allowed, because exactly
- *    one meal and therefore exactly one cuisine is ever on screen here.
- *
- * 4. What was demoted, and why that is correct. The calorie figure drops to
- *    `displaySm` whenever there is a photo: it is a fact about the meal, not
- *    the meal. The estimate loses its card, because a single figure is not a
- *    group and does not need a surface of its own. The photo controls move
- *    below the form's fields, since taking a photo again is the rarest thing
- *    anyone does here and it does not deserve the top of the screen. The edit
- *    form keeps every field it had, under one heading that says plainly that
- *    it is the secondary half of the screen.
+ * The photo leads, full width with nothing beside it. A meal with no photo
+ * leads with its calorie figure at `hero` on a wash instead -- the one place
+ * a large field of colour is allowed, because exactly one meal, and so one
+ * cuisine, is ever on screen here. With a photo the figure drops to
+ * `displaySm`: it is a fact about the meal, not the meal. The photo controls
+ * sit below the form fields, since retaking a photo is the rarest thing
+ * anyone does here.
  */
-
-
 
 /**
  * When the meal was eaten, in words.
