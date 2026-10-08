@@ -26,60 +26,17 @@ import type { Today } from '../../lib/types';
 import { useLayout, useTheme } from '../../theme';
 
 /**
- * The dashboard.
+ * The dashboard: how today is going.
  *
- * THE ONE THING: today's net calories against the daily target, as a hero
- * figure inside a ring meter. Everything under it is quieter by a full step of
- * the type scale and lives on a card, which the hero does not.
- *
- * Section 13 critique of what this replaced.
- *
- * 1. What it was. A vertical stack of eleven cards and four stat tiles, every
- *    one of them at radius 28, padding 24 and a 1pt border, each introduced by
- *    an 11px uppercase letterspaced label with an icon beside it.
- *
- * 2. Which rules it broke.
- *    - Section 6: eleven Card elements on a screen that mixes a headline stat
- *      with secondary data. The ceiling is six and the rule says a dashboard is
- *      never one uniform stack.
- *    - Section 4 and Section 2 contrast: the largest thing on the screen was
- *      `display` at 48, spent on a period total, and `hero` at 64 was never
- *      used. There was no gap at all between the first and second elements, so
- *      nothing was dominant and a stranger could not name the one thing.
- *    - Section 9: the one ratio against a limit was drawn as a 14px bar, the
- *      same weight as everything else on the screen, while 48pt was spent on a
- *      number that is not the question this screen answers.
- *    - Section 10: an icon beside all ten section headings, via the local
- *      IconLabel helper.
- *    - Section 4: `SectionLabel`, the 11px uppercase eyebrow, above ten blocks
- *      plus the page itself.
- *    - Section 5: every gap in the scroll was `lg`, 16, so nothing had more air
- *      than anything else and `xxxl` was unspent.
- *    - Section 7: four stat tiles in two equal rows and three equal nav cards.
- *      Equal weight everywhere, which is the failure mode the guide exists to
- *      prevent.
- *    - Section 11: seven sections wrapped in a staggered fade and lift on mount.
- *    - Section 8 and 9: the chart drew one series and silently dropped the
- *      `burned` figure that is in the same payload, carried no legend, and
- *      labelled its axis in the 11px uppercase style.
- *
- * 3. What the one thing is now. Today's net calories against the daily target,
- *    as a hero figure inside a ring, with 48 of space above and below it and
- *    nothing else on the screen above 34.
- *
- * 4. What was demoted, and what was cut.
- *    Demoted: the fortnight chart, the month against month trend and the three
- *    navigation cards. The chart and the trend keep a card each and drop to
- *    `title` and `subtitle`; the nav cards become three rows in one group,
- *    because three destinations are a list and not three headlines.
- *    Cut: the period total card, which was a second hero at 48 reporting a
- *    window this screen does not ask about; the junk ratio, meals logged and
- *    burned stat tiles; the top category and top spot tiles; the burn
- *    equivalents, which restate a number already on screen in minutes; and the
- *    most fun meals list. All of them are reference rather than an answer to
- *    "how is today going", and a reader who wants them is asking a different
- *    question on a different screen. The junk ratio survives as a row in the
- *    trend card, which is where a month long figure belongs.
+ * Today's net calories against the daily target, as a hero figure inside a
+ * ring, is the one thing this screen answers. Everything under it is a full
+ * step quieter on the type scale and sits on a card, which the hero does not.
+ * The fortnight chart and the month trend keep a card each; the three ways
+ * onward are rows in one group, because three destinations are a list, not
+ * three headlines. Period totals, top categories and the like are reference
+ * rather than an answer to "how is today going", so they live elsewhere --
+ * the junk ratio survives as a row in the trend card, where a month-long
+ * figure belongs.
  */
 
 /** The ring at its full size, clamped on a narrow phone so it never overhangs. */
@@ -693,9 +650,8 @@ export default function DashboardScreen() {
             a sibling of the text column, so a row without one starts its label
             44pt further left and the group's edge visibly breaks.
 
-            This is the line section 10 draws: the icon is on the thing you tap,
-            naming where the tap goes. It is not on a heading, which is the
-            decoration the guide bans and which this screen used to wear. */}
+            Icons go on the thing you tap, naming where the tap goes -- never on
+            a heading, where they would only be decoration. */}
         <View style={{ paddingTop: spacing.xxl }}>
           <ListGroup>
             <ListRow
