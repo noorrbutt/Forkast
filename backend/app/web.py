@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import html
 import json
+import secrets
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Response
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -87,7 +89,7 @@ async def asset_links() -> Response:
     )
 
 
-def _fallback_page(*, heading: str, deep_link: str) -> str:
+def _fallback_page(*, heading: str, deep_link: str) -> HTMLResponse:
     """One shared shell for both fallback pages.
 
     Both do the same job: try the custom scheme once, immediately, for a
@@ -103,20 +105,31 @@ def _fallback_page(*, heading: str, deep_link: str) -> str:
     own escaping, not one shared between them: html.escape() defuses it as
     HTML, json.dumps() defuses it as a JS string literal. Neither is
     optional, and neither substitutes for the other.
+
+    Returns a real Response, not a bare string, because this page needs its
+    own Content-Security-Policy: SECURITY_HEADERS' blanket "default-src
+    'none'" (right for the rest of the API, which serves nothing but JSON)
+    blocks this page's own inline <style> and <script> outright, so the page
+    rendered unstyled and the auto-redirect into the app never ran. A nonce
+    scoped to this one response is what lets exactly this inline style and
+    script run without reopening inline script generally -- the middleware's
+    `setdefault` leaves a header a route already set alone, so this is the
+    only route whose CSP differs from the default.
     """
+    nonce = secrets.token_urlsafe(18)
     safe_href = html.escape(deep_link, quote=True)
     # json.dumps escapes quotes and backslashes but not "</", so a token
     # containing a literal "</script>" would otherwise close this block early
     # and inject whatever HTML followed it. Standard mitigation: escape the
     # forward slash in that one sequence so the substring never appears.
     safe_js_string = json.dumps(deep_link).replace("</", "<\\/")
-    return f"""<!doctype html>
+    body = f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Forkast</title>
-<style>
+<style nonce="{nonce}">
   body {{
     margin: 0;
     min-height: 100vh;
@@ -150,7 +163,7 @@ def _fallback_page(*, heading: str, deep_link: str) -> str:
        tap below.</p>
     <a href="{safe_href}">Open Forkast</a>
   </div>
-  <script>
+  <script nonce="{nonce}">
     // One immediate, silent attempt. If the app is installed and simply
     // wasn't offered the App Link (common inside another app's in-app
     // browser), this is what actually opens it; if it is not installed the
@@ -159,18 +172,33 @@ def _fallback_page(*, heading: str, deep_link: str) -> str:
   </script>
 </body>
 </html>"""
+    return HTMLResponse(
+        content=body,
+        headers={
+            "Content-Security-Policy": (
+                f"default-src 'none'; style-src 'nonce-{nonce}'; "
+                f"script-src 'nonce-{nonce}'; frame-ancestors 'none'"
+            )
+        },
+    )
 
 
-@router.get("/reset-password", response_class=HTMLResponse)
-async def reset_password_fallback(token: str | None = None) -> str:
-    query = f"?token={token}" if token else ""
+@router.get("/reset-password")
+async def reset_password_fallback(token: str | None = None) -> HTMLResponse:
+    # urlencode, not an f-string: a token or email containing "&", "=" or any
+    # other reserved query character would otherwise corrupt the query string
+    # it lands in (or, for "#", truncate it outright) instead of round-
+    # tripping to the app untouched. services/auth.py's own deep_link()
+    # already does this; this page builds the same kind of link by hand and
+    # has to follow the same rule.
+    query = f"?{urlencode({'token': token})}" if token else ""
     return _fallback_page(
         heading="Reset your password", deep_link=f"forkast://reset-password{query}"
     )
 
 
-@router.get("/check-email", response_class=HTMLResponse)
-async def check_email_fallback(token: str | None = None, email: str | None = None) -> str:
-    params = "&".join(f"{k}={v}" for k, v in (("token", token), ("email", email)) if v)
-    query = f"?{params}" if params else ""
+@router.get("/check-email")
+async def check_email_fallback(token: str | None = None, email: str | None = None) -> HTMLResponse:
+    pairs = {k: v for k, v in (("token", token), ("email", email)) if v}
+    query = f"?{urlencode(pairs)}" if pairs else ""
     return _fallback_page(heading="Verify your email", deep_link=f"forkast://check-email{query}")
