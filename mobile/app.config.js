@@ -119,7 +119,19 @@ const config = {
       },
       "ios": {
         "supportsTablet": true,
-        "bundleIdentifier": "com.forkast.app"
+        "bundleIdentifier": "com.forkast.app",
+        // Required by App Review the moment expo-image-picker is in the
+        // dependency tree (it is, for photo logging and avatars), whether or
+        // not every build path actually calls the camera or the library --
+        // a missing or vague purpose string is an automatic rejection, not
+        // just a lint warning. Each one says specifically what the app does
+        // with the photo, not a generic "needs access".
+        "infoPlist": {
+          "NSCameraUsageDescription":
+            "Forkast uses your camera to photograph a meal so it can estimate its calories and save the photo to that diary entry.",
+          "NSPhotoLibraryUsageDescription":
+            "Forkast reads a photo you choose to use it as a meal photo or as your profile picture."
+        }
         // associatedDomains is added below, only when EXPO_PUBLIC_APP_DOMAIN
         // is set: claiming a domain here that apple-app-site-association
         // does not actually verify just gets the entitlement silently
