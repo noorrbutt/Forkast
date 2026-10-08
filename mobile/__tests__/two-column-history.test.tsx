@@ -91,7 +91,7 @@ const meal = (id: string, dishName: string, day: string) => ({
 // Two different days, so groupByDay produces two DiaryDay cards -- the
 // minimum needed to see whether they land in one row or two.
 const ITEMS = [
-  meal('log-1', 'Chicken biryani', '2026-09-15T09:00:00Z'),
+  meal('log-1', 'Chicken Biryani', '2026-09-15T09:00:00Z'),
   meal('log-2', 'Haleem', '2026-09-10T12:00:00Z'),
 ];
 
@@ -126,7 +126,7 @@ describe('the diary at expanded width', () => {
     mockHeight = 844;
 
     const screen = render(<HistoryScreen />, { wrapper });
-    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Chicken Biryani')).toBeTruthy());
 
     const list = screen.UNSAFE_getByType(FlatList);
     expect(list.props.numColumns).toBe(1);
@@ -137,7 +137,7 @@ describe('the diary at expanded width', () => {
     mockHeight = 1366;
 
     const screen = render(<HistoryScreen />, { wrapper });
-    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Chicken Biryani')).toBeTruthy());
 
     const list = screen.UNSAFE_getByType(FlatList);
     expect(list.props.numColumns).toBe(2);

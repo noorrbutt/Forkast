@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { Button, Card, EstimateSourceLabel, Hero, Loading } from '../ui';
-import { formatNumber, saveReaction } from '../../lib/format';
+import { displayDish, formatNumber, saveReaction } from '../../lib/format';
 import type { FoodLog } from '../../lib/types';
 import { useTheme } from '../../theme';
 import { motion } from '../../theme/motion';
@@ -65,7 +65,7 @@ export function LogSaved({
       >
         <Hero
           value={formatNumber(saved.estimated_calories)}
-          caption={`kcal for ${saved.dish_name}${saved.restaurant ? ` at ${saved.restaurant.name}` : ''
+          caption={`kcal for ${displayDish(saved.dish_name)}${saved.restaurant ? ` at ${saved.restaurant.name}` : ''
             }`}
           align="center"
         />

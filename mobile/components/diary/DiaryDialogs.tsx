@@ -1,5 +1,5 @@
 import { Dialog } from '../ui';
-import { formatNumber } from '../../lib/format';
+import { displayDish, formatNumber } from '../../lib/format';
 import type { FoodLog } from '../../lib/types';
 
 /*
@@ -32,7 +32,7 @@ export function RepeatMealDialog({
       title="Log this again?"
       message={
         log
-          ? `${log.dish_name} goes into today at ${formatNumber(
+          ? `${displayDish(log.dish_name)} goes into today at ${formatNumber(
               log.estimated_calories
             )} kcal. You can edit or delete it afterwards.`
           : undefined
@@ -78,7 +78,7 @@ export function DeleteMealDialog({
       title="Delete this meal?"
       message={
         log
-          ? `${log.dish_name} will be removed from your diary. You can undo it for a few seconds afterwards.`
+          ? `${displayDish(log.dish_name)} will be removed from your diary. You can undo it for a few seconds afterwards.`
           : undefined
       }
       actions={[
@@ -121,7 +121,7 @@ export function MealActionMenu({
     <Dialog
       visible={log !== null}
       onDismiss={onClose}
-      title={log?.dish_name ?? ''}
+      title={displayDish(log?.dish_name)}
       actions={[
         {
           label: 'Log again',

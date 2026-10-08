@@ -20,6 +20,7 @@ import {
   FUN_HINT,
   FUN_LEVELS,
   SERVING_LABELS,
+  displayDish,
   formatNumber,
 } from '../../lib/format';
 import { haptics } from '../../lib/haptics';
@@ -338,7 +339,7 @@ export default function MealScreen() {
             </View>
 
             <View style={{ gap: spacing.xs }}>
-              <Text style={[type.title, { color: colors.text }]}>{meal.dish_name}</Text>
+              <Text style={[type.title, { color: colors.text }]}>{displayDish(meal.dish_name)}</Text>
               {/* A full step under `hero` and a full step over `title`. The
                   picture is the answer on this screen and the figure supports
                   it, which is the other way round from a meal with no photo. */}
@@ -353,7 +354,7 @@ export default function MealScreen() {
              colour this app allows. Exactly one meal is ever on this screen,
              so a large area of colour here is never adjacent to another one. */
           <HeroWash>
-            <Text style={[type.title, { color: colors.text }]}>{meal.dish_name}</Text>
+            <Text style={[type.title, { color: colors.text }]}>{displayDish(meal.dish_name)}</Text>
             {/* The only thing on this screen that gets `xxxl`. That reservation
                 is what makes it read as the hero before its size is
                 considered. */}

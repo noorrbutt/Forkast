@@ -81,7 +81,7 @@ function renderHarness(queryClient: QueryClient) {
 }
 
 const INPUT: LogInput = {
-  dish_name: 'Late night biryani',
+  dish_name: 'Late Night Biryani',
   category_id: 4,
   rating: 4,
   serving_size: 'medium',
@@ -91,7 +91,7 @@ const INPUT: LogInput = {
 const SAVED: FoodLog = {
   has_photo: false,
   id: 'server-id-1',
-  dish_name: 'Late night biryani',
+  dish_name: 'Late Night Biryani',
   category_id: 4,
   restaurant_id: null,
   area: null,
@@ -177,7 +177,7 @@ describe('a meal logged with no answer yet', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    await waitFor(() => expect(screen.getByText('Late night biryani')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Late Night Biryani')).toBeTruthy());
     expect(screen.getByText('Pending sync')).toBeTruthy();
 
     // Unblock the pending request so the test does not leak a dangling timer.
@@ -221,13 +221,13 @@ describe('a meal logged with no answer yet', () => {
       mutate(INPUT);
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    await waitFor(() => expect(screen.getByText('Late night biryani')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Late Night Biryani')).toBeTruthy());
 
     await act(async () => {
       rejectPost(new Error('network error'));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    await waitFor(() => expect(screen.queryByText('Late night biryani')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('Late Night Biryani')).toBeNull());
   });
 });

@@ -3,7 +3,7 @@ import { Image, Pressable, Text, View } from 'react-native';
 
 import { EstimateBadge } from '../ui';
 import { usePhotoSource } from '../../hooks/usePhoto';
-import { formatNumber } from '../../lib/format';
+import { displayDish, formatNumber } from '../../lib/format';
 import { useTheme } from '../../theme';
 import { elevation, photoScrim } from '../../theme/tokens';
 import { MealActions } from './MealActions';
@@ -139,7 +139,7 @@ export function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDelet
                       style={[type.subtitle, { color: '#FFFFFF', flex: 1 }]}
                       numberOfLines={2}
                     >
-                      {log.dish_name}
+                      {displayDish(log.dish_name)}
                     </Text>
                     <Text
                       style={[

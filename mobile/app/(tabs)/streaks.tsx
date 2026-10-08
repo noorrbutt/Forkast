@@ -6,7 +6,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-na
 import { Button, Card, Dialog, ErrorState, Hero, HeroWash, Screen, Skeleton, SkeletonCard, SkeletonText } from '../../components/ui';
 import { useStreaks } from '../../hooks/useInsights';
 import { describeError } from '../../lib/api';
-import { formatDate } from '../../lib/format';
+import { displayDish, formatDate } from '../../lib/format';
 import { haptics } from '../../lib/haptics';
 import { hasSeenMilestone, markMilestoneSeen } from '../../lib/milestoneStore';
 import type { StreakMilestone } from '../../lib/types';
@@ -279,7 +279,7 @@ export default function StreaksScreen() {
                     <Text style={[type.body, { color: colors.muted }]}>Last slip</Text>
                     {data.last_junk_date && data.last_junk_dish ? (
                       <Text style={[type.caption, { color: colors.muted }]}>
-                        {data.last_junk_dish}
+                        {displayDish(data.last_junk_dish)}
                       </Text>
                     ) : null}
                   </View>

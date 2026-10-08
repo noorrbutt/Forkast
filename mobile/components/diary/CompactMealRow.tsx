@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 
 import { EstimateBadge, Icon } from '../ui';
-import { formatNumber } from '../../lib/format';
+import { displayDish, formatNumber } from '../../lib/format';
 import type { FoodLog } from '../../lib/types';
 import { useTheme } from '../../theme';
 import { MealActions } from './MealActions';
@@ -51,7 +51,7 @@ export function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDel
   return (
     <SwipeToDelete
       disabled={log.pending ?? false}
-      dishName={log.dish_name}
+      dishName={displayDish(log.dish_name)}
       onDelete={() => onDelete(log.id)}
     >
       {/* The footer below is a SIBLING of this Pressable, not a child of it:
@@ -113,7 +113,7 @@ export function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDel
                 the point, just what was left once two other things crowded
                 onto the same row. */}
             <Text style={[type.subtitle, { color: colors.text }]} numberOfLines={2}>
-              {log.dish_name}
+              {displayDish(log.dish_name)}
             </Text>
 
             {log.pending ? <PendingBadge /> : justRefined ? <RefinedTag /> : null}

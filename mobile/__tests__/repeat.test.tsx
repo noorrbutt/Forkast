@@ -109,7 +109,7 @@ const meal = (id: string, dishName: string) => ({
   restaurant: null,
 });
 
-const BIRYANI = meal('log-biryani', 'Chicken biryani');
+const BIRYANI = meal('log-biryani', 'Chicken Biryani');
 const NIHARI = meal(mockDetailId, 'Nihari');
 
 /** What the server answers with: the same meal, a new row, today. */
@@ -178,7 +178,7 @@ describe('from the diary', () => {
     // Matched on the dialog's own wording rather than on the dish name alone,
     // which appears on the row behind it too.
     const message = screen.getByText(/goes into today/);
-    expect(message.props.children).toMatch(/Chicken biryani/);
+    expect(message.props.children).toMatch(/Chicken Biryani/);
   });
 
   it('writes nothing when the question is declined', async () => {
@@ -276,7 +276,7 @@ describe('from the diary', () => {
 
     expect(mockPush).not.toHaveBeenCalled();
 
-    fireEvent.press(getByText('Chicken biryani'));
+    fireEvent.press(getByText('Chicken Biryani'));
 
     expect(mockPush).toHaveBeenCalledWith('/logs/log-biryani');
   });

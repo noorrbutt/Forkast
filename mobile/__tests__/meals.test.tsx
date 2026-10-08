@@ -134,7 +134,7 @@ const meal = (
   ...extra,
 });
 
-const BIRYANI = meal('log-biryani', 'Chicken biryani');
+const BIRYANI = meal('log-biryani', 'Chicken Biryani');
 const NIHARI = meal(mockDetailId, 'Nihari', {
   has_photo: true,
   created_at: '2026-09-15T12:00:00Z',
@@ -223,7 +223,7 @@ describe('the diary', () => {
   it('gives a meal with no photo a category icon rather than a camera in a grey box', async () => {
     const screen = render(<HistoryScreen />, { wrapper });
 
-    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Chicken Biryani')).toBeTruthy());
 
     // A monogram used to stand in here; now it is the shared "meal" glyph on
     // a tile tinted for the category's own junk/healthy judgement.
@@ -251,13 +251,13 @@ describe('the diary', () => {
   });
 
   it('keeps a mixed day working: a photo meal next to a photoless one', async () => {
-    // Nihari (photo) and Chicken biryani (no photo) share 2026-09-15, so this
+    // Nihari (photo) and Chicken Biryani (no photo) share 2026-09-15, so this
     // is the one day that actually exercises segmentMeals splitting a run of
     // compact rows away from a standalone photo card.
     const { getByText } = render(<HistoryScreen />, { wrapper });
 
     await waitFor(() => expect(getByText('Nihari')).toBeTruthy());
-    expect(getByText('Chicken biryani')).toBeTruthy();
+    expect(getByText('Chicken Biryani')).toBeTruthy();
     expect(getByText(/1,640 kcal/)).toBeTruthy();
   });
 
@@ -267,9 +267,9 @@ describe('the diary', () => {
     // Log again, with no gesture and no menu needed to find either.
     const screen = render(<HistoryScreen />, { wrapper });
 
-    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Chicken Biryani')).toBeTruthy());
 
-    // One pair per meal (Nihari's photo card, Chicken biryani's and
+    // One pair per meal (Nihari's photo card, Chicken Biryani's and
     // Haleem's compact rows) -- more than one of each is the point: these
     // are standing footer buttons on every row, not a single menu shared
     // across the diary.
@@ -495,55 +495,55 @@ describe('deleting a meal from the diary', () => {
 
   it('asks before deleting from the footer button, and does nothing until answered', async () => {
     const screen = render(<HistoryScreen />, { wrapper });
-    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Chicken Biryani')).toBeTruthy());
 
     await act(async () => {
-      fireEvent.press(footerDeleteButtonFor(screen, 'Chicken biryani'));
+      fireEvent.press(footerDeleteButtonFor(screen, 'Chicken Biryani'));
     });
 
     expect(screen.getByText('Delete this meal?')).toBeTruthy();
     // Nothing happened yet: the row is still there and nothing was scheduled.
-    expect(screen.getByText('Chicken biryani')).toBeTruthy();
-    expect(screen.queryByText(/Deleted Chicken biryani/)).toBeNull();
+    expect(screen.getByText('Chicken Biryani')).toBeTruthy();
+    expect(screen.queryByText(/Deleted Chicken Biryani/)).toBeNull();
 
     await act(async () => {
       fireEvent.press(screen.getByText('Cancel'));
     });
 
     expect(screen.queryByText('Delete this meal?')).toBeNull();
-    expect(screen.getByText('Chicken biryani')).toBeTruthy();
+    expect(screen.getByText('Chicken Biryani')).toBeTruthy();
     expect(mockedApi.delete).not.toHaveBeenCalled();
   });
 
   it('deletes once the footer button is confirmed, same as the menu does', async () => {
     const screen = render(<HistoryScreen />, { wrapper });
-    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Chicken Biryani')).toBeTruthy());
 
     await act(async () => {
-      fireEvent.press(footerDeleteButtonFor(screen, 'Chicken biryani'));
+      fireEvent.press(footerDeleteButtonFor(screen, 'Chicken Biryani'));
     });
     await act(async () => {
       fireEvent.press(deleteInDialog(screen));
     });
 
-    expect(screen.queryByText('Chicken biryani')).toBeNull();
-    expect(screen.getByText(/Deleted Chicken biryani/)).toBeTruthy();
+    expect(screen.queryByText('Chicken Biryani')).toBeNull();
+    expect(screen.getByText(/Deleted Chicken Biryani/)).toBeTruthy();
     expect(mockedApi.delete).not.toHaveBeenCalled();
   });
 
   it('removes the row immediately and offers Undo, without calling the server yet', async () => {
     const screen = render(<HistoryScreen />, { wrapper });
-    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Chicken Biryani')).toBeTruthy());
 
     await act(async () => {
-      openMenuFor(screen, 'Chicken biryani');
+      openMenuFor(screen, 'Chicken Biryani');
     });
     await act(async () => {
       fireEvent.press(deleteInDialog(screen));
     });
 
-    expect(screen.queryByText('Chicken biryani')).toBeNull();
-    expect(screen.getByText(/Deleted Chicken biryani/)).toBeTruthy();
+    expect(screen.queryByText('Chicken Biryani')).toBeNull();
+    expect(screen.getByText(/Deleted Chicken Biryani/)).toBeTruthy();
     expect(mockedApi.delete).not.toHaveBeenCalled();
   });
 
@@ -556,10 +556,10 @@ describe('deleting a meal from the diary', () => {
     // Unmounting exercises the exact same commit path (flush() on
     // teardown) without needing to wait out or fake the real window.
     const screen = render(<HistoryScreen />, { wrapper });
-    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Chicken Biryani')).toBeTruthy());
 
     await act(async () => {
-      openMenuFor(screen, 'Chicken biryani');
+      openMenuFor(screen, 'Chicken Biryani');
     });
     await act(async () => {
       fireEvent.press(deleteInDialog(screen));
@@ -578,10 +578,10 @@ describe('deleting a meal from the diary', () => {
 
   it('Undo cancels it outright, so even a later flush never reaches the server', async () => {
     const screen = render(<HistoryScreen />, { wrapper });
-    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Chicken Biryani')).toBeTruthy());
 
     await act(async () => {
-      openMenuFor(screen, 'Chicken biryani');
+      openMenuFor(screen, 'Chicken Biryani');
     });
     await act(async () => {
       fireEvent.press(deleteInDialog(screen));
@@ -590,7 +590,7 @@ describe('deleting a meal from the diary', () => {
       fireEvent.press(screen.getByText('Undo'));
     });
 
-    expect(screen.getByText('Chicken biryani')).toBeTruthy();
+    expect(screen.getByText('Chicken Biryani')).toBeTruthy();
 
     // Proves cancellation rather than a delete merely still pending: if
     // Undo had not actually cleared it, unmounting (which flushes anything
@@ -605,17 +605,17 @@ describe('deleting a meal from the diary', () => {
     // file's own comment on openMenuFor -- not only by a swipe someone using
     // one has no way to discover or perform. This is that path.
     const screen = render(<HistoryScreen />, { wrapper });
-    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Chicken Biryani')).toBeTruthy());
 
     await act(async () => {
-      openMenuFor(screen, 'Chicken biryani');
+      openMenuFor(screen, 'Chicken Biryani');
     });
     const deleteAction = deleteInDialog(screen);
 
     await act(async () => {
       fireEvent.press(deleteAction);
     });
-    expect(screen.queryByText('Chicken biryani')).toBeNull();
+    expect(screen.queryByText('Chicken Biryani')).toBeNull();
   });
 
   it('the swipe action reaches the same onDelete the menu does', async () => {
@@ -624,14 +624,14 @@ describe('deleting a meal from the diary', () => {
     // checks that pressing it is wired to the real thing, not that the
     // gesture recognises a swipe.
     const screen = render(<HistoryScreen />, { wrapper });
-    await waitFor(() => expect(screen.getByText('Chicken biryani')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Chicken Biryani')).toBeTruthy());
 
     await act(async () => {
-      fireEvent.press(screen.getByLabelText('Delete Chicken biryani'));
+      fireEvent.press(screen.getByLabelText('Delete Chicken Biryani'));
     });
 
-    expect(screen.queryByText('Chicken biryani')).toBeNull();
-    expect(screen.getByText(/Deleted Chicken biryani/)).toBeTruthy();
+    expect(screen.queryByText('Chicken Biryani')).toBeNull();
+    expect(screen.getByText(/Deleted Chicken Biryani/)).toBeTruthy();
   });
 });
 

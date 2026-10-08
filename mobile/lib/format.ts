@@ -28,6 +28,20 @@ export function titleCase(slug: string): string {
     .join(' ');
 }
 
+/**
+ * A dish name as it is shown, with the first letter of every word capitalised.
+ *
+ * Display only. What was typed is what is stored and sent, so a later search
+ * or a relog matches the user's own words exactly. Only the first letter of a
+ * word is touched, never the rest, so "McDonald's", "BBQ" and "Hot N Spicy"
+ * come through as they were typed, and "chocolate brownie" no longer sits
+ * lowercase beside them in the same list.
+ */
+export function displayDish(name: string | null | undefined): string {
+  if (!name) return '';
+  return name.replace(/(^|\s)(\S)/g, (_, space: string, first: string) => space + first.toUpperCase());
+}
+
 export function formatNumber(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '0';
   return Math.round(value).toLocaleString('en-US');
