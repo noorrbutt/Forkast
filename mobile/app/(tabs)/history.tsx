@@ -2,11 +2,10 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, Text, View } from 'react-native';
 
-import { groupByDay, segmentMeals, type DiaryDay } from '../../components/diary/diaryDays';
-import { MealRow } from '../../components/diary/MealRow';
-import { PhotoMealRow } from '../../components/diary/PhotoMealRow';
-import { THUMB } from '../../components/diary/rowProps';
-import { Dialog, Empty, ErrorState, ListGroup, Loading, Screen, Skeleton, SkeletonText, UndoSnackbar, useScreenInsets } from '../../components/ui';
+import { DayGroup } from '../../components/diary/DayGroup';
+import { groupByDay, type DiaryDay } from '../../components/diary/diaryDays';
+import { DiaryDaySkeleton } from '../../components/diary/DiaryDaySkeleton';
+import { Dialog, Empty, ErrorState, Loading, Screen, UndoSnackbar, useScreenInsets } from '../../components/ui';
 import { useDeleteLog, useInfiniteLogs, useRepeatLog } from '../../hooks/useLogs';
 import { useSoftDelete } from '../../hooks/useSoftDelete';
 import { describeError } from '../../lib/api';
@@ -89,107 +88,6 @@ import { useLayout, useTheme } from '../../theme';
 
 /** How long the confirmation stays on a row before the row goes quiet again. */
 const CONFIRMED_MS = 4000;
-
-/**
- * One day's worth of the shape DayGroup actually draws -- a heading line
- * above a card of row-shaped placeholders -- rather than a spinner sitting
- * alone in the middle of the screen before the first page has answered.
- */
-function DiaryDaySkeleton() {
-  const { colors, radius, spacing } = useTheme();
-
-  return (
-    <View style={{ gap: spacing.sm }}>
-      <SkeletonText width={120} fontSize={11} />
-      <View
-        style={{
-          borderRadius: radius.card,
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.surface,
-          padding: spacing.lg,
-          gap: spacing.lg,
-        }}
-      >
-        {[0, 1].map((row) => (
-          <View key={row} style={{ flexDirection: 'row', gap: spacing.lg, alignItems: 'center' }}>
-            <Skeleton width={THUMB} height={THUMB} radius={radius.tile} />
-            <View style={{ flex: 1, gap: spacing.sm }}>
-              <SkeletonText width="70%" fontSize={16} />
-              <SkeletonText width="40%" fontSize={13} />
-            </View>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function DayGroup({
-  day,
-  onOpen,
-  onRepeat,
-  onDelete,
-  onAskDelete,
-  onLongPress,
-  confirmed,
-  repeat,
-}: {
-  day: DiaryDay;
-  onOpen: (id: Uuid) => void;
-  onRepeat: (id: Uuid) => void;
-  onDelete: (id: Uuid) => void;
-  onAskDelete: (id: Uuid) => void;
-  onLongPress: (id: Uuid) => void;
-  confirmed: Uuid | null;
-  repeat: ReturnType<typeof useRepeatLog>;
-}) {
-  const { colors, spacing, type } = useTheme();
-  const segments = useMemo(() => segmentMeals(day.meals), [day.meals]);
-
-  const rowProps = (log: FoodLog) => ({
-    onOpen,
-    onRepeat,
-    onDelete,
-    onAskDelete,
-    onLongPress,
-    sending: repeat.isPending && repeat.variables === log.id,
-    confirmed: confirmed === log.id,
-    error:
-      repeat.isError && repeat.variables === log.id ? describeError(repeat.error) : null,
-  });
-
-  return (
-    <View style={{ gap: spacing.sm }}>
-      {/* The heading ListGroup used to print via its own `title` prop, moved
-          out here now that a day can hold more than one surface: it names
-          the day once, above all of them, rather than repeating per run or
-          being unreachable for a day that opens on a photo. */}
-      <Text style={[type.labelSoft, { color: colors.muted, paddingHorizontal: spacing.xs }]}>
-        {`${day.heading} · ${formatNumber(day.total)} kcal`}
-      </Text>
-
-      <View style={{ gap: spacing.md }}>
-        {segments.map((segment, index) =>
-          segment.kind === 'photo' ? (
-            <PhotoMealRow key={segment.item.id} log={segment.item} last {...rowProps(segment.item)} />
-          ) : (
-            <ListGroup key={`group-${index}`}>
-              {segment.items.map((log, i) => (
-                <MealRow
-                  key={log.id}
-                  log={log}
-                  last={i === segment.items.length - 1}
-                  {...rowProps(log)}
-                />
-              ))}
-            </ListGroup>
-          ),
-        )}
-      </View>
-    </View>
-  );
-}
 
 /**
  * The diary list.
@@ -317,15 +215,8 @@ function DiaryList({
         </Text>
       ) : null
     }
-    /* A full step between days, against hairlines inside one, so a day
-       reads as a group before a single word of it is read.
-
-       Section 4 says a section heading should be `title`, and these are
-       the group's own quieter label instead. The reason: a date is not a
-       headline, it is the coordinate the meals under it share, and at 21pt
-       it would outweigh every dish name on the screen. The grouping is
-       already carried by the surface and the space around it, so the
-       heading only has to name the day and say what it came to. */
+    // A full step between days, against hairlines inside one, so a day
+    // reads as a group before a single word of it is read.
     renderItem={({ item: day }) =>
       numColumns > 1 ? (
         // flex: 1 so two cards in a row share it evenly rather than each
