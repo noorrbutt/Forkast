@@ -76,12 +76,14 @@ function readToday(today: Today) {
           ? 'Right on target, 0 kcal left'
           : `${formatNumber(remaining)} kcal left`;
 
+  // The ring's own key, one short line under it. It used to be a full
+  // sentence explaining net calories, under a status line, under a figure: three
+  // readings of one question. With "left" as the figure, this only has to say
+  // which number the ring is measuring, which section 9 still requires.
   const measures =
     target === null
       ? 'No daily target yet, so there is nothing to measure this against.'
-      : today.burned > 0
-        ? 'The ring measures net calories, what you ate less what you burned, against your daily target.'
-        : 'The ring measures net calories against your daily target. Nothing burned logged today, so net is what you ate.';
+      : `${formatNumber(today.net)} net of ${formatNumber(target)} kcal target`;
 
   // What the ring itself announces, once, rather than leaving a screen
   // reader to stitch the figure, the status line and the caption together
@@ -98,8 +100,13 @@ function readToday(today: Today) {
     status,
     measures,
     accessibilityLabel,
-    figure: formatNumber(today.net),
-    caption: target === null ? 'kcal today' : `of ${formatNumber(target)} kcal today`,
+    // What is left is the hero, because it is the number someone opens the app
+    // to see. Past the target it is how far past, and the caption says "over"
+    // in words so the colour is never the only carrier. With no target there
+    // is nothing to be left of, so the day's own figure stands in.
+    figure:
+      remaining === null ? formatNumber(today.net) : formatNumber(Math.abs(remaining)),
+    caption: remaining === null ? 'kcal today' : over ? 'kcal over' : 'kcal left',
   };
 }
 
@@ -257,18 +264,9 @@ function TodayHero({
           </Ring>
         )}
 
-        <View style={{ alignItems: 'center', gap: spacing.xs }}>
-          {reading.status ? (
-            <Text
-              style={[type.title, { color: reading.over ? colors.danger : colors.text }]}
-            >
-              {reading.status}
-            </Text>
-          ) : null}
-          <Text style={[type.caption, { color: colors.muted, textAlign: 'center' }]}>
-            {reading.measures}
-          </Text>
-        </View>
+        <Text style={[type.caption, { color: colors.muted, textAlign: 'center' }]}>
+          {reading.measures}
+        </Text>
 
         {/* Centred, because everything above it in this block is: the ring, the
             status line and the caption all sit on the column's centre line, and a

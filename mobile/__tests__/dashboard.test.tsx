@@ -245,12 +245,24 @@ describe('hierarchy', () => {
   it('puts exactly one element at the reserved hero size', async () => {
     const screen = await open(UNDER);
 
-    // 1,600 is the net, which is the number the ring measures. Twice at this
-    // size is a rule violation rather than a judgement call.
+    // 400 is what is left of the target, the number someone opens the app to
+    // see. Twice at this size is a rule violation rather than a judgement call.
     const hero = textSizes(screen).filter((size) => size >= 44);
 
     expect(hero).toEqual([type.hero.fontSize]);
-    expect(screen.getByText('1,600')).toBeTruthy();
+    expect(flat(screen.getByText('400').props.style).fontSize).toBe(type.hero.fontSize);
+    expect(screen.getByText('kcal left')).toBeTruthy();
+  });
+
+  it('answers with one hero number, not three competing ones', async () => {
+    const screen = await open(UNDER);
+
+    // Net and target are still on screen, but in one caption-size line rather
+    // than as a figure plus a title-size status plus an explanatory sentence.
+    const key = screen.getByText('1,600 net of 2,000 kcal target');
+    expect(flat(key.props.style).fontSize).toBe(type.caption.fontSize);
+    expect(screen.queryByText('400 kcal left')).toBeNull();
+    expect(screen.queryByText(/The ring measures/)).toBeNull();
   });
 
   it('leaves a full step of the scale between the hero and whatever is second', async () => {
@@ -294,7 +306,7 @@ describe('the ring', () => {
     const screen = await open(UNDER);
 
     // A meter that moves for an unexplained reason is worse than no meter.
-    expect(screen.getByText(/The ring measures net calories/)).toBeTruthy();
+    expect(screen.getByText(/net of 2,000 kcal target/)).toBeTruthy();
   });
 
   it('draws no ring when there is no target, and offers to set one', async () => {
@@ -312,15 +324,17 @@ describe('the ring', () => {
     const screen = await open(UNDER);
 
     expect(screen.UNSAFE_queryAllByType(Svg)).toHaveLength(1);
-    expect(screen.getByText('400 kcal left')).toBeTruthy();
+    expect(screen.getByText('kcal left')).toBeTruthy();
   });
 
   it('reads as over in words, not only in colour', async () => {
     const screen = await open(OVER);
 
-    expect(screen.getByText('Over by 200 kcal')).toBeTruthy();
-    expect(screen.getByText(/over/i)).toBeTruthy();
-    expect(screen.getByText('2,200')).toBeTruthy();
+    // 200 over, at hero size. (200 burned is also on screen, at displaySm.)
+    const sizes = screen.getAllByText('200').map((node) => flat(node.props.style).fontSize);
+    expect(sizes).toContain(type.hero.fontSize);
+    expect(screen.getByText('kcal over')).toBeTruthy();
+    expect(screen.getByText('2,200 net of 2,000 kcal target')).toBeTruthy();
   });
 });
 

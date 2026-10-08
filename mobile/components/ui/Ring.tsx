@@ -28,6 +28,15 @@ const START = 130;
 const THICKNESS = 14;
 
 /**
+ * The empty track, at under half the fill's weight.
+ *
+ * At equal weight, a morning with 300 kcal eaten was a ring drawn mostly in
+ * grey: the part of the day not yet used outweighed the reading itself. A
+ * thinner track keeps the scale visible while the fill is what the eye lands on.
+ */
+const TRACK_THICKNESS = 6;
+
+/**
  * A meter, drawn as a ring.
  *
  * Deliberately not a donut chart. A donut compares segments against each other
@@ -100,7 +109,7 @@ export function Ring({ value, max, size = 220, children, accessibilityLabel }: R
               cy={size / 2}
               r={radius}
               stroke={colors.meterTrack}
-              strokeWidth={THICKNESS}
+              strokeWidth={TRACK_THICKNESS}
               strokeLinecap="round"
               fill="none"
               strokeDasharray={`${trackLength} ${circumference}`}
