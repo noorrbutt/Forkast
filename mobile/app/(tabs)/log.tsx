@@ -12,98 +12,14 @@ import { SERVING_SIZES } from '../../lib/types';
 import { useTheme } from '../../theme';
 
 /**
- * Logging a meal, and the one screen state that follows it.
+ * Logging a meal: capture, then confirm or manual entry, then the saved state.
  *
- * THE ONE THING, while the form is being filled in: the question "What did you
- * eat?" at `display`, with the two controls that answer it directly underneath.
- * Everything below that is a step of the type scale quieter and a step of the
- * spacing scale closer together.
- *
- * THE ONE THING, once the meal is saved: the estimate, as the only `hero` in
- * this file. The two states are mutually exclusive renders of one component, so
- * the screen still only ever shows one hero.
- *
- * Section 13 critique of what this replaced.
- *
- * 1. What it was. One capped column holding fifteen top level blocks at a
- *    single gap of 24: four cards, four text fields, two pickers and four rows
- *    of chips, each of the last five introduced by a heading with an icon
- *    beside it. Nothing on it was larger than 16 until the meal had been saved.
- *
- * 2. Which rules it broke.
- *    - Section 2 contrast, and the first composition line of Section 14: the
- *      largest type anywhere on the form was `subtitle` at 16, which is also
- *      what every field label, chip and button used. The gap between the first
- *      and second element was zero steps against a floor of one full step, so
- *      there was nothing for the eye to land on and no honest answer to "what
- *      is the one thing".
- *    - Section 10: an icon beside all seven headings, through the local
- *      IconLabel helper. Estimated, How a log works, Matches, Rating, Fun
- *      scale, Who was there and Serving size.
- *    - Section 6: four cards on a screen that is one task. The explainer card,
- *      the matches card and both empty states were surfaces around content that
- *      needed no surface of its own, and a card around a chip row is what turns
- *      a form into a stack.
- *    - Section 3 usability: the primary action shipped `disabled={!canSubmit}`.
- *      The guide names this exactly, "MUST NOT disable the primary action of a
- *      form until the form is valid", and calls hiding the affordance behind
- *      the action it invites the worst version of it.
- *    - Section 5: all fifteen blocks were separated by the same 24, so the gap
- *      inside a group equalled the gap around it and the grouping said nothing.
- *      Serving size sat four blocks away from the category even though those
- *      two together are the whole calorie estimate.
- *    - Section 10 again: both empty states passed an icon to `Empty`, which
- *      draws it on a 56pt accent disc.
- *    - Section 12: the header wore "Nice one" as an eyebrow, which does no job.
- *
- * 3. What the one thing is now. The question the form asks, at 48 over a body
- *    line that says how the estimate is arrived at, with 32 of space beneath it
- *    against 24 everywhere else. After a save it is the estimate at 64, alone
- *    in the top third with 48 above and below it.
- *
- * 4. What was demoted or cut, and why that is correct.
- *    Demoted: the seven headings. Four became the same 12/500 sentence case
- *    label that Field and Select already print above themselves, because a row
- *    of chips is a question of exactly the same rank as a text input and
- *    dressing it as a section made every question look like a section. The
- *    other three are gone: search results under a search field, and a photo
- *    picker with a photo in it, are obvious from their content.
- *    Demoted: the form itself, from fifteen blocks to four groups, "what you
- *    ate", "where you ate it", "how it was" and the photo, with serving size
- *    moved up beside the category it scales.
- *    Cut: the three step explainer card, replaced by one line under the
- *    question that stays put rather than vanishing at the first tap, and the
- *    two `Empty` cards, replaced by a sentence and the one button that fixes
- *    the situation.
- *
- * A third state, ahead of both of the above: the camera. This screen used to
- * open directly on the form; it now opens on a capture screen instead, since a
- * photo is the fastest way to log a meal and typing one in is the deliberate
- * fallback rather than the default. The one thing there is the same question
- * this screen has always asked, "What did you eat?", answered by a button
- * instead of a field. A photo hands back a guess with no category attached to
- * it yet, so it opens a fourth state, confirm, which is deliberately not a
- * second copy of the form: it shows only what a photo can answer for itself
- * (the dish, a portion, a calorie preview) plus the fastest way to pick a
- * category, which is the same dish search the form already has, run against
- * the guess instead of against what someone typed. Saving from there still
- * goes through the exact same submit() and the exact same POST /logs the form
- * uses, so a photo-confirmed meal and a typed one are priced identically.
- *
- * Why the estimate is NOT a hero on the form.
- *
- * It was the obvious candidate and it is the wrong call twice over. The number
- * does not exist yet: the server picks a value inside the category's range and
- * only then multiplies it by the serving size, so the most the client can
- * honestly say before submitting is a range. The style guide requires a hero to
- * be a number or a short headline, and a range is neither. Second, a 64pt
- * figure that appears only once a category is chosen would take the top of the
- * hierarchy away from the controls mid task and shove every remaining field
- * down under the reader's finger at the moment they are using it. The range
- * lives where it is acted on instead, as the hint under the category picker,
- * which is also what this screen's tests assert. Once the meal is saved the
- * number is real and the screen has nothing else to say, and that is where the
- * hero goes.
+ * The screen opens on the camera because a photo is the fastest way to log a
+ * meal; typing it in is the deliberate fallback. A photo hands back a guess
+ * with no category, so it leads to ConfirmEstimate rather than straight to a
+ * save. Every step reads and writes the same useLogForm state and saves
+ * through the same submit(), so a photo-confirmed meal and a typed one are
+ * priced identically.
  */
 
 /**
