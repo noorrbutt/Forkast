@@ -5,7 +5,7 @@ import { EstimateBadge } from '../ui';
 import { usePhotoSource } from '../../hooks/usePhoto';
 import { formatNumber } from '../../lib/format';
 import { useTheme } from '../../theme';
-import { elevation } from '../../theme/tokens';
+import { elevation, photoScrim } from '../../theme/tokens';
 import { MealActions } from './MealActions';
 import { RefinedTag, useJustRefined } from './MealBadges';
 import { mealMeta, type MealRowProps } from './rowProps';
@@ -22,18 +22,20 @@ const ABSOLUTE_FILL = {
   bottom: 0,
 };
 
+const PHOTO_HEIGHT = 240;
+
 /**
  * A meal WITH a photo. Full width, taller, the picture doing the work a
  * 64pt square never could: dish name, figure and meta sit over the bottom of
  * the image itself rather than beside a thumbnail of it.
  *
- * The gradient uses `colors.scrim`, the same token a modal backdrop sits on,
- * not a one-off value invented here: the job is identical, making whatever is
- * under a dark layer readable against it. What changes is what sits under it,
- * a photograph instead of a screen, so the white text on top is a fixed
- * value rather than a theme token -- a photo carries its own colours and
- * `colors.text`, tuned to sit on this app's own two backgrounds, has no
- * reason to be legible against someone's dinner.
+ * The gradient is `photoScrim` from tokens, fixed across themes, because what
+ * sits under it is a photograph rather than a screen. It used to borrow the
+ * modal `scrim`, which on light is only 42% black and left white text near 2:1
+ * over a white plate. The white text on top is a fixed value for the same
+ * reason -- a photo carries its own colours and `colors.text`, tuned to sit on
+ * this app's own two backgrounds, has no reason to be legible against
+ * someone's dinner.
  */
 export function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDelete, onLongPress, sending, confirmed, error }: MealRowProps) {
   const { colors, isDark, radius, spacing, type } = useTheme();
@@ -81,11 +83,14 @@ export function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDelet
               }}
               style={({ pressed }) => ({ opacity: pressed ? 0.92 : 1 })}
             >
-              {/* Capped rather than left to a fixed 4:3, which on a wide phone or a
-                  tablet's column made this card taller than the meal it was
-                  showing warranted -- the photo is here to be recognised, not to
-                  be the biggest thing on the screen. */}
-              <View style={{ width: '100%', aspectRatio: 4 / 3, maxHeight: 240 }}>
+              {/* A fixed height rather than a 4:3 ratio capped by maxHeight.
+                  The photo is here to be recognised, not to be the biggest
+                  thing on the screen, so it stops at 240. But a ratio plus a
+                  height cap made layout honour the ratio by shrinking the
+                  WIDTH to 320 once the cap bound, which on any phone wider
+                  than that left a dark strip of card down the right edge.
+                  240 is what every phone already got. */}
+              <View style={{ width: '100%', height: PHOTO_HEIGHT }}>
                 {photo ? (
                   <Image
                     source={photo}
@@ -99,10 +104,10 @@ export function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDelet
                     food itself should read clearly, and the gradient exists solely
                     to buy the two lines of text at the bottom their contrast. */}
                 <LinearGradient
-                  colors={['transparent', colors.scrim]}
+                  colors={[...photoScrim.colors]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 0, y: 1 }}
-                  locations={[0.4, 1]}
+                  locations={[...photoScrim.locations]}
                   style={ABSOLUTE_FILL}
                 />
 

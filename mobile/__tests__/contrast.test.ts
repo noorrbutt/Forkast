@@ -15,7 +15,15 @@
  * rule the secondary button was failing.
  */
 
-import { heroWash, palettes, series, split, type Palette, type ThemeName } from '../theme/tokens';
+import {
+  heroWash,
+  palettes,
+  photoScrim,
+  series,
+  split,
+  type Palette,
+  type ThemeName,
+} from '../theme/tokens';
 
 /**
  * A colour as channels, from either notation the palette uses.
@@ -299,6 +307,21 @@ describe('the calorie chart', () => {
 
   it.each(THEMES)('%s: the target line clears the mark floor on a card', (theme) => {
     expect(ratio(palettes[theme].text, palettes[theme].surface)).toBeGreaterThanOrEqual(SHAPE);
+  });
+});
+
+describe('white text over a meal photo', () => {
+  it('stays readable over a white plate from where the dish name can start', () => {
+    // Measured against the worst photo there is, pure white, at the middle stop
+    // and at the bottom. Above the middle stop there is no text.
+    const middle = photoScrim.colors[1];
+    const bottom = photoScrim.colors[2];
+    expect(ratio('#FFFFFF', over(middle, '#FFFFFF'))).toBeGreaterThanOrEqual(TEXT);
+    expect(ratio('#FFFFFF', over(bottom, '#FFFFFF'))).toBeGreaterThanOrEqual(TEXT);
+  });
+
+  it('was not readable on the modal scrim it used to borrow, on light', () => {
+    expect(ratio('#FFFFFF', over(palettes.light.scrim, '#FFFFFF'))).toBeLessThan(TEXT);
   });
 });
 

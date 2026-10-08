@@ -242,6 +242,20 @@ export const googleMark = {
 } as const;
 
 /**
+ * The dark fade under white text laid over a meal photo.
+ *
+ * Not `scrim`, and the same in both themes. `scrim` is a modal backdrop, and
+ * on light it is only 42% black, which over a white plate left white text near
+ * 2:1. What sits under this is a photograph, which has no theme, so the fade
+ * is fixed: by 60% of the way down, where the dish name's first line can
+ * start, it is dark enough that white clears 4.5:1 over pure white.
+ */
+export const photoScrim = {
+  colors: ['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0.55)', 'rgba(0, 0, 0, 0.75)'],
+  locations: [0.3, 0.6, 1],
+} as const;
+
+/**
  * The wash behind the one number a screen leads with.
  *
  * The reference apps get most of their warmth from a soft colour field sitting
