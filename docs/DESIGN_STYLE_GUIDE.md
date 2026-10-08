@@ -12,14 +12,25 @@ measurement or a bug that shipped, the reason is given next to it.
 Rules marked **MUST** are enforceable and checkable. Rules marked **SHOULD** need
 a stated reason to break, written in a comment at the call site.
 
-The core idea running through all of it: a screen should have one clear focal
-point, with everything else visibly secondary. Equal weight everywhere -- a
-uniform stack of identical cards with nothing for the eye to land on -- is the
-failure mode most of these rules exist to prevent.
+Section numbers are stable and are referenced from code comments ("section
+10" and so on), so a new section goes at the end rather than renumbering.
 
 ---
 
-## 1. The seven design principles, for Forkast
+## 1. The core idea
+
+A screen has one clear focal point, and everything else is visibly secondary.
+The reader should be able to say what they saw first, second and third, and
+agree with what was intended.
+
+**The failure mode most of these rules exist to prevent: equal weight
+everywhere** -- a vertical stack of same size rounded cards with centred text
+and nothing for the eye to land on first. That is what a screen looks like when
+it is assembled card by card instead of composed as a whole.
+
+---
+
+## 2. The seven design principles, for Forkast
 
 Not dictionary definitions. What each one means on these screens.
 
@@ -63,7 +74,7 @@ The same idea looks the same everywhere. This is why a design system exists.
 Related things sit together; unrelated things get space, not a border.
 
 - **MUST** Group with space first. Reach for a card only when a group needs a
-  surface of its own (Section 5).
+  surface of its own (Section 6).
 - **MUST** Spacing inside a group is always smaller than the spacing around it.
   If the gap inside equals the gap outside, the grouping says nothing.
 
@@ -86,7 +97,7 @@ Space is the cheapest way to say something is important.
 
 ---
 
-## 2. The seven usability heuristics, for Forkast
+## 3. The seven usability heuristics, for Forkast
 
 A screen can look right and still be hard to use, or be usable and still read
 poorly. Both bars must clear.
@@ -138,7 +149,7 @@ poorly. Both bars must clear.
 
 ---
 
-## 3. Type
+## 4. Type
 
 One family. Weight, size and space do the work.
 
@@ -186,7 +197,7 @@ form guidance independently puts a dashboard hero figure at 48px or more.
 
 ---
 
-## 4. Space
+## 5. Space
 
 All spacing comes from `spacing` in tokens. No literal numbers in a screen.
 
@@ -209,7 +220,7 @@ All spacing comes from `spacing` in tokens. No literal numbers in a screen.
 
 ---
 
-## 5. Composition: focal or list
+## 6. Composition: focal or list
 
 
 ### Lead with one focal element when
@@ -279,7 +290,7 @@ top of a page".
 
 ---
 
-## 6. Emphasis and asymmetry
+## 7. Emphasis and asymmetry
 
 - **MUST NOT** Give every element equal visual space by default. Equal weight
   everywhere is the failure mode this document exists to prevent.
@@ -291,7 +302,7 @@ top of a page".
 
 ---
 
-## 7. Colour, and what each colour's job is
+## 8. Colour, and what each colour's job is
 
 Every colour does exactly one job. Tokens only, never a literal hex in a screen.
 
@@ -394,7 +405,7 @@ the card: visible as a mark without claiming a meaning it does not have.
 
 ---
 
-## 8. Data display
+## 9. Data display
 
 - **A single current value** is a figure with its label, at `numeral`. The number
   is the chart. Not a one bar bar chart. There is no `StatTile` component any
@@ -425,7 +436,7 @@ glance; donuts are an anti pattern for comparing close values, which this is not
 
 ---
 
-## 9. Icons and imagery
+## 10. Icons and imagery
 
 ### Icons: where they are used today
 
@@ -479,7 +490,7 @@ below follows from that one sentence.
 
 ---
 
-## 10. Motion
+## 11. Motion
 
 - **MUST** Motion answers an action. Opening, expanding, confirming, selecting.
 - **MUST NOT** Fade and slide up every section on mount. That is the generic
@@ -490,7 +501,7 @@ below follows from that one sentence.
 
 ---
 
-## 11. Words
+## 12. Words
 
 - Sentence case everywhere except the tab bar.
 - A button says what happens: "Log this meal", not "Submit".
@@ -503,7 +514,17 @@ below follows from that one sentence.
 
 ---
 
-## 12. The checklist
+## 13. Reworking a screen
+
+When a screen is redesigned, the before-and-after reasoning (what it was, which
+rules it broke, what leads now) belongs in the commit message, where it is tied
+to the diff that acted on it. The code keeps only what a future reader needs:
+a short top-of-file note on what the screen leads with and why, and comments at
+the specific call sites where a rule is deliberately bent.
+
+---
+
+## 14. The checklist
 
 A screen is not done until every line passes.
 
@@ -548,7 +569,7 @@ A screen is not done until every line passes.
 
 ---
 
-## 13. Amending this document
+## 15. Amending this document
 
 When a screen genuinely needs something this guide forbids, change the guide
 first, with the reason, and then the screen. A rule with a growing list of

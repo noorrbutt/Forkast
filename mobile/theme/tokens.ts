@@ -384,7 +384,7 @@ export const type = {
    *
    * The component that renders this steps the size down for long values and
    * large system text, so the rule lives in one place rather than in every
-   * caller. See docs/DESIGN_STYLE_GUIDE.md section 3.
+   * caller. See docs/DESIGN_STYLE_GUIDE.md section 4.
    */
   hero: {
     fontFamily: FAMILY.light,
@@ -476,7 +476,7 @@ export const type = {
   /** 11 / uppercase / letterSpacing 1. Always paired with the muted colour. */
   /**
    * 11 / 600 uppercase. RESTRICTED: the tab bar and chart axis or legend text
-   * only. See docs/DESIGN_STYLE_GUIDE.md section 3. Anywhere else it is the eyebrow
+   * only. See docs/DESIGN_STYLE_GUIDE.md section 4. Anywhere else it is the eyebrow
    * this app is trying to stop wearing.
    */
   label: {
