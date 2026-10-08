@@ -13,12 +13,13 @@ requests being answered by the wrong server rather than as a bind error.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import inspect
 import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
@@ -256,14 +257,34 @@ async def ready() -> dict[str, str]:
 
 
 @app.get("/queue", tags=["meta"])
-async def queue(session: SessionDep) -> dict[str, Any]:
+async def queue(
+    session: SessionDep, x_metrics_token: str | None = Header(default=None)
+) -> dict[str, Any]:
     """Jobs queue depth, for whoever is watching the worker.
 
     Pending is the backlog (by kind too, since a refinement backlog and an
     email backlog mean different things), dead_letter is what gave up and
-    needs a person. Unauthenticated like /ready, and like it carries counts
-    only: no payloads, which can hold one-time links.
+    needs a person. No payloads -- only counts, never a one-time link -- but
+    counts are still live internal state, not a fixed shape every caller
+    gets alike the way /ready's is, so this is not actually "unauthenticated
+    like /ready" the way it first looked: a stranger who finds the URL gets
+    a free read into another account's dead-letter and breaker state.
+
+    Gated on METRICS_TOKEN when one is configured. In production, where
+    METRICS_TOKEN being unset is far more likely an oversight than a
+    deliberate choice to leave this open, that absence fails closed (404)
+    rather than open -- the same reasoning the well-known routes already
+    use for "looks configured but isn't" being worse than a plain 404.
     """
+    token = settings.metrics_token
+    if token is not None:
+        if x_metrics_token is None or not hmac.compare_digest(
+            x_metrics_token, token.get_secret_value()
+        ):
+            raise HTTPException(status_code=404)
+    elif settings.environment is Environment.production:
+        raise HTTPException(status_code=404)
+
     stats = await jobs.queue_stats(session)
     stats["ai_breaker_open"] = await circuit_breaker.is_open(session)
     return stats

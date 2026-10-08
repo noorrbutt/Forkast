@@ -1,0 +1,31 @@
+# A Docker deploy of just `docker build && docker run` (the README's own
+# quickstart) starts the API alone: the jobs table fills with refinement and
+# email rows, the request's own inline attempt handles most of them, and the
+# rest -- a retry after a failure, anything a restart interrupted, a
+# dead-lettered job -- sit there forever with nothing to pick them back up.
+# Same image, same env, a different command: that is the whole difference
+# between the api and worker services below.
+#
+#   docker compose up --build
+#
+# Maintenance (prune, refine-backfill -- see the README's own cron section)
+# is not a service here: both are short-lived, scheduled commands, not a
+# long-running process, and belong on whatever actually runs cron where this
+# is deployed, not inside compose.
+services:
+  api:
+    build: .
+    env_file: .env
+    ports:
+      - "8010:8010"
+    restart: unless-stopped
+
+  worker:
+    build: .
+    env_file: .env
+    # Migrations already ran as part of the api service's own CMD; a second
+    # `alembic upgrade head` racing it on startup is harmless (alembic is
+    # idempotent against a schema already at head) but unnecessary, so the
+    # worker's own entrypoint skips straight to the worker itself.
+    command: python -m app.worker
+    restart: unless-stopped

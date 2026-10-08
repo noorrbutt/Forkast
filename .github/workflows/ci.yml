@@ -17,6 +17,15 @@ jobs:
     name: Backend (pytest + alembic)
     runs-on: ubuntu-latest
 
+    # Both the version README.md recommends for local dev and the one the
+    # Dockerfile/Vercel actually deploy on (backend/.python-version) -- this
+    # job used to run only 3.14, so nothing ever actually ran the suite on
+    # the interpreter production runs until a deploy did.
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.12', '3.14']
+
     services:
       postgres:
         # 18 specifically. The schema calls uuidv7(), which does not exist
@@ -55,7 +64,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: backend/requirements-dev.txt
 

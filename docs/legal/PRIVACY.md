@@ -4,27 +4,25 @@
 Every `[[FILL: ...]]` below is a fact only you can supply. Publishing with any
 of them still in place would itself be a misrepresentation.
 
-**Last updated:** [[FILL: date you publish this]]
+**Last updated:** 2026-10-08
 **Applies to:** the Forkast mobile app and its API.
 
 ---
 
 ## Who is responsible for your data
 
-[[FILL: legal entity name, or your own full name if you are a sole trader]] is
-the data controller for the information described here.
+Noor Butt, operating as an individual (sole trader), is the data controller
+for the information described here.
 
-- **Address:** [[FILL: registered or business address. A postal address is
-  required by GDPR Art. 13 and by both app stores. A PO box is acceptable in
-  most jurisdictions; an email address alone is not.]]
-- **Contact for privacy questions and requests:** [[FILL: email address you
-  will actually monitor]]
-- **Data protection officer:** [[FILL: usually "not appointed, and not required
-  under GDPR Art. 37" for an app this size. Confirm with your lawyer.]]
-- **EU/UK representative:** [[FILL: if you are established outside the EU/UK but
-  offer the app to people in them, GDPR Art. 27 requires a representative
-  inside them unless an exemption applies. This is commonly missed and is
-  enforceable.]]
+- **Address:** [[FILL: postal address -- required by GDPR Art. 13 and by both
+  app stores. A PO box is acceptable in most jurisdictions; an email address
+  alone is not. Not supplied yet.]]
+- **Contact for privacy questions and requests:** noorbbutt@gmail.com
+- **Data protection officer:** Not appointed, and not required under GDPR
+  Art. 37 for an app at this scale.
+- **EU/UK representative:** None appointed. Forkast does not target or
+  market to people in the EU/UK specifically; if that changes, GDPR Art. 27
+  requires appointing one unless an exemption applies.
 
 ## The short version
 
@@ -84,10 +82,12 @@ on your **explicit consent**, which is why the sign-up screen asks for it in a
 box that starts empty, and why you can withdraw it at any time by deleting your
 account.
 
-[[FILL: your lawyer should confirm whether calorie and goal data is Article 9
-health data in your jurisdiction. There is a genuine argument either way for a
-consumer food diary, and the answer changes what you are required to do. Do not
-guess at this one.]]
+Forkast treats this data as Article 9 health data out of caution, even though
+there is a genuine argument either way for a consumer calorie diary (as
+opposed to, say, a clinical nutrition app). This is a deliberately
+conservative default, not a settled legal conclusion -- confirm it with a
+lawyer before relying on it, since the answer changes what you are actually
+required to do.
 
 ### Technical information
 
@@ -148,23 +148,25 @@ States). When, and only when, you tap to generate a plan, Forkast sends Groq:
 This includes the health information described above. It does **not** include
 your name, your email address, your photographs, or your account identifier.
 
-[[FILL: you need a data processing agreement with Groq before you can lawfully
-send them personal data of people in the EU or UK, plus a transfer mechanism for
-sending it to the United States (Standard Contractual Clauses, or reliance on
-the EU-US Data Privacy Framework if Groq is certified under it). Check Groq's
-current terms and confirm with your lawyer. Until this is in place, you should
-either not offer the feature in the EU/UK or not ship the feature at all.]]
+Forkast does not currently operate in, or knowingly offer sign-ups to, the
+EU or UK. Until a data processing agreement with Groq and an appropriate
+international-transfer mechanism (Standard Contractual Clauses, or the
+EU-US Data Privacy Framework if Groq is certified under it) are confirmed in
+place, the meal-plan feature must not be offered to users there. Confirm
+Groq's current terms and this arrangement with a lawyer before changing that.
 
 You can use every other part of Forkast without ever generating a plan.
+
+### Neon, our database host
+
+Forkast's database is hosted by Neon, Inc. in Ohio, United States. Neon is a
+data processor acting on Forkast's instructions and does not use your data
+for its own purposes.
 
 ### Nobody else
 
 Forkast has no other third-party recipients. Your data is not shared with
 advertisers, data brokers, insurers, employers, or social networks.
-
-[[FILL: name your hosting provider and the country your database is in. They are
-a processor and must be disclosed. If the app is not yet hosted anywhere, this
-section has to be written before launch.]]
 
 ## What Forkast is allowed to do with it, legally
 
@@ -195,18 +197,19 @@ if your account has no password, because the action cannot be undone.
 
 Deleting removes your account, every meal you logged, every photograph, your
 burned-calorie entries, your generated plans, and all your sign-in sessions,
-immediately and permanently. There is no recovery period and no backup you can
-be restored from. [[FILL: if you add backups, say how long a deleted account
-survives in them. Saying "immediately and permanently" while nightly backups
-hold it for 30 days is a false statement in a privacy policy.]]
+immediately and permanently from the live database. There is no
+Forkast-side recovery period and no Forkast-side backup you can be restored
+from. Neon, our database host, keeps a short rolling window of
+point-in-time infrastructure backups as a standard part of its service;
+these are not used to restore a deleted account and age out automatically
+on Neon's own schedule, not ours.
 
 Restaurants you were the first to add remain in the shared list of places, with
 their link to you removed. They carry nothing about you.
 
-You can also delete an account without installing the app:
-[[FILL: Google Play has required a web-accessible account deletion route since
-2024 for any app with account creation. You need a public URL that works without
-the app. See docs/legal/STORE_DISCLOSURES.md.]]
+You can also delete an account without installing the app: sign in to the
+web version of Forkast and use Profile → Delete my account from a browser.
+See docs/legal/STORE_DISCLOSURES.md for the current URL.
 
 ## Your rights
 
@@ -224,9 +227,9 @@ than checking.
 - **Withdraw consent.** Turn reminders off, stop asking for plans, or delete the
   account. Withdrawing does not undo what was already done lawfully.
 - **Object, or ask us to restrict processing.** Write to the address above.
-- **Complain.** [[FILL: name the supervisory authority for your country. For the
-  UK this is the Information Commissioner's Office, ico.org.uk. For an EU
-  country it is that country's DPA.]]
+- **Complain.** To the data protection authority in your own country -- for
+  the UK this is the Information Commissioner's Office, ico.org.uk; for an
+  EU country, that country's own DPA.
 
 Californian residents additionally have the rights to know, delete, correct, and
 to opt out of sale or sharing. Forkast does not sell or share personal
@@ -237,9 +240,9 @@ differently for exercising a right.
 ## Children
 
 Forkast is not intended for children, and calorie tracking is not something to
-put in front of one. You must be [[FILL: 16 is the safe default across the EU;
-13 is the US COPPA floor but several EU states set it higher and some set it at
-16. Pick one and enforce it at sign-up.]] or older to use it.
+put in front of one. You must be 13 or older to use it. (13 is the US COPPA
+floor; several EU states set their own age of digital consent higher, up to
+16 -- if Forkast is offered there, confirm the applicable age per country.)
 
 Forkast does not knowingly collect anything from a child under that age. If you
 believe a child has created an account, write to the address above and it will
@@ -259,10 +262,11 @@ SECURITY.md in the repository.
 
 ## Where your data is held
 
-[[FILL: the country your server and database are in, and the country Groq
-processes in (the United States). If you serve anyone in the EU or UK from a
-server outside them, or send their data to Groq, you must name the transfer
-safeguard you rely on.]]
+Your account and diary are stored on servers in Ohio, United States (Neon,
+our database host). Meal plans you generate are processed by Groq, Inc.,
+also in the United States. Forkast does not currently serve the EU or UK
+(see "Groq, when you ask for a meal plan" above), so no international
+transfer safeguard is in place for data from those regions yet.
 
 ## Changes
 
@@ -272,5 +276,5 @@ it. The date at the top always reflects the current version.
 
 ## Contact
 
-[[FILL: email address]]
-[[FILL: postal address]]
+noorbbutt@gmail.com
+[[FILL: postal address -- not supplied yet, required before publishing]]

@@ -30,17 +30,22 @@ export type LegalDocument = {
 /**
  * Where the full, canonical versions live.
  *
- * Empty until they are hosted. The screen hides the "read the full version"
- * link rather than showing one that 404s, which is worse than not offering it.
+ * GitHub's own rendered view of docs/legal/ -- a stable public URL with no
+ * extra hosting to stand up, which is a reasonable canonical home for a
+ * project this size. Requires the repository itself to be public; if it
+ * is not, these links 404 for anyone outside it and need a real host
+ * instead. The screen hides the "read the full version" link rather than
+ * showing one that 404s, which is worse than not offering it -- empty
+ * these back out again if that ever becomes true.
  */
 export const LEGAL_URLS: Record<LegalDocument['slug'], string> = {
-  privacy: '',
-  terms: '',
-  tracking: '',
-  refunds: '',
+  privacy: 'https://github.com/noorrbutt/Forkast/blob/main/docs/legal/PRIVACY.md',
+  terms: 'https://github.com/noorrbutt/Forkast/blob/main/docs/legal/TERMS.md',
+  tracking: 'https://github.com/noorrbutt/Forkast/blob/main/docs/legal/TRACKING.md',
+  refunds: 'https://github.com/noorrbutt/Forkast/blob/main/docs/legal/REFUNDS.md',
 };
 
-export const LAST_UPDATED = 'not yet published';
+export const LAST_UPDATED = '2026-10-08';
 
 const PRIVACY: LegalDocument = {
   slug: 'privacy',

@@ -81,16 +81,52 @@ async def test_fallback_page_escapes_a_token_that_looks_like_markup(
     """The token comes straight off the query string and is untrusted the
     same way any query parameter is. It must never be able to break out of
     either the href attribute or the inline <script> block it also appears
-    in."""
+    in -- and, now that the deep link is built with urlencode() rather than
+    an f-string, it never even reaches the page as raw markup to begin with:
+    percent-encoding neutralises it a step earlier than html.escape() does."""
     hostile = '"><script>alert(1)</script>'
     response = await client.get("/reset-password", params={"token": hostile})
     assert response.status_code == 200
-    # The href attribute's quote is properly escaped, so the token cannot
-    # close it early.
-    assert 'href="forkast://reset-password?token=&quot;&gt;' in response.text
-    # And the </script> inside the token cannot close the real script block
-    # early either, wherever the token appears.
+    # Percent-encoded in the deep link itself, so the raw characters that
+    # would matter for an HTML or script-block escape never appear at all.
+    assert "%22%3E%3Cscript%3Ealert%281%29%3C%2Fscript%3E" in response.text
     assert "<script>alert(1)</script>" not in response.text
+    assert hostile not in response.text
+
+
+async def test_fallback_page_declares_a_nonce_scoped_csp_that_allows_its_own_inline_code(
+    client: AsyncClient,
+) -> None:
+    """SECURITY_HEADERS' blanket default-src 'none' is right for the rest of
+    the API, which serves nothing but JSON, but it blocks this page's own
+    inline <style> and <script> outright -- the page would render unstyled
+    and the auto-redirect into the app would never run. This route sets its
+    own CSP instead (SecurityHeadersMiddleware's setdefault leaves it alone),
+    scoped to a nonce generated fresh per response and attached to both
+    inline tags, not a blanket 'unsafe-inline'."""
+    response = await client.get("/reset-password", params={"token": "abc123"})
+
+    csp = response.headers["content-security-policy"]
+    assert "default-src 'none'" in csp
+
+    nonces = set()
+    for directive in ("style-src", "script-src"):
+        part = next(p for p in csp.split("; ") if p.startswith(directive))
+        nonce = part.removeprefix(f"{directive} 'nonce-").removesuffix("'")
+        assert nonce, f"{directive} carried no nonce"
+        nonces.add(nonce)
+    assert len(nonces) == 1, "style and script should share one nonce per response"
+    (nonce,) = nonces
+
+    assert f'<style nonce="{nonce}">' in response.text
+    assert f'<script nonce="{nonce}">' in response.text
+
+
+async def test_fallback_page_csp_nonce_changes_on_every_response(client: AsyncClient) -> None:
+    first = await client.get("/reset-password", params={"token": "abc123"})
+    second = await client.get("/reset-password", params={"token": "abc123"})
+
+    assert first.headers["content-security-policy"] != second.headers["content-security-policy"]
 
 
 def test_deep_link_helper_falls_back_to_the_custom_scheme_with_no_domain(
