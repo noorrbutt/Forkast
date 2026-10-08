@@ -199,9 +199,17 @@ export const series: Record<ThemeName, string[]> = {
  * separation above 20 in both.
  *
  * Six is a floor rather than a target, and it is only legal alongside a second
- * way of telling the two apart. There are three here: junk is always the top
- * segment, a 2px gap of the surface colour runs between the fills, and the
- * legend pairs each swatch with its word.
+ * way of telling the two apart. There are four here: junk is always the top
+ * segment, a 2px gap of the surface colour runs between the fills, every junk
+ * segment wears a 2px cap in `text`, and the legend pairs each swatch with its
+ * word. The cap is the one a lone bar relies on, since a day of all junk or
+ * none has no stack to read position from.
+ *
+ * Why the chart does not simply use `success` for the clean half, which would
+ * leave one green on the dashboard instead of two: `success` sits at nearly
+ * the same lightness as the junk terracotta, which is the exact failure the
+ * paragraph above describes, and it is the ring's status colour, which a food
+ * category may not borrow (style guide section 8).
  */
 export const split: Record<ThemeName, { junk: string; clean: string }> = {
   dark: { junk: '#D3795E', clean: '#5F952D' },

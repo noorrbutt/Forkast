@@ -387,8 +387,14 @@ point past which adjacent classes blur.
 Only two of the three are a categorical palette. Junk and not junk are the two
 halves of one measure and wear `split`, which is tuned so they separate under
 red-green colour blindness. Burned is a different measure rather than a third
-kind of food, so it wears `outline`, the one grey already held at 3:1 against
-the card: visible as a mark without claiming a meaning it does not have.
+kind of food, so it wears `muted`, a grey that clears 4.5:1 against the card:
+visible as data without claiming a meaning it does not have. It wore
+`outline` first, which only just clears 3:1, and a narrow bar at that contrast
+read as a disabled control.
+
+The daily target is drawn across the chart as a dashed 2px line in `text`. It
+is a reference to read the marks against, not a fourth mark, so it does not
+count against the cap below.
 
 - **MUST** Three marks maximum on the calorie chart. A fourth means the chart is
   answering a second question and wants to be a second chart.
@@ -396,8 +402,10 @@ the card: visible as a mark without claiming a meaning it does not have.
   ring and the meter. A chart splitting one measure in two uses `split`.
 - **MUST** A chart with two or more marks carries a legend, and identity is
   never colour alone. `split` in particular is only legal alongside a second
-  cue: junk is always the top segment, and a 2px surface gap runs between the
-  fills.
+  cue: junk is always the top segment, a 2px surface gap runs between the
+  fills, and every junk segment carries a 2px cap in `text`. The cap is the one
+  that matters on a day that was all junk or none, where there is no stack to
+  read position from and the two fills are about 1.1:1 in luminance.
 - **MUST NOT** Use a second y axis. Ever. Two measures of different scale means
   two charts.
 - **MUST** Text in a chart wears text tokens, never the series colour. A coloured

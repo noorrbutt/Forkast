@@ -678,7 +678,7 @@ export default function DashboardScreen() {
               <Card>
                 <View style={{ gap: spacing.lg }}>
                   <Text style={[type.title, { color: colors.text }]}>Calories by day</Text>
-                  <CalorieBars data={data.calories_by_day ?? []} />
+                  <CalorieBars data={data.calories_by_day ?? []} target={data.today.target} />
                 </View>
               </Card>
 

@@ -422,11 +422,37 @@ describe('the chart', () => {
     expect(lower).toContain(theme.clean.toLowerCase());
   });
 
-  it('gives the bars a scale to be read against', async () => {
+  it('gives the bars a real y axis rather than a caption standing in for one', async () => {
     const screen = await open(UNDER);
 
-    // The tallest eaten day in the fixture.
-    expect(screen.getByText('Tallest bar 2,370 kcal.')).toBeTruthy();
+    // The tallest eaten day is 2,370, so the scale runs to 3,000 in round steps.
+    expect(screen.getByText('1k')).toBeTruthy();
+    expect(screen.getByText('2k')).toBeTruthy();
+    expect(screen.getByText('3k')).toBeTruthy();
+    expect(screen.queryByText(/Tallest bar/)).toBeNull();
+  });
+
+  it('draws the daily target as a line to read the bars against', async () => {
+    const screen = await open(UNDER);
+
+    expect(screen.getByTestId('calorie-target-line')).toBeTruthy();
+    expect(screen.getByText('Daily target')).toBeTruthy();
+  });
+
+  it('draws no target line when there is no target', async () => {
+    const screen = await open(NO_TARGET);
+
+    expect(screen.queryByTestId('calorie-target-line')).toBeNull();
+  });
+
+  it('labels the axis with dates, so a fortnight never names two bars "Fri"', async () => {
+    const screen = await open(UNDER);
+
+    // Fourteen days from Sep 4, a tick every third day.
+    for (const tick of ['Sep 4', 'Sep 7', 'Sep 10', 'Sep 13', 'Sep 16']) {
+      expect(screen.getByText(tick)).toBeTruthy();
+    }
+    expect(screen.queryByText('Fri')).toBeNull();
   });
 });
 

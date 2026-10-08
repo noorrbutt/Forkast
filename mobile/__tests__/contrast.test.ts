@@ -15,7 +15,7 @@
  * rule the secondary button was failing.
  */
 
-import { heroWash, palettes, series, type Palette, type ThemeName } from '../theme/tokens';
+import { heroWash, palettes, series, split, type Palette, type ThemeName } from '../theme/tokens';
 
 /**
  * A colour as channels, from either notation the palette uses.
@@ -271,6 +271,34 @@ describe('the data series palette', () => {
         expect(color.toLowerCase()).not.toBe(p.danger.toLowerCase());
       }
     }
+  });
+});
+
+describe('the calorie chart', () => {
+  it.each(THEMES)('%s: junk and everything else cannot be told apart by luminance', (theme) => {
+    // Recorded rather than fixed: the pair is tuned for hue separation under
+    // colour blindness, and lands near 1.1:1 in luminance. This is why a lone
+    // bar (a day that was all junk or none) needs the ink cap, and if the pair
+    // is ever retuned past 3:1 the cap becomes optional and this says so.
+    expect(ratio(split[theme].junk, split[theme].clean)).toBeLessThan(SHAPE);
+  });
+
+  it.each(THEMES)('%s: the junk cap is visible against the card it sits on', (theme) => {
+    // The cue that does not depend on hue: a 2px line of text ink on top of
+    // every junk segment.
+    expect(ratio(palettes[theme].text, palettes[theme].surface)).toBeGreaterThanOrEqual(SHAPE);
+  });
+
+  it.each(THEMES)('%s: the burned bar reads as data, not as a disabled control', (theme) => {
+    // It wore `outline`, which only just clears 3:1 and looked switched off.
+    // `muted` clears the text floor on a card.
+    const p = palettes[theme];
+    expect(ratio(p.muted, p.surface)).toBeGreaterThanOrEqual(TEXT);
+    expect(ratio(p.muted, p.surface)).toBeGreaterThan(ratio(p.outline, p.surface));
+  });
+
+  it.each(THEMES)('%s: the target line clears the mark floor on a card', (theme) => {
+    expect(ratio(palettes[theme].text, palettes[theme].surface)).toBeGreaterThanOrEqual(SHAPE);
   });
 });
 

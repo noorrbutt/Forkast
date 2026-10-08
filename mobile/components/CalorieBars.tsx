@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native';
 
-import { formatNumber, shortDay } from '../lib/format';
+import { formatDate, formatNumber } from '../lib/format';
 import type { CaloriesByDay } from '../lib/types';
 import { split, useTheme } from '../theme';
 
@@ -39,8 +39,22 @@ const DAY_INSET = 3;
 /** So a small but non zero day still draws a mark. A zero day draws nothing. */
 const MIN_MARK = 2;
 
-/** At most this many ticks on the axis, whatever the window length. */
-const MAX_TICKS = 7;
+/**
+ * At most this many ticks on the axis, whatever the window length.
+ *
+ * Five, not seven, now that a tick is a date ("Sep 24") rather than a weekday
+ * ("Thu"): seven dates do not fit across a phone without wrapping.
+ */
+const MAX_TICKS = 5;
+
+/** Room for the y axis labels to the left of the plot. */
+const Y_GUTTER = 36;
+
+/** The target line's weight. Section 9's 2px line. */
+const TARGET_LINE = 2;
+
+/** The ink cap on a junk segment. Same 2px. */
+const JUNK_CAP = 2;
 
 /**
  * One day per column: what was eaten, split by whether it was junk, and what
@@ -58,7 +72,14 @@ const MAX_TICKS = 7;
  * No chart library. It keeps the bundle small and lets the marks inherit the
  * same radius language as everything else.
  */
-export function CalorieBars({ data }: { data: CaloriesByDay[] }) {
+export function CalorieBars({
+  data,
+  target,
+}: {
+  data: CaloriesByDay[];
+  /** The daily target, drawn as a reference line. Null or zero draws none. */
+  target?: number | null;
+}) {
   const { colors, isDark, layout, radius, spacing, type } = useTheme();
   const half = isDark ? split.dark : split.light;
 
@@ -77,15 +98,21 @@ export function CalorieBars({ data }: { data: CaloriesByDay[] }) {
     ...data.map((entry) => Math.max(entry.calories ?? 0, entry.burned ?? 0)),
   );
 
-  // Thin the ticks rather than the labels. Shrinking or clipping a weekday name
-  // is how "Maintain" became "Maint...", so a label is either drawn in full or
-  // not drawn at all.
+  // The target is drawn on the same scale, so the scale has to reach it even
+  // on a fortnight that never came near it.
+  const goal = target !== null && target !== undefined && target > 0 ? target : null;
+  const { top, gridlines } = scaleFor(Math.max(peak, goal ?? 0));
+
+  // Thin the ticks rather than the labels. Shrinking or clipping a date is how
+  // "Maintain" became "Maint...", so a label is either drawn in full or not
+  // drawn at all.
   const step = Math.max(1, Math.ceil(data.length / MAX_TICKS));
   const chunks: CaloriesByDay[][] = [];
   for (let i = 0; i < data.length; i += step) chunks.push(data.slice(i, i + step));
 
   const heightOf = (value: number) =>
-    value <= 0 ? 0 : Math.max(MIN_MARK, (value / peak) * CHART_HEIGHT);
+    value <= 0 ? 0 : Math.max(MIN_MARK, (value / top) * CHART_HEIGHT);
+  const offsetOf = (value: number) => (value / top) * CHART_HEIGHT;
 
   /**
    * Clamped to the day's total, rather than trusted.
@@ -115,20 +142,21 @@ export function CalorieBars({ data }: { data: CaloriesByDay[] }) {
    * kcal day of none is the same bar otherwise.
    *
    * Burned stays neutral on purpose. It is a different measure rather than a
-   * third category of food, and outline is the one grey held at 3:1 against the
-   * card, so the mark is visible without claiming a meaning it does not have.
+   * third category of food, so it is grey rather than a hue. It wears `muted`
+   * rather than `outline`: outline only just clears 3:1 against the card, and
+   * a narrow bar at that contrast read as a disabled control rather than data.
    */
   const series = [
-    { key: 'junk', label: 'Junk', color: half.junk },
-    { key: 'clean', label: 'Everything else', color: half.clean },
-    { key: 'burned', label: 'Burned', color: colors.outline },
+    { key: 'junk', label: 'Junk', color: half.junk, cap: true },
+    { key: 'clean', label: 'Everything else', color: half.clean, cap: false },
+    { key: 'burned', label: 'Burned', color: colors.muted, cap: false },
   ];
 
   return (
     <View style={{ gap: spacing.md }}>
       {/* Identity is the swatch plus the word, never the colour alone, and the
           words wear a text token rather than the colour of their series. */}
-      {/* Wraps. Three entries, one of them reading "Everything else", do not
+      {/* Wraps. Four entries, one of them reading "Everything else", do not
           fit across a narrow phone once the system text size goes up, and a
           legend that runs off the card explains nothing. */}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg }}>
@@ -137,105 +165,214 @@ export function CalorieBars({ data }: { data: CaloriesByDay[] }) {
             key={entry.key}
             style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}
           >
-            <View
-              style={{
-                width: spacing.md,
-                height: spacing.md,
-                borderRadius: radius.pill,
-                backgroundColor: entry.color,
-              }}
-            />
+            {/* A small bar rather than a dot, so the junk swatch can carry the
+                same ink cap the junk segments do. */}
+            <View style={{ width: spacing.sm + 2, height: spacing.md }}>
+              {entry.cap ? <JunkCap color={colors.text} /> : null}
+              <View
+                style={{
+                  flex: 1,
+                  backgroundColor: entry.color,
+                  borderTopLeftRadius: entry.cap ? 0 : radius.pill,
+                  borderTopRightRadius: entry.cap ? 0 : radius.pill,
+                }}
+              />
+            </View>
             <Text style={[type.caption, { color: colors.muted }]}>{entry.label}</Text>
           </View>
         ))}
+        {goal !== null ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+            <View
+              style={{
+                width: spacing.md,
+                borderTopWidth: TARGET_LINE,
+                borderStyle: 'dashed',
+                borderColor: colors.text,
+              }}
+            />
+            <Text style={[type.caption, { color: colors.muted }]}>Daily target</Text>
+          </View>
+        ) : null}
       </View>
 
       <View
         // Collapsed into one reading. Fourteen days announced column by column
         // is a minute of speech that tells nobody the shape of the fortnight.
         accessible
-        accessibilityLabel={`Calories by day, ${data.length} ${data.length === 1 ? 'day' : 'days'}. Each day splits into junk and everything else, with burned beside it on the same scale. ${totalJunk === 0 ? 'No junk in this window.' : `${Math.round((totalJunk / totalEaten) * 100)} percent junk across the window.`} Tallest bar ${formatNumber(peak)} kcal.`}
+        accessibilityLabel={`Calories by day, ${data.length} ${data.length === 1 ? 'day' : 'days'}. Each day splits into junk and everything else, with burned beside it on the same scale. ${totalJunk === 0 ? 'No junk in this window.' : `${Math.round((totalJunk / totalEaten) * 100)} percent junk across the window.`} Tallest bar ${formatNumber(peak)} kcal.${goal !== null ? ` Daily target ${formatNumber(goal)} kcal.` : ''}`}
         style={{ gap: spacing.sm }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: CHART_HEIGHT }}>
-          {data.map((entry, index) => (
-            <View
-              key={`bars-${entry.day}-${index}`}
-              style={{
-                flex: 1,
-                height: '100%',
-                paddingHorizontal: DAY_INSET,
-                flexDirection: 'row',
-                alignItems: 'flex-end',
-                gap: SERIES_GAP,
-              }}
-            >
-              {/* The eaten bar, stacked. Junk sits on top, always, which is
-                  the position half of the secondary encoding: whatever the
-                  colours look like to a given pair of eyes, the cap is the
-                  junk. The base carries the radius when there is no cap. */}
-              <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-                {junkOf(entry) > 0 ? (
-                  <View
-                    style={{
-                      height: heightOf(junkOf(entry)),
-                      backgroundColor: half.junk,
-                      borderTopLeftRadius: radius.pill,
-                      borderTopRightRadius: radius.pill,
-                      marginBottom: cleanOf(entry) > 0 ? STACK_GAP : 0,
-                    }}
-                  />
-                ) : null}
-                {cleanOf(entry) > 0 ? (
-                  <View
-                    style={{
-                      height: heightOf(cleanOf(entry)),
-                      backgroundColor: half.clean,
-                      borderTopLeftRadius: junkOf(entry) > 0 ? 0 : radius.pill,
-                      borderTopRightRadius: junkOf(entry) > 0 ? 0 : radius.pill,
-                    }}
-                  />
-                ) : null}
-              </View>
+        <View style={{ flexDirection: 'row' }}>
+          {/* The y axis: a label per gridline, in a gutter the x axis below
+              mirrors so the two rows still divide the width identically. */}
+          <View style={{ width: Y_GUTTER, height: CHART_HEIGHT }}>
+            {gridlines.map((value) => (
+              <Text
+                key={`y-${value}`}
+                style={[
+                  type.caption,
+                  {
+                    position: 'absolute',
+                    right: spacing.xs,
+                    bottom: offsetOf(value) - type.caption.lineHeight / 2,
+                    color: colors.muted,
+                    fontVariant: ['tabular-nums'],
+                  },
+                ]}
+              >
+                {formatAxis(value)}
+              </Text>
+            ))}
+          </View>
+          <View style={{ flex: 1, height: CHART_HEIGHT }}>
+            {/* Recessive gridlines, drawn first so every mark sits over them. */}
+            {gridlines.map((value) => (
               <View
+                key={`grid-${value}`}
                 style={{
-                  flex: 1,
-                  height: heightOf(entry.burned ?? 0),
-                  backgroundColor: colors.outline,
-                  borderTopLeftRadius: radius.pill,
-                  borderTopRightRadius: radius.pill,
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  bottom: offsetOf(value),
+                  height: layout.hairline,
+                  backgroundColor: colors.border,
                 }}
               />
+            ))}
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: CHART_HEIGHT }}>
+              {data.map((entry, index) => (
+                <View
+                  key={`bars-${entry.day}-${index}`}
+                  style={{
+                    flex: 1,
+                    height: '100%',
+                    paddingHorizontal: DAY_INSET,
+                    flexDirection: 'row',
+                    alignItems: 'flex-end',
+                    gap: SERIES_GAP,
+                  }}
+                >
+                  {/* The eaten bar, stacked. Junk sits on top, always, which is
+                      the position half of the secondary encoding: whatever the
+                      colours look like to a given pair of eyes, the cap is the
+                      junk. The base carries the radius when there is no cap. */}
+                  <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+                    {/* The ink cap is the cue that does not depend on colour. On a
+                        split day position already says which half is junk, but a
+                        day that is all one or all the other is a lone bar, and junk
+                        against everything else is only about 1.1:1 in luminance:
+                        without the cap those two bars differ by hue alone. */}
+                    {junkOf(entry) > 0 ? <JunkCap color={colors.text} /> : null}
+                    {junkOf(entry) > 0 ? (
+                      <View
+                        style={{
+                          height: heightOf(junkOf(entry)),
+                          backgroundColor: half.junk,
+                          marginBottom: cleanOf(entry) > 0 ? STACK_GAP : 0,
+                        }}
+                      />
+                    ) : null}
+                    {cleanOf(entry) > 0 ? (
+                      <View
+                        style={{
+                          height: heightOf(cleanOf(entry)),
+                          backgroundColor: half.clean,
+                          borderTopLeftRadius: junkOf(entry) > 0 ? 0 : radius.pill,
+                          borderTopRightRadius: junkOf(entry) > 0 ? 0 : radius.pill,
+                        }}
+                      />
+                    ) : null}
+                  </View>
+                  <View
+                    style={{
+                      flex: 1,
+                      height: heightOf(entry.burned ?? 0),
+                      backgroundColor: colors.muted,
+                      borderTopLeftRadius: radius.pill,
+                      borderTopRightRadius: radius.pill,
+                    }}
+                  />
+                </View>
+              ))}
             </View>
-          ))}
+
+            {/* The target, as a reference line across every day. Dashed and in
+                ink, so it reads as a line to measure against rather than as a
+                fourth series. */}
+            {goal !== null ? (
+              <View
+                testID="calorie-target-line"
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  bottom: offsetOf(goal),
+                  borderTopWidth: TARGET_LINE,
+                  borderStyle: 'dashed',
+                  borderColor: colors.text,
+                }}
+              />
+            ) : null}
+          </View>
         </View>
 
         {/* The axis, kept to a hairline. A grid heavy enough to read against is
             a grid competing with the marks. */}
-        <View style={{ height: layout.hairline, backgroundColor: colors.border }} />
+        <View
+          style={{ height: layout.hairline, backgroundColor: colors.border, marginLeft: Y_GUTTER }}
+        />
 
-        <View style={{ flexDirection: 'row' }}>
+        <View style={{ flexDirection: 'row', paddingLeft: Y_GUTTER }}>
           {chunks.map((chunk, index) => (
             <Text
               key={`tick-${chunk[0].day}-${index}`}
               // Deliberately no numberOfLines. A tick either fits or wraps; it
               // never truncates.
+              //
+              // A date rather than a weekday. Over fourteen days a weekday
+              // name comes round twice, so "Fri" named two different bars and
+              // said nothing about which. Each tick starts at the left edge of
+              // the first bar it names, because the column it sits in is that
+              // chunk's exact share of the width.
               style={[
                 type.caption,
                 { color: colors.muted, flex: chunk.length, paddingHorizontal: DAY_INSET },
               ]}
             >
-              {shortDay(chunk[0].day)}
+              {formatDate(chunk[0].day)}
             </Text>
           ))}
         </View>
       </View>
-
-      {/* One number rather than a full scale, which is all a fortnight of bars
-          needs to stop being decoration. */}
-      <Text style={[type.caption, { color: colors.muted }]}>
-        {`Tallest bar ${formatNumber(peak)} kcal.`}
-      </Text>
     </View>
   );
+}
+
+/** The 2px ink line that sits on every junk segment, and on its legend swatch. */
+function JunkCap({ color }: { color: string }) {
+  return <View style={{ height: JUNK_CAP, backgroundColor: color }} />;
+}
+
+/**
+ * A y scale with round gridlines, at most three of them above zero.
+ *
+ * Steps are 1, 2, 2.5 or 5 of a power of ten, so the labels read as numbers a
+ * person would have picked ("500, 1,000, 1,500") rather than a third of the
+ * tallest bar.
+ */
+export function scaleFor(max: number): { top: number; gridlines: number[] } {
+  const safe = Math.max(1, max);
+  const raw = safe / 3;
+  const power = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * power).find((value) => value >= raw) ?? raw;
+  const top = Math.ceil(safe / step) * step;
+  const gridlines: number[] = [];
+  for (let value = step; value <= top + step / 1000; value += step) gridlines.push(value);
+  return { top, gridlines };
+}
+
+/** "1,500", or "2k" once the figure is a round thousand and the gutter is narrow. */
+function formatAxis(value: number): string {
+  return value >= 1000 && value % 1000 === 0 ? `${value / 1000}k` : formatNumber(value);
 }
