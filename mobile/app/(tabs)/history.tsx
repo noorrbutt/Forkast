@@ -4,8 +4,9 @@ import { FlatList, RefreshControl, Text, View } from 'react-native';
 
 import { DayGroup } from '../../components/diary/DayGroup';
 import { groupByDay, type DiaryDay } from '../../components/diary/diaryDays';
+import { DeleteMealDialog, MealActionMenu, RepeatMealDialog } from '../../components/diary/DiaryDialogs';
 import { DiaryDaySkeleton } from '../../components/diary/DiaryDaySkeleton';
-import { Dialog, Empty, ErrorState, Loading, Screen, UndoSnackbar, useScreenInsets } from '../../components/ui';
+import { Empty, ErrorState, Loading, Screen, UndoSnackbar, useScreenInsets } from '../../components/ui';
 import { useDeleteLog, useInfiniteLogs, useRepeatLog } from '../../hooks/useLogs';
 import { useSoftDelete } from '../../hooks/useSoftDelete';
 import { describeError } from '../../lib/api';
@@ -250,14 +251,7 @@ export default function HistoryScreen() {
     return () => clearTimeout(timer);
   }, [confirmed]);
 
-  /**
-   * Which meal is waiting to be confirmed, or null when nothing is asked.
-   *
-   * Logging again used to fire on the tap. It writes a real row that then has
-   * to be found and deleted, and the button sits on a row that is itself
-   * pressable, so it is easy to hit by accident while scrolling. One question
-   * is cheaper than an undo that does not exist.
-   */
+  /** Which meal Log again is asking about (RepeatMealDialog), or null. */
   const [pending, setPending] = useState<FoodLog | null>(null);
 
   const openMeal = useCallback((id: Uuid) => router.push(`/logs/${id}`), [router]);
@@ -271,7 +265,7 @@ export default function HistoryScreen() {
    * Which meal the footer's Delete button is asking about, or null when
    * nothing is asked. The swipe and the long-press menu skip this and call
    * deleteMeal directly -- both are already a deliberate step on their own,
-   * the same reasoning askToRepeat's own comment gives for why a standing,
+   * the same reasoning RepeatMealDialog gives for why a standing,
    * one-tap button is the one that needs the question in front of it.
    */
   const [confirmingDelete, setConfirmingDelete] = useState<FoodLog | null>(null);
@@ -372,100 +366,22 @@ export default function HistoryScreen() {
         onUndo={undoDelete}
       />
 
-      {/* At screen level rather than inside the row, which is what every other
-          confirmation in this app does. A dialog mounted per row would be a
-          hundred modals, and it would unmount underneath itself the moment the
-          list refetched. */}
-      <Dialog
-        visible={pending !== null}
-        onDismiss={() => !repeat.isPending && setPending(null)}
-        title="Log this again?"
-        message={
-          pending
-            ? `${pending.dish_name} goes into today at ${formatNumber(
-                pending.estimated_calories
-              )} kcal. You can edit or delete it afterwards.`
-            : undefined
-        }
-        actions={[
-          {
-            label: 'Log it again',
-            variant: 'primary',
-            onPress: () => pending && logAgain(pending),
-            disabled: repeat.isPending,
-            loading: repeat.isPending,
-          },
-          {
-            label: 'Cancel',
-            variant: 'secondary',
-            onPress: () => setPending(null),
-            disabled: repeat.isPending,
-          },
-        ]}
+      <RepeatMealDialog
+        log={pending}
+        busy={repeat.isPending}
+        onConfirm={logAgain}
+        onCancel={() => setPending(null)}
       />
-
-      {/* Delete's own confirmation, the same reasoning as Log again's just
-          above: the footer button is one plain tap on every row, which is
-          exactly why it asks first. The swipe and the long-press menu don't
-          -- both are already a deliberate step, and the undo snackbar is
-          still there underneath this as the second safety net either way. */}
-      <Dialog
-        visible={confirmingDelete !== null}
-        onDismiss={() => setConfirmingDelete(null)}
-        title="Delete this meal?"
-        message={
-          confirmingDelete
-            ? `${confirmingDelete.dish_name} will be removed from your diary. You can undo it for a few seconds afterwards.`
-            : undefined
-        }
-        actions={[
-          {
-            label: 'Delete',
-            variant: 'danger',
-            icon: 'trash',
-            onPress: () => {
-              if (confirmingDelete) deleteMeal(confirmingDelete.id);
-              setConfirmingDelete(null);
-            },
-          },
-          {
-            label: 'Cancel',
-            variant: 'secondary',
-            onPress: () => setConfirmingDelete(null),
-          },
-        ]}
+      <DeleteMealDialog
+        log={confirmingDelete}
+        onConfirm={(log) => deleteMeal(log.id)}
+        onCancel={() => setConfirmingDelete(null)}
       />
-
-      {/* The accessible, non-gesture equivalent of the swipe: a long press,
-          or the same custom accessibility action, opens this instead of
-          reaching for a hidden panel off the edge of the row. */}
-      <Dialog
-        visible={menuLog !== null}
-        onDismiss={() => setMenuLog(null)}
-        title={menuLog?.dish_name ?? ''}
-        actions={[
-          {
-            label: 'Log again',
-            icon: 'log',
-            onPress: () => {
-              if (menuLog) askToRepeat(menuLog.id);
-              setMenuLog(null);
-            },
-          },
-          {
-            label: 'Delete',
-            icon: 'trash',
-            variant: 'danger',
-            onPress: () => {
-              if (menuLog) deleteMeal(menuLog.id);
-              setMenuLog(null);
-            },
-          },
-          {
-            label: 'Cancel',
-            onPress: () => setMenuLog(null),
-          },
-        ]}
+      <MealActionMenu
+        log={menuLog}
+        onRepeat={(log) => askToRepeat(log.id)}
+        onDelete={(log) => deleteMeal(log.id)}
+        onClose={() => setMenuLog(null)}
       />
     </Screen>
   );
