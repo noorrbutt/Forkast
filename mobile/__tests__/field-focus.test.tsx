@@ -15,6 +15,7 @@ import { render, fireEvent } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
 import { Field } from '../components/ui/Field';
+import { Select } from '../components/ui/Select';
 import { ThemeProvider } from '../theme';
 
 function styleOf(node: { props: Record<string, unknown> }) {
@@ -29,6 +30,26 @@ function mount() {
   );
   return screen.getByPlaceholderText('you@example.com');
 }
+
+describe('a text field next to a select', () => {
+  it('is not the same filled pill with the chevron taken off', () => {
+    const screen = render(
+      <ThemeProvider>
+        <Field label="Dish" placeholder="What was it" />
+        <Select label="Category" value={null} options={[]} onChange={() => {}} />
+      </ThemeProvider>,
+    );
+    const field = styleOf(screen.getByPlaceholderText('What was it'));
+    const select = StyleSheet.flatten(
+      (screen.getByLabelText('Category').props.style as never) ?? {},
+    ) as Record<string, unknown>;
+
+    // Typing goes in an outlined box; choosing opens from a filled one.
+    expect(field.backgroundColor).toBe('transparent');
+    expect(select.backgroundColor).not.toBe('transparent');
+    expect(select.backgroundColor).toBeTruthy();
+  });
+});
 
 describe('a focused text field', () => {
   it('changes more than its colour', () => {

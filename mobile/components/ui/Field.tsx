@@ -81,7 +81,14 @@ export function Field({ label, hint, reveal = false, style, onFocus, onBlur, ...
             type.body,
             {
               color: colors.text,
-              backgroundColor: colors.surfaceAlt,
+              // No fill: a box to type into, drawn by its edge alone. Select
+              // keeps the raised surfaceAlt fill and its chevron, so a field
+              // that opens a list and a field you type in no longer share one
+              // pill and differ only by a glyph at the end. The edge is
+              // `outline`, which clears 3:1 against the page, a card and a
+              // raised fill alike (contrast.test.ts), so the input proves it
+              // is a control on whatever it sits on.
+              backgroundColor: 'transparent',
               borderRadius: radius.input,
               // `outline`, not `border`. border is the decorative hairline
               // between surfaces and measures 1.52:1 against this fill, while the
