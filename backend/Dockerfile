@@ -14,6 +14,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Root by default is root's whole filesystem, not a mistake this image needs
+# to make: a code-execution bug in a dependency only has to compromise a
+# process that owns nothing on the host. Owns /app only -- nothing is written
+# outside it at runtime -- which is all a stray RUN before this point would
+# have needed root for anyway.
+RUN useradd --system --no-create-home --uid 10001 forkast \
+    && chown -R forkast:forkast /app
+USER forkast
+
 EXPOSE 8010
 
 # Migrations run before the server starts, not as a separate manual step, so

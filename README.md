@@ -417,7 +417,14 @@ docker run --env-file .env -p 8010:8010 forkast-api
 The container applies pending migrations before starting uvicorn, so a deploy
 that forgets to run alembic by hand never serves the old schema. Production
 installs only `requirements.txt`; `requirements-dev.txt` (pytest, ruff, coverage)
-is for local work and CI.
+is for local work and CI. The image also drops root after installing
+dependencies and runs as an unprivileged user.
+
+That single `docker run` starts the API only. The jobs worker (below) is a
+separate long-running process the same image can run with a different
+command, and a deploy that skips it quietly loses retries and dead-letter
+recovery -- `docker compose up --build` (`backend/docker-compose.yml`) starts
+both the API and a worker from one build instead of the API alone.
 
 Production checklist:
 
@@ -430,7 +437,9 @@ Production checklist:
       proxy you control sits in front
 - [ ] At least one worker running
 - [ ] The maintenance cron scheduled
-- [ ] `/ready` returns 200 and `GET /queue` shows an empty dead-letter count
+- [ ] `METRICS_TOKEN` set, or `GET /queue` 404s (see its own docstring)
+- [ ] `/ready` returns 200 and `GET /queue` (with the token) shows an empty
+      dead-letter count
 
 The mobile build for EAS never bakes a developer's LAN address into a committed
 file. Set `EXPO_PUBLIC_API_URL` per machine with `eas env:create`, the same
