@@ -31,9 +31,9 @@ import { useLayout, useTheme } from '../../theme';
  * Today's net calories against the daily target, as a hero figure inside a
  * ring, is the one thing this screen answers. Everything under it is a full
  * step quieter on the type scale and sits on a card, which the hero does not.
- * The fortnight chart and the month trend keep a card each; the three ways
- * onward are rows in one group, because three destinations are a list, not
- * three headlines. Period totals, top categories and the like are reference
+ * The ways onward (the plan, then the map) are rows in one group directly
+ * under the hero; the fortnight chart and the month trend keep a card each
+ * below them. Period totals, top categories and the like are reference
  * rather than an answer to "how is today going", so they live elsewhere --
  * the junk ratio survives as a row in the trend card, where a month-long
  * figure belongs.
@@ -530,6 +530,37 @@ export default function DashboardScreen() {
   // is one with neither, not merely one without logs.
   const hasAnything = data ? data.logs_count > 0 || data.total_burned > 0 : false;
 
+  /*
+   * The ways onward from here, as rows in one group rather than headlines.
+   *
+   * Two now, the plan first. The diary row is gone: Diary is a tab one tap
+   * away in the bar under this screen, so a row here was a second, longer
+   * route to the same place, and it pushed the plan further down.
+   *
+   * Each carries the glyph its destination owns elsewhere, and both carry one,
+   * because ListRow lays the icon out as a sibling of the text column and a
+   * bare row would start its label further left than its neighbour.
+   */
+  const destinations = (
+    <ListGroup>
+      <ListRow
+        icon="plan"
+        label="AI meal plan"
+        // Three, because that is what the plan prompt asks for and what the
+        // plan screen draws. This said "a week" and the plan never was.
+        hint="Three days of meals shaped around your goal."
+        onPress={() => router.push('/plan')}
+      />
+      <ListRow
+        icon="map"
+        label="Map"
+        hint="Where you eat, grouped by area."
+        onPress={() => router.push('/map')}
+        last
+      />
+    </ListGroup>
+  );
+
   return (
     <Screen
       scroll
@@ -639,8 +670,10 @@ export default function DashboardScreen() {
             </View>
 
             <View style={[{ gap: spacing.xxl }, isExpanded ? { flex: 1 } : null]}>
-              {/* The one action on this screen that changes the hero, so it
-                  sits directly under it rather than below the reference. */}
+              {/* Directly under the hero rather than after the chart and the
+                  trend. The plan is the feature the app leads with, and at the
+                  foot of the third screenful hardly anyone reached it. */}
+              {destinations}
 
               <Card>
                 <View style={{ gap: spacing.lg }}>
@@ -654,45 +687,9 @@ export default function DashboardScreen() {
           </View>
         ) : null}
 
-        {/* Three destinations are a list, not three headlines. One surface, one
-            left edge, no eyebrow above it, and a 56pt row apiece.
-
-            Each carries the glyph its destination already owns elsewhere:
-            `history` is the same meaning the Meals tab uses, `plan` the same
-            one the plan route uses. One idea is never drawn two ways, so
-            arriving at a screen shows the icon that sent you there.
-
-            All three together, never two of three. ListRow lays the icon out as
-            a sibling of the text column, so a row without one starts its label
-            44pt further left and the group's edge visibly breaks.
-
-            Icons go on the thing you tap, naming where the tap goes -- never on
-            a heading, where they would only be decoration. */}
-        <View style={{ paddingTop: spacing.xxl }}>
-          <ListGroup>
-            <ListRow
-              icon="history"
-              label="Your diary"
-              hint="Past meals, with a typo to fix or a double log to delete."
-              onPress={() => router.push('/history')}
-            />
-            <ListRow
-              icon="map"
-              label="Map"
-              hint="Where you eat, grouped by area."
-              onPress={() => router.push('/map')}
-            />
-            <ListRow
-              icon="plan"
-              label="AI meal plan"
-              // Three, because that is what the plan prompt asks for and what
-              // the plan screen draws. This said "a week" and the plan never was.
-              hint="Three days of meals shaped around your goal."
-              onPress={() => router.push('/plan')}
-              last
-            />
-          </ListGroup>
-        </View>
+        {/* Before a first meal there is no chart or trend to sit above, so the
+            ways onward stay where they always were, under everything. */}
+        {data && hasAnything ? null : <View style={{ paddingTop: spacing.xxl }}>{destinations}</View>}
       </View>
 
       <BurnDialog visible={burnOpen} onDismiss={() => setBurnOpen(false)} />
