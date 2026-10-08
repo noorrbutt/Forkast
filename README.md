@@ -605,7 +605,7 @@ PostgreSQL older than 18.
 |---|---|
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and pre-PR checks |
 | [SECURITY.md](SECURITY.md) | What the auth layer does, scope, and how to report a vulnerability |
-| [DESIGN_STYLE_GUIDE.md](DESIGN_STYLE_GUIDE.md) | The rules every screen is composed against |
+| [DESIGN_STYLE_GUIDE.md](docs/DESIGN_STYLE_GUIDE.md) | The rules every screen is composed against |
 | [docs/A11Y.md](docs/A11Y.md) | Accessibility audit and manual device checks |
 | [docs/VERCEL_DEPLOY.md](docs/VERCEL_DEPLOY.md) | Serverless deployment with Neon |
 | [docs/WEB_DEPLOY.md](docs/WEB_DEPLOY.md) | Publishing the browser build |

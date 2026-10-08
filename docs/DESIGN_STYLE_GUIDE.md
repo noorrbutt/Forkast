@@ -1,60 +1,31 @@
 # Forkast Design Style Guide
 
-This is the single source of truth for how a Forkast screen is composed. Every
-screen is checked against Section 14 before it is considered done, and every
-rewrite starts with the self-critique in Section 13.
+How a Forkast screen is composed: the type scale, the spacing scale, what each
+colour token is for, when to use a card versus a list, and the rules for icons,
+charts, motion and copy. The checklist at the end is what a screen is reviewed
+against before it ships.
 
-It is a **hierarchy and composition** document. The ink and saffron palette, the
-radii and the structural language in `mobile/theme/tokens.ts` stay as they are.
-Nothing here is a rebrand.
-
----
-
-## 0. How to use this
-
-1. Before touching a screen, write its critique (Section 13). Name the rules it
-   breaks. If you cannot name one, the screen may not need changing.
-2. Compose the screen against Sections 4 to 11.
-3. Run the checklist in Section 14. A screen that fails any hard rule is not done.
+The palette, radii and other raw values live in `mobile/theme/tokens.ts`; this
+document is about how to use them. Where a rule exists because of a specific
+measurement or a bug that shipped, the reason is given next to it.
 
 Rules marked **MUST** are enforceable and checkable. Rules marked **SHOULD** need
 a stated reason to break, written in a comment at the call site.
 
----
-
-## 1. The diagnosis
-
-Forkast did not look generated because its colours or components were bad. It
-looked generated because it had no point of view: every screen was a vertical
-stack of same size rounded cards with centred text and nothing for the eye to
-land on first. That is what happens when a screen is assembled card by card
-instead of composed as a whole.
-
-The evidence, measured rather than felt:
-
-| Symptom | Measurement |
-|---|---|
-| Dashboard is an undifferentiated stack | 11 `<Card>` elements, all the same radius, padding and weight |
-| Nothing is dominant | Largest type is 48px and it is used for both hero numbers and page titles, so they compete |
-| Every section wears the same badge | `SectionLabel`, 11px uppercase with letterspacing, on 7 screens |
-| Icons as decoration | 104 icon usages, including one beside nearly every section heading |
-| Surfaces did not separate | Before the palette rebuild, card against page measured 1.09:1 |
-
-Two of those are named industry tells for generated design: content chopped into
-identical rounded cards with one radius regardless of hierarchy, and a tracked
-out uppercase eyebrow label above every heading. Forkast had both.
-
-**The failure mode this guide exists to prevent: equal weight everywhere.**
+The core idea running through all of it: a screen should have one clear focal
+point, with everything else visibly secondary. Equal weight everywhere -- a
+uniform stack of identical cards with nothing for the eye to land on -- is the
+failure mode most of these rules exist to prevent.
 
 ---
 
-## 2. The seven design principles, for Forkast
+## 1. The seven design principles, for Forkast
 
 Not dictionary definitions. What each one means on these screens.
 
 ### Contrast
-Difference in size, weight and colour is how a screen says what matters. Forkast
-had contrast in colour and almost none in size.
+Difference in size, weight and colour is how a screen says what matters. Size
+does most of that work; colour alone is not enough.
 
 - **MUST** Every screen has exactly one element at the top of its visual
   hierarchy, and the gap to the second element is at least one full step of the
@@ -63,8 +34,8 @@ had contrast in colour and almost none in size.
   reader to know which matters. Change the size, not the colour.
 
 ### Balance
-Weight distributed across the screen. Forkast was perfectly balanced in the worst
-way: everything equal, so the composition was inert.
+Weight distributed across the screen. Perfectly even weight is not balance, it
+is an inert composition.
 
 - **SHOULD** Prefer asymmetric balance. A large hero on the left balanced by two
   small figures on the right reads better than three equal columns.
@@ -75,8 +46,8 @@ way: everything equal, so the composition was inert.
 The order the eye is meant to travel. A reader should be able to name the first,
 second and third thing they saw, and agree with what you intended.
 
-- **MUST** Every screen can answer: what is the one thing? Write it in a comment
-  at the top of the screen component.
+- **MUST** Every screen can answer: what is the one thing? If the answer is not
+  obvious from the code, say it in the screen's top comment.
 - **MUST** Hero, then supporting figures, then everything else. Three levels is
   usually enough; four is a sign the screen is doing two jobs.
 
@@ -92,7 +63,7 @@ The same idea looks the same everywhere. This is why a design system exists.
 Related things sit together; unrelated things get space, not a border.
 
 - **MUST** Group with space first. Reach for a card only when a group needs a
-  surface of its own (Section 6).
+  surface of its own (Section 5).
 - **MUST** Spacing inside a group is always smaller than the spacing around it.
   If the gap inside equals the gap outside, the grouping says nothing.
 
@@ -115,10 +86,10 @@ Space is the cheapest way to say something is important.
 
 ---
 
-## 3. The seven usability heuristics, for Forkast
+## 2. The seven usability heuristics, for Forkast
 
-A screen can be striking and still unusable, or usable and still slop. Both bars
-must clear.
+A screen can look right and still be hard to use, or be usable and still read
+poorly. Both bars must clear.
 
 ### Consistency
 - **MUST** One name per action, everywhere. The button that says Sign up leads to
@@ -167,7 +138,7 @@ must clear.
 
 ---
 
-## 4. Type
+## 3. Type
 
 One family. Weight, size and space do the work.
 
@@ -204,8 +175,8 @@ form guidance independently puts a dashboard hero figure at 48px or more.
   system text, so it can never overflow or truncate. The rule lives in the
   component, not in each caller.
 - **MUST NOT** Use `label`, the 11px uppercase style, as a heading above every
-  section. A tracked out uppercase eyebrow over every block is a named tell of
-  generated design, and Forkast had it on 7 screens. `label` is allowed only for
+  section. An uppercase eyebrow over every block flattens the hierarchy it is
+  meant to signal, and at one point it sat on 7 screens. `label` is allowed only for
   tab bar labels and for axis or legend text in a chart.
 - **SHOULD** Use `title` in sentence case for a section heading. If a section is
   obvious from its content, it needs no heading at all.
@@ -215,7 +186,7 @@ form guidance independently puts a dashboard hero figure at 48px or more.
 
 ---
 
-## 5. Space
+## 4. Space
 
 All spacing comes from `spacing` in tokens. No literal numbers in a screen.
 
@@ -238,9 +209,8 @@ All spacing comes from `spacing` in tokens. No literal numbers in a screen.
 
 ---
 
-## 6. Composition: focal or list
+## 5. Composition: focal or list
 
-This is the rule the old screens broke hardest.
 
 ### Lead with one focal element when
 
@@ -272,8 +242,7 @@ a list. A row of three serving sizes is a group of equal choices.
 
 - **MUST NOT** Render a screen as a uniform stack of same size cards unless every
   card holds genuinely repetitive, equal weight content. A dashboard mixing a
-  headline stat with secondary data is **never** one uniform stack. This is the
-  single rule that would have prevented the 11 card dashboard.
+  headline stat with secondary data is **never** one uniform stack.
 - **MUST** A card exists to give a group its own surface. If a group needs no
   surface, use space instead. Reaching for `<Card>` by reflex is how a screen
   becomes a stack.
@@ -310,7 +279,7 @@ top of a page".
 
 ---
 
-## 7. Emphasis and asymmetry
+## 6. Emphasis and asymmetry
 
 - **MUST NOT** Give every element equal visual space by default. Equal weight
   everywhere is the failure mode this document exists to prevent.
@@ -322,7 +291,7 @@ top of a page".
 
 ---
 
-## 8. Colour, and what each colour's job is
+## 7. Colour, and what each colour's job is
 
 Every colour does exactly one job. Tokens only, never a literal hex in a screen.
 
@@ -425,7 +394,7 @@ the card: visible as a mark without claiming a meaning it does not have.
 
 ---
 
-## 9. Data display
+## 8. Data display
 
 - **A single current value** is a figure with its label, at `numeral`. The number
   is the chart. Not a one bar bar chart. There is no `StatTile` component any
@@ -456,7 +425,7 @@ glance; donuts are an anti pattern for comparing close values, which this is not
 
 ---
 
-## 10. Icons and imagery
+## 9. Icons and imagery
 
 ### Icons: where they are used today
 
@@ -485,8 +454,7 @@ below follows from that one sentence.
 - Cuisine emoji in lists and pickers, which is identity, not decoration.
 
 **Banned:**
-- **MUST NOT** Put an icon beside a section heading. This was on 7 screens and is
-  a large part of why the app read as templated. A card title and a
+- **MUST NOT** Put an icon beside a section heading. A card title and a
   `ControlLabel` are both read rather than tapped: they label content or a
   control you are already looking at, so nothing goes beside either.
 - **MUST NOT** Put a decorative disc behind an icon to give it presence. The
@@ -511,7 +479,7 @@ below follows from that one sentence.
 
 ---
 
-## 11. Motion
+## 10. Motion
 
 - **MUST** Motion answers an action. Opening, expanding, confirming, selecting.
 - **MUST NOT** Fade and slide up every section on mount. That is the generic
@@ -522,7 +490,7 @@ below follows from that one sentence.
 
 ---
 
-## 12. Words
+## 11. Words
 
 - Sentence case everywhere except the tab bar.
 - A button says what happens: "Log this meal", not "Submit".
@@ -535,30 +503,7 @@ below follows from that one sentence.
 
 ---
 
-## 13. The before and after self-critique
-
-**Required before rewriting any screen.** Write it as a comment at the top of the
-screen file, or in the commit body. It is not optional and it is not a summary of
-what you changed.
-
-State, in this order:
-
-1. **What the screen was.** Its structure in one sentence. "A vertical stack of
-   eleven cards."
-2. **Which rules it broke.** Name them from this document, with the measurement
-   where there is one. "Section 6: eleven uniform cards on a screen mixing a
-   headline stat with secondary data. Section 4: no element above `display`, so
-   nothing was dominant. Section 10: an icon beside all five headings."
-3. **What the one thing is now.** "Today's calories against target, as a ring."
-4. **What was demoted, and why that is correct.** "Burn equivalents and top spot
-   moved below the fold. They are reference, not the question the screen answers."
-
-If step 2 comes out empty, stop. Either the screen is already right, or the
-critique is not honest enough yet.
-
----
-
-## 14. The checklist
+## 12. The checklist
 
 A screen is not done until every line passes.
 
@@ -603,7 +548,7 @@ A screen is not done until every line passes.
 
 ---
 
-## 15. Amending this document
+## 13. Amending this document
 
 When a screen genuinely needs something this guide forbids, change the guide
 first, with the reason, and then the screen. A rule with a growing list of
