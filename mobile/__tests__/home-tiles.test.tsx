@@ -16,7 +16,8 @@ jest.mock('../lib/api', () => {
   return { ...actual, getAccessToken: () => 'test-token' };
 });
 
-import { NoPhotoMealTile, tileLabel } from '../components/home/MealTile';
+import { MealTile, NoPhotoMealTile, PhotoMealTile, tileLabel } from '../components/home/MealTile';
+import { TILE_PHOTO_EDGE, photoSource } from '../hooks/usePhoto';
 import { openSlots, slotOf, todaysMeals } from '../components/home/todayMeals';
 import { Icon } from '../components/ui';
 import type { FoodLog } from '../lib/types';
@@ -146,6 +147,61 @@ describe('the no-photo tile', () => {
     const style = flat(screen.getByTestId('today-tile-log-1').props.style);
     expect(style.width).toBe(112);
     expect(style.height).toBe(140);
+  });
+});
+
+describe('the photo tile', () => {
+  const photographed = meal({ id: 'log-2', has_photo: true, dish_name: 'grilled salmon' });
+
+  it('asks the server for the tile-sized copy, not the full photo', () => {
+    const screen = render(<PhotoMealTile log={photographed} size={SIZE} onOpen={jest.fn()} />, {
+      wrapper,
+    });
+
+    // useAuthedImage hands native Image a one-entry source array.
+    const [source] = screen.UNSAFE_getByType(Image).props.source;
+    expect(source.uri).toMatch(/\/logs\/log-2\/photo\?v=\d+&w=560$/);
+    expect(source.headers).toEqual({ Authorization: 'Bearer test-token' });
+  });
+
+  it('carries the same label, pill and name as the no-photo tile', () => {
+    const screen = render(<PhotoMealTile log={photographed} size={SIZE} onOpen={jest.fn()} />, {
+      wrapper,
+    });
+
+    expect(screen.getByRole('button').props.accessibilityLabel).toBe(
+      'Lunch, Grilled Salmon, 640 kcal',
+    );
+    expect(screen.getByText('640 kcal')).toBeTruthy();
+    expect(screen.getByText('Grilled Salmon')).toBeTruthy();
+  });
+
+  it('falls back to the no-photo tile when the picture will not load', () => {
+    const screen = render(<PhotoMealTile log={photographed} size={SIZE} onOpen={jest.fn()} />, {
+      wrapper,
+    });
+
+    fireEvent(screen.getByTestId('today-tile-photo'), 'error');
+
+    expect(screen.queryByTestId('today-tile-photo')).toBeNull();
+    expect(screen.getByTestId('today-tile-glyph')).toBeTruthy();
+  });
+
+  it('is chosen by has_photo', () => {
+    const typed = render(<MealTile log={meal()} size={SIZE} onOpen={jest.fn()} />, { wrapper });
+    expect(typed.queryByTestId('today-tile-photo')).toBeNull();
+
+    const pictured = render(<MealTile log={photographed} size={SIZE} onOpen={jest.fn()} />, {
+      wrapper,
+    });
+    expect(pictured.getByTestId('today-tile-photo')).toBeTruthy();
+  });
+});
+
+describe('photo urls', () => {
+  it('leaves the full-size url alone for the diary and the meal screen', () => {
+    expect(photoSource('abc', 't', 3).uri).toMatch(/\/logs\/abc\/photo\?v=3$/);
+    expect(photoSource('abc', 't', 3, TILE_PHOTO_EDGE).uri).toMatch(/\/logs\/abc\/photo\?v=3&w=560$/);
   });
 });
 

@@ -1,11 +1,14 @@
-import type { ReactNode } from 'react';
-import { Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useState, type ReactNode } from 'react';
+import { Image, Pressable, Text, View, useWindowDimensions } from 'react-native';
 
 import { categoryTileTone } from '../diary/CompactMealRow';
 import { Icon } from '../ui';
+import { TILE_PHOTO_EDGE, usePhotoSource } from '../../hooks/usePhoto';
 import { displayDish, formatNumber } from '../../lib/format';
 import type { FoodLog, Uuid } from '../../lib/types';
 import { useTheme } from '../../theme';
+import { photoScrim } from '../../theme/tokens';
 import { slotLabelOf } from './todayMeals';
 
 /**
@@ -154,4 +157,63 @@ export function NoPhotoMealTile({ log, size, onOpen }: TileProps) {
       </View>
     </TileFrame>
   );
+}
+
+/** Inlined, as in PhotoMealRow: the literal StyleSheet.absoluteFill resolves to. */
+const ABSOLUTE_FILL = {
+  position: 'absolute' as const,
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+};
+
+/**
+ * A meal with a photo: the picture fills the tile, the name sits on a scrim.
+ *
+ * Requests the server's tile-sized copy (TILE_PHOTO_EDGE) rather than the
+ * full stored photo. If the picture cannot be had at all, the tile falls back
+ * to the no-photo composition rather than an empty frame with white text on
+ * grey.
+ */
+export function PhotoMealTile({ log, size, onOpen }: TileProps) {
+  const { spacing, type } = useTheme();
+  const source = usePhotoSource(log.id, TILE_PHOTO_EDGE);
+  const [failed, setFailed] = useState(false);
+
+  if (failed) return <NoPhotoMealTile log={log} size={size} onOpen={onOpen} />;
+
+  return (
+    <TileFrame log={log} size={size} onOpen={onOpen} testID={`today-tile-${log.id}`}>
+      {source ? (
+        <Image
+          testID="today-tile-photo"
+          source={source}
+          style={ABSOLUTE_FILL}
+          resizeMode="cover"
+          onError={() => setFailed(true)}
+          accessibilityIgnoresInvertColors
+        />
+      ) : null}
+      <LinearGradient
+        colors={[...photoScrim.colors]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        locations={[...photoScrim.locations]}
+        style={ABSOLUTE_FILL}
+      />
+      <View style={{ flex: 1, padding: spacing.md, justifyContent: 'space-between' }}>
+        <KcalPill calories={log.estimated_calories} overPhoto />
+        {/* Fixed white over the scrim, the diary photo card's own rule. */}
+        <Text style={[type.subtitle, { color: '#FFFFFF' }]} numberOfLines={3}>
+          {displayDish(log.dish_name)}
+        </Text>
+      </View>
+    </TileFrame>
+  );
+}
+
+/** The right tile for a meal, by whether it has a picture. */
+export function MealTile(props: TileProps) {
+  return props.log.has_photo ? <PhotoMealTile {...props} /> : <NoPhotoMealTile {...props} />;
 }

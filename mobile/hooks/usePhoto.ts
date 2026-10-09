@@ -28,12 +28,29 @@ let revision = 0;
  * its own caching and decoding far better than anything done by hand here. The
  * request needs the bearer token, which is why the header goes along with it.
  */
-export function photoSource(logId: Uuid, token: string | null, version = revision) {
+export function photoSource(
+  logId: Uuid,
+  token: string | null,
+  version = revision,
+  maxEdge?: number,
+) {
+  const size = maxEdge === undefined ? '' : `&w=${maxEdge}`;
   return {
-    uri: `${API_BASE_URL}/logs/${logId}/photo?v=${version}`,
+    uri: `${API_BASE_URL}/logs/${logId}/photo?v=${version}${size}`,
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   };
 }
+
+/**
+ * The longest edge a tile-sized photo is asked for.
+ *
+ * Home's Today strip draws a photo at about 112 x 140pt. Filling that with a
+ * 4:3 landscape photo at 3x density needs about 420px of height, so 560px
+ * on the long edge, against the 1024px the server stores. The server does the
+ * resize (?w= on GET /logs/{id}/photo), so the full image never crosses the
+ * network for a tile.
+ */
+export const TILE_PHOTO_EDGE = 560;
 
 /**
  * Null while a meal is still being written, when there is no id to fetch from.
@@ -41,9 +58,14 @@ export function photoSource(logId: Uuid, token: string | null, version = revisio
  * Passed through useAuthedImage, which is the identity function on iOS and
  * Android and does the fetch-to-object-url dance on web, where Image cannot
  * send the Authorization header this source carries.
+ *
+ * `maxEdge` asks the server for a smaller copy. Left out, which is what the
+ * diary's photo cards and the meal screen do, the full stored photo is served.
  */
-export function usePhotoSource(logId: Uuid | null) {
-  return useAuthedImage(logId === null ? undefined : photoSource(logId, getAccessToken()));
+export function usePhotoSource(logId: Uuid | null, maxEdge?: number) {
+  return useAuthedImage(
+    logId === null ? undefined : photoSource(logId, getAccessToken(), revision, maxEdge),
+  );
 }
 
 /**
