@@ -318,7 +318,11 @@ export const layout = {
   screenPadding: spacing.xl,
   tabBarHeight: 64,
   tabBarInset: 18,
-  scrollBottomInset: 120,
+  // The floating bar sits tabBarInset above the screen edge and stands
+  // tabBarHeight tall, so a scrolled screen's last row needs at least that
+  // much clearance plus a visible gap above it, or its bottom edge sits right
+  // under the bar instead of above it.
+  scrollBottomInset: 18 + 64 + 32,
   hairline: 1,
   /**
    * How wide a column of content is allowed to get.
