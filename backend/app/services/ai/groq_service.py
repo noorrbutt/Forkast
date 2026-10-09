@@ -159,10 +159,14 @@ PLAN_SCHEMA: dict[str, Any] = {
                                 "properties": {
                                     "slot": {"type": "string"},
                                     "dish": {"type": "string"},
-                                    "note": {"type": "string"},
+                                    # Strict mode requires every property in
+                                    # `required`; optionality has to be
+                                    # expressed in the type instead, so a meal
+                                    # with nothing to add returns null here.
+                                    "note": {"type": ["string", "null"]},
                                     "approx_calories": {"type": "integer"},
                                 },
-                                "required": ["slot", "dish", "approx_calories"],
+                                "required": ["slot", "dish", "note", "approx_calories"],
                                 "additionalProperties": False,
                             },
                         },
