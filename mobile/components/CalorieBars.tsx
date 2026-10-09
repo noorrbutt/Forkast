@@ -34,7 +34,7 @@ const STACK_GAP = 2;
  * It is also three times the gap inside a pair, which is what makes the pair
  * read as one day rather than as two neighbours.
  */
-const DAY_INSET = 3;
+const DAY_INSET = 1;
 
 /** So a small but non zero day still draws a mark. A zero day draws nothing. */
 const MIN_MARK = 2;
@@ -50,8 +50,9 @@ const MAX_TICKS = 5;
 /** Room for the y axis labels to the left of the plot. */
 const Y_GUTTER = 36;
 
-/** The target line's weight. Section 9's 2px line. */
-const TARGET_LINE = 2;
+/** The target line's weight: thin and quiet, a reference rather than a
+ * fourth series outweighing the data it sits over. */
+const TARGET_LINE = 1;
 
 /** The ink cap on a junk segment. Same 2px. */
 const JUNK_CAP = 2;
@@ -99,9 +100,13 @@ export function CalorieBars({
   );
 
   // The target is drawn on the same scale, so the scale has to reach it even
-  // on a fortnight that never came near it.
+  // on a fortnight that never came near it. The ceiling sits 15% above
+  // whichever of the two is taller, not rounded up to the next whole
+  // gridline step: that rounding alone could put the axis a third again
+  // past the data, so every bar and the target line both sat in the bottom
+  // half of the chart with empty space above them that nothing explained.
   const goal = target !== null && target !== undefined && target > 0 ? target : null;
-  const { top, gridlines } = scaleFor(Math.max(peak, goal ?? 0));
+  const { top, gridlines } = scaleFor(Math.max(peak, goal ?? 0) * 1.15);
 
   // Thin the ticks rather than the labels. Shrinking or clipping a date is how
   // "Maintain" became "Maint...", so a label is either drawn in full or not
@@ -181,19 +186,6 @@ export function CalorieBars({
             <Text style={[type.caption, { color: colors.muted }]}>{entry.label}</Text>
           </View>
         ))}
-        {goal !== null ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-            <View
-              style={{
-                width: spacing.md,
-                borderTopWidth: TARGET_LINE,
-                borderStyle: 'dashed',
-                borderColor: colors.text,
-              }}
-            />
-            <Text style={[type.caption, { color: colors.muted }]}>Daily target</Text>
-          </View>
-        ) : null}
       </View>
 
       <View
@@ -297,22 +289,41 @@ export function CalorieBars({
               ))}
             </View>
 
-            {/* The target, as a reference line across every day. Dashed and in
-                ink, so it reads as a line to measure against rather than as a
-                fourth series. */}
+            {/* The target, as a reference line across every day. Thin and
+                muted rather than in ink, so it reads as a line to measure
+                against without outweighing the bars it supports, and
+                labelled in place instead of in a separate legend row, so the
+                line says what it is on its own. */}
             {goal !== null ? (
-              <View
-                testID="calorie-target-line"
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  right: 0,
-                  bottom: offsetOf(goal),
-                  borderTopWidth: TARGET_LINE,
-                  borderStyle: 'dashed',
-                  borderColor: colors.text,
-                }}
-              />
+              <>
+                <View
+                  testID="calorie-target-line"
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    bottom: offsetOf(goal),
+                    borderTopWidth: TARGET_LINE,
+                    borderStyle: 'dashed',
+                    borderColor: colors.muted,
+                  }}
+                />
+                <Text
+                  style={[
+                    type.caption,
+                    {
+                      position: 'absolute',
+                      right: 0,
+                      bottom: Math.min(offsetOf(goal) + 2, CHART_HEIGHT - 12),
+                      color: colors.muted,
+                      backgroundColor: colors.surface,
+                      paddingLeft: spacing.xs,
+                    },
+                  ]}
+                >
+                  {`Target ${formatNumber(goal)}`}
+                </Text>
+              </>
             ) : null}
           </View>
         </View>
@@ -366,10 +377,13 @@ export function scaleFor(max: number): { top: number; gridlines: number[] } {
   const raw = safe / 3;
   const power = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 2.5, 5, 10].map((m) => m * power).find((value) => value >= raw) ?? raw;
-  const top = Math.ceil(safe / step) * step;
+  // The top is exactly what the caller asked for, not rounded up to the next
+  // step: a gridline at a round number is worth having, a ceiling pushed a
+  // whole step past the data is not. The last gridline can land short of the
+  // top, which is fine, since nothing requires one to sit at the very edge.
   const gridlines: number[] = [];
-  for (let value = step; value <= top + step / 1000; value += step) gridlines.push(value);
-  return { top, gridlines };
+  for (let value = step; value < safe; value += step) gridlines.push(value);
+  return { top: safe, gridlines };
 }
 
 /** "1,500", or "2k" once the figure is a round thousand and the gutter is narrow. */

@@ -250,18 +250,20 @@ describe('the chart', () => {
   it('gives the bars a real y axis rather than a caption standing in for one', async () => {
     const screen = await open(UNDER);
 
-    // The tallest eaten day is 2,370, so the scale runs to 3,000 in round steps.
+    // The tallest eaten day is 2,370, so the ceiling is 2,370 * 1.15 = 2,725.5
+    // and only the round steps under that are drawn: 1k and 2k, not 3k, which
+    // would have sat a third again past the data.
     expect(screen.getByText('1k')).toBeTruthy();
     expect(screen.getByText('2k')).toBeTruthy();
-    expect(screen.getByText('3k')).toBeTruthy();
+    expect(screen.queryByText('3k')).toBeNull();
     expect(screen.queryByText(/Tallest bar/)).toBeNull();
   });
 
-  it('draws the daily target as a line to read the bars against', async () => {
+  it('draws the daily target as a line to read the bars against, labelled in place', async () => {
     const screen = await open(UNDER);
 
     expect(screen.getByTestId('calorie-target-line')).toBeTruthy();
-    expect(screen.getByText('Daily target')).toBeTruthy();
+    expect(screen.getByText('Target 2,000')).toBeTruthy();
   });
 
   it('draws no target line when there is no target', async () => {
