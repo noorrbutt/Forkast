@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 from html import escape
 from importlib import import_module
@@ -9,17 +10,29 @@ from typing import Any
 
 from app.config import get_settings
 
+logger = logging.getLogger(__name__)
+
 
 def _send_link_email(to: str, link: str, *, subject: str, intro: str, action: str) -> None:
     settings = get_settings()
     sender = settings.resend_from_email
     api_key = settings.resend_api_key
-    if (
-        api_key is None
-        or not api_key.get_secret_value().strip()
-        or not sender
-        or not sender.strip()
-    ):
+    has_key = api_key is not None and bool(api_key.get_secret_value().strip())
+    has_sender = bool(sender and sender.strip())
+    if not has_key or not has_sender:
+        # Deliberately a no-op rather than an error: local dev, CI and tests
+        # all run with no Resend credentials configured, and none of them
+        # should need one just to register a user. But the job handler that
+        # calls this treats a plain return as success and marks the job done,
+        # so without a log line here, a deployment that forgot to set
+        # RESEND_API_KEY / RESEND_FROM_EMAIL sends nothing and nothing ever
+        # says why -- every verification and reset email vanishes silently.
+        logger.warning(
+            "email_send_skipped_no_provider to=%s subject=%r missing=%s",
+            to,
+            subject,
+            "RESEND_API_KEY" if not has_key else "RESEND_FROM_EMAIL",
+        )
         return
 
     client = init_resend_client()
