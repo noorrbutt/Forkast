@@ -24,15 +24,14 @@ from app.services import email as email_service
 ME = "/api/v1/me"
 
 
-def _mock_resend(monkeypatch: pytest.MonkeyPatch) -> Mock:
+def _mock_brevo(monkeypatch: pytest.MonkeyPatch) -> Mock:
     send = Mock()
-    client = SimpleNamespace(Emails=SimpleNamespace(send=send))
     settings = SimpleNamespace(
-        resend_api_key=SecretStr("re_test_key"),
-        resend_from_email="Forkast <noreply@example.test>",
+        brevo_api_key=SecretStr("xkeysib-test-key"),
+        brevo_from_email="Forkast <noreply@example.test>",
     )
     monkeypatch.setattr(email_service, "get_settings", lambda: settings)
-    monkeypatch.setattr(email_service, "init_resend_client", lambda: client)
+    monkeypatch.setattr(email_service, "send_via_brevo", send)
     return send
 
 
@@ -53,7 +52,7 @@ async def test_a_blank_name_is_refused(auth_client: AsyncClient) -> None:
 async def test_changing_email_marks_it_unverified_and_sends_a_new_link(
     auth_client: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    send = _mock_resend(monkeypatch)
+    send = _mock_brevo(monkeypatch)
 
     response = await auth_client.patch(ME, json={"email": "new-address@forkast.app"})
 
@@ -62,7 +61,7 @@ async def test_changing_email_marks_it_unverified_and_sends_a_new_link(
     assert body["email"] == "new-address@forkast.app"
     assert body["email_verified"] is False
     assert send.call_count == 1
-    assert send.call_args.args[0]["to"] == ["new-address@forkast.app"]
+    assert send.call_args.args[0]["to"] == [{"email": "new-address@forkast.app"}]
 
     user = await session.scalar(select(User).where(User.email == "new-address@forkast.app"))
     assert user is not None

@@ -201,7 +201,7 @@ list. The ones you will touch most:
 | `JWT_SECRET` | none | Generate with `openssl rand -hex 32` |
 | `AI_PROVIDER` | `fake` | `fake` is the local estimator. `groq` needs `GROQ_API_KEY` |
 | `PHOTO_ESTIMATE_ENABLED` | `true` | Kill switch for photo estimation alone |
-| `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | empty | Verification and reset emails |
+| `BREVO_API_KEY`, `BREVO_FROM_EMAIL` | empty | Verification and reset emails |
 | `GOOGLE_CLIENT_IDS` | empty | Audiences accepted for Google sign in. Empty turns the feature off |
 | `CORS_ORIGINS` | `*` | Restrict this in production |
 | `TRUST_PROXY_HEADERS`, `TRUSTED_PROXY_HOPS` | `false`, `1` | Only enable behind a proxy you control, or callers can spoof their rate-limit identity |
@@ -432,7 +432,7 @@ Production checklist:
 - [ ] A real `JWT_SECRET`, and `CORS_ORIGINS` narrowed from `*`
 - [ ] `AI_PROVIDER=groq` with a key, if you want real estimates. Startup warns when
       production is backed by the local estimator
-- [ ] `RESEND_API_KEY` and a verified sender domain
+- [ ] `BREVO_API_KEY` and a verified sender address
 - [ ] `TRUST_PROXY_HEADERS=true` and the correct `TRUSTED_PROXY_HOPS`, only if a
       proxy you control sits in front
 - [ ] At least one worker running

@@ -26,15 +26,14 @@ from app.services import jobs
 REGISTER = "/api/v1/auth/register"
 
 
-def _mock_resend(monkeypatch: pytest.MonkeyPatch, *, side_effect=None) -> Mock:
+def _mock_brevo(monkeypatch: pytest.MonkeyPatch, *, side_effect=None) -> Mock:
     send = Mock(side_effect=side_effect)
-    client = SimpleNamespace(Emails=SimpleNamespace(send=send))
     settings = SimpleNamespace(
-        resend_api_key=SecretStr("re_test_key"),
-        resend_from_email="Forkast <noreply@example.test>",
+        brevo_api_key=SecretStr("xkeysib-test-key"),
+        brevo_from_email="Forkast <noreply@example.test>",
     )
     monkeypatch.setattr(email_service, "get_settings", lambda: settings)
-    monkeypatch.setattr(email_service, "init_resend_client", lambda: client)
+    monkeypatch.setattr(email_service, "send_via_brevo", send)
     return send
 
 
@@ -51,7 +50,7 @@ async def test_a_failed_verification_email_is_retried_and_then_scrubbed(
     session_factory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    failing = _mock_resend(monkeypatch, side_effect=RuntimeError("provider unavailable"))
+    failing = _mock_brevo(monkeypatch, side_effect=RuntimeError("provider unavailable"))
     response = await client.post(
         REGISTER,
         json={
@@ -72,7 +71,7 @@ async def test_a_failed_verification_email_is_retried_and_then_scrubbed(
     link = job.payload["link"]
 
     # The provider recovers and the backoff has elapsed.
-    working = _mock_resend(monkeypatch)
+    working = _mock_brevo(monkeypatch)
     await session.execute(
         update(Job).where(Job.id == job.id).values(run_at=dt.datetime.now(dt.UTC))
     )
@@ -81,7 +80,7 @@ async def test_a_failed_verification_email_is_retried_and_then_scrubbed(
     await jobs.run_claimed(claimed, jobs.JobContext(factory=session_factory))
 
     assert working.call_count == 1
-    assert link in working.call_args.args[0]["text"]
+    assert link in working.call_args.args[0]["textContent"]
     done = await _email_job(session)
     assert done.status is JobStatus.done
     # The link holds a live one-time token; only its hash belongs in the DB.

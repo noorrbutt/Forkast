@@ -24,15 +24,14 @@ VERIFY = "/api/v1/auth/verify-email"
 RESEND = "/api/v1/auth/resend-verification"
 
 
-def _mock_resend(monkeypatch: pytest.MonkeyPatch, *, side_effect=None) -> Mock:
+def _mock_brevo(monkeypatch: pytest.MonkeyPatch, *, side_effect=None) -> Mock:
     send = Mock(side_effect=side_effect)
-    client = SimpleNamespace(Emails=SimpleNamespace(send=send))
     settings = SimpleNamespace(
-        resend_api_key=SecretStr("re_test_key"),
-        resend_from_email="Forkast <noreply@example.test>",
+        brevo_api_key=SecretStr("xkeysib-test-key"),
+        brevo_from_email="Forkast <noreply@example.test>",
     )
     monkeypatch.setattr(email_service, "get_settings", lambda: settings)
-    monkeypatch.setattr(email_service, "init_resend_client", lambda: client)
+    monkeypatch.setattr(email_service, "send_via_brevo", send)
     return send
 
 
@@ -55,30 +54,30 @@ def _settings_args() -> dict[str, str]:
     }
 
 
-def test_resend_settings_must_be_configured_together() -> None:
-    with pytest.raises(ValidationError, match="RESEND_API_KEY and RESEND_FROM_EMAIL"):
-        Settings(_env_file=None, **_settings_args(), RESEND_API_KEY="re_test_key")
+def test_brevo_settings_must_be_configured_together() -> None:
+    with pytest.raises(ValidationError, match="BREVO_API_KEY and BREVO_FROM_EMAIL"):
+        Settings(_env_file=None, **_settings_args(), BREVO_API_KEY="xkeysib-test-key")
 
-    with pytest.raises(ValidationError, match="RESEND_API_KEY and RESEND_FROM_EMAIL"):
+    with pytest.raises(ValidationError, match="BREVO_API_KEY and BREVO_FROM_EMAIL"):
         Settings(
             _env_file=None,
             **_settings_args(),
-            RESEND_FROM_EMAIL="Forkast <noreply@example.test>",
+            BREVO_FROM_EMAIL="Forkast <noreply@example.test>",
         )
 
 
 async def test_registration_sends_a_hashed_verification_token(
     client: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    send = _mock_resend(monkeypatch)
+    send = _mock_brevo(monkeypatch)
     response = await client.post(REGISTER, json=_registration("verify@forkast.app"))
 
     assert response.status_code == 201
     assert send.call_count == 1
     params = send.call_args.args[0]
-    assert params["from"] == "Forkast <noreply@example.test>"
-    assert params["to"] == ["verify@forkast.app"]
-    assert "forkast://check-email?token=" in params["text"]
+    assert params["sender"] == {"email": "noreply@example.test", "name": "Forkast"}
+    assert params["to"] == [{"email": "verify@forkast.app"}]
+    assert "forkast://check-email?token=" in params["textContent"]
 
     user = await session.scalar(select(User).where(User.email == "verify@forkast.app"))
     assert user is not None
@@ -87,17 +86,17 @@ async def test_registration_sends_a_hashed_verification_token(
         select(EmailVerificationToken).where(EmailVerificationToken.user_id == user.id)
     )
     assert stored is not None
-    raw_token = parse_qs(urlsplit(params["text"].split(": ", maxsplit=1)[1]).query)["token"][0]
+    raw_token = parse_qs(urlsplit(params["textContent"].split(": ", maxsplit=1)[1]).query)["token"][0]
     assert stored.token_hash == hash_refresh_token(raw_token)
     assert stored.token_hash != raw_token
 
 
-async def test_registration_succeeds_when_resend_raises(
+async def test_registration_succeeds_when_brevo_raises(
     client: AsyncClient,
     session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    send = _mock_resend(monkeypatch, side_effect=RuntimeError("provider unavailable"))
+    send = _mock_brevo(monkeypatch, side_effect=RuntimeError("provider unavailable"))
     response = await client.post(REGISTER, json=_registration("delivery-failure@forkast.app"))
 
     assert response.status_code == 201
@@ -140,7 +139,7 @@ async def test_resend_is_enumeration_safe_for_unknown_and_verified_accounts(
     session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    send = _mock_resend(monkeypatch)
+    send = _mock_brevo(monkeypatch)
     user = User(email="resend@forkast.app", password_hash="test-hash")
     verified = User(email="verified@forkast.app", password_hash="test-hash", email_verified=True)
     session.add_all([user, verified])

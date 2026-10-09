@@ -127,8 +127,8 @@ class Settings(BaseSettings):
     # vision model -- without a redeploy or touching anything else the same
     # provider serves, such as plans or text calorie refinement.
     photo_estimate_enabled: bool = Field(default=True, alias="PHOTO_ESTIMATE_ENABLED")
-    resend_api_key: SecretStr | None = Field(default=None, alias="RESEND_API_KEY")
-    resend_from_email: str = Field(default="", alias="RESEND_FROM_EMAIL")
+    brevo_api_key: SecretStr | None = Field(default=None, alias="BREVO_API_KEY")
+    brevo_from_email: str = Field(default="", alias="BREVO_FROM_EMAIL")
 
     cors_origins: str = Field(default="*", alias="CORS_ORIGINS")
 
@@ -318,12 +318,12 @@ class Settings(BaseSettings):
                 "AI_PROVIDER=fake for the deterministic local estimator."
             )
 
-        has_resend_key = bool(
-            self.resend_api_key and self.resend_api_key.get_secret_value().strip()
+        has_brevo_key = bool(
+            self.brevo_api_key and self.brevo_api_key.get_secret_value().strip()
         )
-        has_resend_sender = bool(self.resend_from_email.strip())
-        if has_resend_key != has_resend_sender:
-            raise ValueError("RESEND_API_KEY and RESEND_FROM_EMAIL must be configured together.")
+        has_brevo_sender = bool(self.brevo_from_email.strip())
+        if has_brevo_key != has_brevo_sender:
+            raise ValueError("BREVO_API_KEY and BREVO_FROM_EMAIL must be configured together.")
 
         if self.cors_origin_list == ["*"] and urlsplit(self.database_url).hostname not in {
             "localhost",

@@ -23,24 +23,23 @@ FORGOT = "/api/v1/auth/forgot-password"
 RESET = "/api/v1/auth/reset-password"
 
 
-def _mock_resend(monkeypatch: pytest.MonkeyPatch, *, side_effect=None) -> Mock:
+def _mock_brevo(monkeypatch: pytest.MonkeyPatch, *, side_effect=None) -> Mock:
     send = Mock(side_effect=side_effect)
-    client = SimpleNamespace(Emails=SimpleNamespace(send=send))
     settings = SimpleNamespace(
-        resend_api_key=SecretStr("re_test_key"),
-        resend_from_email="Forkast <noreply@example.test>",
+        brevo_api_key=SecretStr("xkeysib-test-key"),
+        brevo_from_email="Forkast <noreply@example.test>",
     )
     monkeypatch.setattr(email_service, "get_settings", lambda: settings)
-    monkeypatch.setattr(email_service, "init_resend_client", lambda: client)
+    monkeypatch.setattr(email_service, "send_via_brevo", send)
     return send
 
 
-async def test_forgot_password_returns_202_when_resend_raises(
+async def test_forgot_password_returns_202_when_brevo_raises(
     client: AsyncClient,
     session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    send = _mock_resend(monkeypatch, side_effect=RuntimeError("provider unavailable"))
+    send = _mock_brevo(monkeypatch, side_effect=RuntimeError("provider unavailable"))
     user = User(
         email="reset-delivery@forkast.app",
         password_hash="existing-hash",
@@ -54,8 +53,8 @@ async def test_forgot_password_returns_202_when_resend_raises(
     assert response.status_code == 202
     assert send.call_count == 1
     params = send.call_args.args[0]
-    assert params["to"] == [user.email]
-    assert "forkast://reset-password?token=" in params["text"]
+    assert params["to"] == [{"email": user.email}]
+    assert "forkast://reset-password?token=" in params["textContent"]
     stored = await session.scalar(
         select(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
     )
@@ -65,7 +64,7 @@ async def test_forgot_password_returns_202_when_resend_raises(
         <= stored.expires_at - stored.created_at
         <= dt.timedelta(minutes=60)
     )
-    raw_token = parse_qs(urlsplit(params["text"].split(": ", 1)[1]).query)["token"][0]
+    raw_token = parse_qs(urlsplit(params["textContent"].split(": ", 1)[1]).query)["token"][0]
     assert stored.token_hash == hash_refresh_token(raw_token)
     assert stored.token_hash != raw_token
 
@@ -75,7 +74,7 @@ async def test_forgot_password_returns_202_for_unknown_and_unverified_emails(
     session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    send = _mock_resend(monkeypatch)
+    send = _mock_brevo(monkeypatch)
     user = User(email="unverified-reset@forkast.app", password_hash="existing-hash")
     verified = User(
         email="verified-reset@forkast.app",
@@ -93,7 +92,7 @@ async def test_forgot_password_returns_202_for_unknown_and_unverified_emails(
     assert unverified.status_code == 202
     assert already_verified.status_code == 202
     assert send.call_count == 1
-    assert send.call_args.args[0]["to"] == [verified.email]
+    assert send.call_args.args[0]["to"] == [{"email": verified.email}]
     assert (
         await session.scalar(
             select(PasswordResetToken).where(PasswordResetToken.user_id == user.id)

@@ -159,8 +159,8 @@ Email (both or neither):
 
 | Name | Value |
 | --- | --- |
-| `RESEND_API_KEY` | Resend key |
-| `RESEND_FROM_EMAIL` | Verified sender |
+| `BREVO_API_KEY` | Brevo key |
+| `BREVO_FROM_EMAIL` | Verified sender |
 
 Optional, with their defaults in `backend/app/config.py`:
 
