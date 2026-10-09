@@ -260,7 +260,7 @@ function uppercaseLabels(screen: Screen): string[] {
 async function open(today: Today) {
   signedInWith(today, 12);
   const screen = render(<DashboardScreen />, { wrapper });
-  await waitFor(() => expect(screen.getByText('This week')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Last 7 days')).toBeTruthy());
   // The burn input runs a query of its own, which settles after this one. Left
   // to land on its own it updates outside act, and that warning is noise that
   // hides the next real one.
@@ -435,7 +435,7 @@ describe('icons and labels', () => {
     const screen = await open(UNDER);
 
     expect(flat(screen.getByText('Today').props.style).fontSize).toBe(type.title.fontSize);
-    expect(flat(screen.getByText('This week').props.style).fontSize).toBe(type.title.fontSize);
+    expect(flat(screen.getByText('Last 7 days').props.style).fontSize).toBe(type.title.fontSize);
   });
 });
 
