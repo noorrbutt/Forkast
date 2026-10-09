@@ -100,6 +100,10 @@ function TabIcon({ name, focused, size }: TabIconProps) {
 /** Exported for the tests, which drive it with a fabricated navigation state. */
 export function FloatingTabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
   const { colors, layout, radius, spacing, type } = useTheme();
+  // The raised button only ever hides on the Log screen itself -- there it
+  // could only navigate to where you already are. Everywhere else, Home
+  // included, it stays up so logging a meal is never more than one tap away.
+  const fabHidden = state.routes[state.index]?.name === RAISED_ROUTE;
 
   const go = (route: (typeof state.routes)[number], focused: boolean) => {
     const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
@@ -124,7 +128,7 @@ export function FloatingTabBar({ state, descriptors, navigation, insets }: Botto
         position: 'absolute',
         left: spacing.lg,
         right: spacing.lg,
-        bottom: insets.bottom + spacing.md,
+        bottom: insets.bottom + layout.tabBarInset,
         maxWidth: layout.contentWidth,
         alignSelf: 'center',
         marginHorizontal: 'auto',
@@ -151,8 +155,13 @@ export function FloatingTabBar({ state, descriptors, navigation, insets }: Botto
           if (HIDDEN_ROUTES.has(route.name)) return null;
 
           // The raised action leaves a gap here and is drawn over the bar
-          // below, so the other tabs still divide the width evenly.
-          if (route.name === RAISED_ROUTE) return <View key={route.key} style={{ flex: 1 }} />;
+          // below, so the other tabs still divide the width evenly. When the
+          // button itself is hidden (on the Log screen), the gap would just
+          // be dead space, so it's dropped and the remaining four items
+          // re-space evenly across the full width instead.
+          if (route.name === RAISED_ROUTE) {
+            return fabHidden ? null : <View key={route.key} style={{ flex: 1 }} />;
+          }
 
           return (
             <Pressable
@@ -197,13 +206,8 @@ export function FloatingTabBar({ state, descriptors, navigation, insets }: Botto
         const focused = state.index === index;
         // Not drawn on the Log screen itself. There it could only navigate to
         // where you already are, so it was a large saffron button that did
-        // nothing, sitting over the form it was supposed to lead to. The
-        // spacer in the row stays, so the other four tabs do not shift.
+        // nothing, sitting over the form it was supposed to lead to.
         if (focused) return null;
-        // Nor on Home, whose Today strip is the way in to Log there: a ghost
-        // tile per open slot, or one "Another meal" tile once they are filled,
-        // so there is always a log action on screen without this one.
-        if (state.routes[state.index]?.name === 'index') return null;
         return (
           <Pressable
             key={route.key}

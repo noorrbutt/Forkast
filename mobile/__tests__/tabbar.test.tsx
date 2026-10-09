@@ -183,15 +183,8 @@ describe('the raised centre button', () => {
     expect(screen.getByLabelText('Profile')).toBeTruthy();
   });
 
-  it('is not drawn on Home, whose Today strip is the way in to Log there', () => {
-    const { screen } = mountBar(0);
-
-    expect(screen.queryByLabelText('Log a meal')).toBeNull();
-    expect(screen.getByLabelText('Diary')).toBeTruthy();
-  });
-
-  it('is drawn on every other tab', () => {
-    for (const index of [1, 3, 4]) {
+  it('is drawn on every other tab, Home included', () => {
+    for (const index of [0, 1, 3, 4]) {
       const { screen } = mountBar(index);
       expect(screen.getByLabelText('Log a meal')).toBeTruthy();
       screen.unmount();
