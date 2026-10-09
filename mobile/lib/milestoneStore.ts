@@ -41,3 +41,38 @@ export async function markMilestoneSeen(day: number): Promise<void> {
     memory.add(key(day));
   }
 }
+
+/**
+ * Which dates a "a freeze just covered you" notice has already been shown
+ * for.
+ *
+ * The server only sends freeze_just_used_on on the one read that actually
+ * spent the freeze, so in principle one flag isn't strictly needed the way a
+ * milestone's is. But a cached response replayed on remount (React Query
+ * serving the same payload again without a fresh fetch) would otherwise
+ * replay the notice too, so the same seen-once pattern applies here.
+ */
+function freezeKey(date: string): string {
+  return `forkast.freeze.seen.${date}`;
+}
+
+export async function hasSeenFreezeSave(date: string): Promise<boolean> {
+  if (Platform.OS === 'web') return memory.has(freezeKey(date));
+  try {
+    return (await SecureStore.getItemAsync(freezeKey(date))) != null;
+  } catch {
+    return memory.has(freezeKey(date));
+  }
+}
+
+export async function markFreezeSaveSeen(date: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    memory.add(freezeKey(date));
+    return;
+  }
+  try {
+    await SecureStore.setItemAsync(freezeKey(date), '1');
+  } catch {
+    memory.add(freezeKey(date));
+  }
+}

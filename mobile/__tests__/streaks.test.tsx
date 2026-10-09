@@ -85,6 +85,7 @@ type StreakPayload = {
   longest_streak: number;
   last_junk_date: string | null;
   message: string;
+  freeze_just_used_on?: string | null;
 };
 
 /** Nothing ever logged: no run, no record, no slip. */
@@ -355,5 +356,27 @@ describe('a run that has just been broken', () => {
         ),
       ).toBeTruthy(),
     );
+  });
+});
+
+describe('a freeze that just covered a slip', () => {
+  it('says so, instead of the save happening silently', async () => {
+    const view = await show({ ...RUNNING, freeze_just_used_on: '2026-10-09' });
+
+    await waitFor(() =>
+      expect(view.getByText('Your streak freeze just saved you')).toBeTruthy(),
+    );
+    expect(
+      view.getByText(
+        'A junk day landed today, but a banked freeze covered it instead of resetting the count.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('says nothing when no freeze was just spent', async () => {
+    const view = await show(RUNNING);
+
+    await waitFor(() => view.getByText('7'));
+    expect(view.queryByText('Your streak freeze just saved you')).toBeNull();
   });
 });

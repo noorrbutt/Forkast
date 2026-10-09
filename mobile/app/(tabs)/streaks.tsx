@@ -8,7 +8,12 @@ import { useStreaks } from '../../hooks/useInsights';
 import { describeError } from '../../lib/api';
 import { displayDish, formatDate } from '../../lib/format';
 import { haptics } from '../../lib/haptics';
-import { hasSeenMilestone, markMilestoneSeen } from '../../lib/milestoneStore';
+import {
+  hasSeenFreezeSave,
+  hasSeenMilestone,
+  markFreezeSaveSeen,
+  markMilestoneSeen,
+} from '../../lib/milestoneStore';
 import type { StreakMilestone } from '../../lib/types';
 import { useTheme } from '../../theme';
 import { motion } from '../../theme/motion';
@@ -71,6 +76,53 @@ function MilestoneCelebration({ milestone }: { milestone: StreakMilestone | null
         <Text style={[type.hero, { color: colors.success, fontSize: 44 }]}>+1</Text>
         <Text style={[type.caption, { color: colors.muted }]}>freeze banked</Text>
       </Animated.View>
+    </Dialog>
+  );
+}
+
+/**
+ * The one-time notice that a slip did not actually cost the streak.
+ *
+ * Spending a freeze used to be invisible: the count would quietly drop by
+ * one and the streak would hold, with nothing on screen saying why, so a
+ * save looked identical to a day with nothing junk logged at all. The server
+ * now reports the exact date it just covered, only on the read that spent
+ * it, which is what this opens for.
+ */
+function FreezeSavedNotice({ date }: { date: string | null }) {
+  const { colors, spacing, type } = useTheme();
+  const [visible, setVisible] = useState(false);
+  const shown = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!date) return;
+    if (shown.current === date) return;
+    let active = true;
+    void hasSeenFreezeSave(date).then((seen) => {
+      if (!active || seen) return;
+      shown.current = date;
+      void markFreezeSaveSeen(date);
+      setVisible(true);
+      haptics.success();
+    });
+    return () => {
+      active = false;
+    };
+  }, [date]);
+
+  if (!date) return null;
+
+  return (
+    <Dialog
+      visible={visible}
+      onDismiss={() => setVisible(false)}
+      title="Your streak freeze just saved you"
+      message="A junk day landed today, but a banked freeze covered it instead of resetting the count."
+      actions={[{ label: 'Good to know', onPress: () => setVisible(false) }]}
+    >
+      <View style={{ alignItems: 'center', paddingVertical: spacing.md }}>
+        <Text style={[type.hero, { color: colors.success, fontSize: 44 }]}>❄</Text>
+      </View>
     </Dialog>
   );
 }
@@ -168,6 +220,7 @@ export default function StreaksScreen() {
       }
     >
       <MilestoneCelebration milestone={data?.milestone ?? null} />
+      <FreezeSavedNotice date={data?.freeze_just_used_on ?? null} />
 
       <View style={column}>
         {/* isPending rather than isLoading, because the query is disabled until

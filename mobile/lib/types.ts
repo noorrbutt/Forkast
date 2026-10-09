@@ -344,6 +344,10 @@ export type Streaks = {
   last_junk_dish: string | null;
   /** Banked and unspent. Spent automatically, so this can drop with no action taken. */
   available_freezes: number;
+  /** The day a freeze was newly spent on this exact read, or null. Sent only
+   * on the read that spent it, so the client can show a one-time "a freeze
+   * covered you" notice instead of the save happening silently. */
+  freeze_just_used_on: string | null;
   /** Sent every time current_streak matches a milestone length, not only the
    * first time -- the server has no notion of whether this has been shown
    * yet, so the client gates the one-time celebration itself. */
