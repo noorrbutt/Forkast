@@ -123,6 +123,10 @@ class StreaksOut(BaseModel):
     # run, which is why this can drop between two reads with no action taken
     # by the caller.
     available_freezes: int = 0
+    # The most recent day a freeze was newly spent on, in this exact request.
+    # Null on every read after the one that spent it, which is what lets the
+    # client say so once rather than it happening silently every time.
+    freeze_just_used_on: dt.date | None = None
     milestone: StreakMilestone | None = None
     # Soft recovery wording rather than a punitive tone, per the product brief.
     message: str

@@ -152,6 +152,58 @@ async def test_a_banked_freeze_bridges_a_junk_day_without_breaking_the_streak(
     assert body["last_junk_date"] == today.isoformat()
 
 
+async def test_a_spent_freeze_keeps_bridging_the_same_day_on_later_reads(
+    auth_client: AsyncClient,
+) -> None:
+    """Streaks are recomputed from scratch on every request, which means the
+    walk reaches the same old junk day again on every later read too. A freeze
+    that only bridged it within the request that spent it would make the
+    streak collapse back to zero the very next time anything calls this --
+    opening the app, generating a plan, anything -- as if the freeze had never
+    been used."""
+    await _set_timezone(auth_client, "Asia/Karachi")
+    categories = await _categories(auth_client)
+    today = dt.datetime.now(KARACHI).date()
+
+    await _log_clean_streak(auth_client, categories, 3, today)
+    # Earns the day-3 milestone and its freeze before the slip.
+    await auth_client.get(STREAKS)
+    await _log(
+        auth_client, categories["fries"], dish="regrettable", when=dt.datetime.now(KARACHI)
+    )
+
+    first = (await auth_client.get(STREAKS)).json()
+    assert first["current_streak"] == 3
+    assert first["available_freezes"] == 0
+
+    # A second, unrelated read -- the one that used to re-walk straight into
+    # the same already-bridged junk day, find no freeze left in the "still
+    # available" pool, and break there.
+    second = (await auth_client.get(STREAKS)).json()
+
+    assert second["current_streak"] == 3
+    assert second["available_freezes"] == 0
+
+
+async def test_freeze_just_used_on_is_reported_once(auth_client: AsyncClient) -> None:
+    await _set_timezone(auth_client, "Asia/Karachi")
+    categories = await _categories(auth_client)
+    today = dt.datetime.now(KARACHI).date()
+
+    await _log_clean_streak(auth_client, categories, 3, today)
+    await auth_client.get(STREAKS)
+    await _log(
+        auth_client, categories["fries"], dish="regrettable", when=dt.datetime.now(KARACHI)
+    )
+
+    first = (await auth_client.get(STREAKS)).json()
+    assert first["freeze_just_used_on"] == today.isoformat()
+
+    # Reported only on the read that spent it, not on every read after.
+    second = (await auth_client.get(STREAKS)).json()
+    assert second["freeze_just_used_on"] is None
+
+
 async def test_without_a_freeze_a_junk_day_still_resets_the_streak(
     auth_client: AsyncClient,
 ) -> None:

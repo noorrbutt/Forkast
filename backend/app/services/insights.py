@@ -366,29 +366,40 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
 
     earliest = max(first_logged_day, window_start)
 
-    # Oldest first, so a streak with several bad days behind it spends its
-    # longest-banked freeze first rather than an order that happens to leave a
-    # more recently earned one sitting unused.
-    available_freezes = list(
+    # Every freeze this user has, spent or not. Streaks are recomputed from
+    # scratch on every request (see the module docstring), so a day a freeze
+    # already bridged has to stay bridged on every later walk too -- not only
+    # within the request that spent it. Checking used_on_date here is what
+    # makes that permanent: without it, the walk would reach that same old
+    # junk day again on the very next request, find the freeze already gone
+    # from the "available" pool, and break there as if it had never been
+    # spent, collapsing the streak back down every time this function reruns.
+    all_freezes = list(
         await session.scalars(
             select(StreakFreeze)
-            .where(StreakFreeze.user_id == user.id, StreakFreeze.used_on_date.is_(None))
+            .where(StreakFreeze.user_id == user.id)
             .order_by(StreakFreeze.created_at)
         )
     )
-    freeze_queue = iter(available_freezes)
+    already_protected = {f.used_on_date for f in all_freezes if f.used_on_date is not None}
+
+    # Oldest first, so a streak with several bad days behind it spends its
+    # longest-banked freeze first rather than an order that happens to leave a
+    # more recently earned one sitting unused.
+    freeze_queue = iter(f for f in all_freezes if f.used_on_date is None)
     next_freeze = next(freeze_queue, None)
     spent: list[tuple[StreakFreeze, dt.date]] = []
 
     # A streak is a sequence of days without a junk log, not a sequence of days
     # with a clean meal. Empty days still count as clean until the next junk day
-    # resets the run. A junk day no longer ends the run outright if a freeze is
-    # still on hand: it is spent on that exact day and the walk continues past
-    # it, oldest freeze first.
+    # resets the run. A junk day no longer ends the run outright if it is
+    # already protected or a freeze is still on hand: an already protected day
+    # is skipped for free, an unprotected one spends the next freeze and the
+    # walk continues past it, oldest freeze first.
     current_streak = 0
     cursor = today
     while cursor >= earliest:
-        if cursor in junk_days:
+        if cursor in junk_days and cursor not in already_protected:
             if next_freeze is None:
                 break
             spent.append((next_freeze, cursor))
@@ -468,6 +479,11 @@ async def compute_streaks(session: AsyncSession, user: User) -> StreaksOut:
         last_junk_dish=last_junk_dish,
         available_freezes=int(remaining_freezes or 0),
         milestone=milestone,
+        # The most recent day a freeze was newly spent in this exact call, so
+        # the client can tell "a freeze just covered a slip" from "a freeze is
+        # sitting there unspent" and say so once, rather than that protection
+        # happening silently every time, which is how it worked before.
+        freeze_just_used_on=max((day for _, day in spent), default=None),
         message=_streak_message(current_streak, has_any_logs=True),
     )
 
