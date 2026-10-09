@@ -219,8 +219,7 @@ async def test_averaging_over_several_logged_days(auth_client: AsyncClient) -> N
     today = dt.datetime.now(KARACHI).date()
 
     meals = [
-        await _log(auth_client, categories["biryani"], dish=f"meal {offset}")
-        for offset in range(3)
+        await _log(auth_client, categories["biryani"], dish=f"meal {offset}") for offset in range(3)
     ]
 
     this_month = (await auth_client.get(TREND)).json()["this_month"]
