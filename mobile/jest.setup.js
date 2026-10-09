@@ -86,6 +86,17 @@ jest.mock('expo-image-manipulator', () => ({
   SaveFormat: { JPEG: 'jpeg', PNG: 'png' },
 }));
 
+// No react-native-maps either: it registers a TurboModule at import time. The
+// diary imports the map now (its List / Map switch), so every test that renders
+// the diary would otherwise fail before a single assertion. Stubbed to the
+// "maps unavailable" path, which draws the list of places and no MapView.
+jest.mock('./components/MapCanvas', () => ({
+  MAPS_UNAVAILABLE: true,
+  MapView: null,
+  Marker: null,
+  PROVIDER_DEFAULT: undefined,
+}));
+
 // No Google sign in SDK in a test runner: the module reaches for native code at
 // import time, exactly like the two above. The default is a signed in user, so
 // the tests exercise the path a real person takes; a test that needs a refusal

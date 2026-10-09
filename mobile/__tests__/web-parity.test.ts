@@ -228,24 +228,14 @@ describe('a row of three buttons', () => {
 });
 
 describe('icons name a destination, never a heading', () => {
-  it('puts one on each of the dashboard navigation rows', () => {
+  it('leaves Home with no list of destinations at all', () => {
     const source = code('app/(tabs)/index.tsx');
 
-    // One row now. The diary row went, because Diary is a tab in the bar,
-    // and the plan moved into Home's next card.
-    expect(source).toMatch(/icon="map"/);
+    // The rows are gone: Diary is a tab, the plan lives in the next card, the
+    // map is a view of the diary, and the charts are behind "See trends".
+    expect(source).not.toMatch(/<ListGroup/);
     expect(source).toMatch(/<NextCard/);
-  });
-
-  it('gives every row an icon or none, because a bare row breaks the group edge', () => {
-    // ListRow lays the icon out beside the text column, so a row without one
-    // starts its label 44pt further left than its neighbours.
-    const group = /<ListGroup>[\s\S]*?<\/ListGroup>/.exec(code('app/(tabs)/index.tsx'));
-
-    expect(group).not.toBeNull();
-    const rows = group?.[0].match(/<ListRow/g) ?? [];
-    const icons = group?.[0].match(/icon="/g) ?? [];
-    expect(icons.length).toBe(rows.length);
+    expect(source).toMatch(/router\.push\('\/trends'\)/);
   });
 
   it('does not put one back beside the photo label', () => {
@@ -372,7 +362,6 @@ describe('the content column', () => {
  */
 describe('icons inside a group of rows', () => {
   const GROUPS = [
-    'app/(tabs)/index.tsx',
     'app/(tabs)/profile.tsx',
     'components/ChangePassword.tsx',
     'components/DeleteAccount.tsx',
@@ -381,7 +370,7 @@ describe('icons inside a group of rows', () => {
   it('never mixes iconned and bare rows in the profile settings', () => {
     // The three components that render into the profile's groups, read
     // together, because the group is assembled across files.
-    const source = GROUPS.slice(1).map(code).join('\n');
+    const source = GROUPS.map(code).join('\n');
     const rows = source.match(/<ListRow/g) ?? [];
     const icons = source.match(/^\s*icon="/gm) ?? [];
 
@@ -389,13 +378,17 @@ describe('icons inside a group of rows', () => {
     expect(icons).toHaveLength(0);
   });
 
-  it('keeps the dashboard destinations all iconned, which is the other half of the rule', () => {
-    const group = /<ListGroup>[\s\S]*?<\/ListGroup>/.exec(code('app/(tabs)/index.tsx'));
-    const rows = group?.[0].match(/<ListRow/g) ?? [];
-    const icons = group?.[0].match(/icon="/g) ?? [];
-
-    expect(rows.length).toBeGreaterThan(0);
-    expect(icons.length).toBe(rows.length);
+  it('never mixes them in any group the app draws', () => {
+    // ListRow lays the icon out beside the text column, so a row without one
+    // starts its label 44pt further left than its neighbours. Home's iconned
+    // destinations group is gone, so this checks every group that is left.
+    for (const file of ['app/(tabs)/profile.tsx', 'components/MapScreen.tsx', 'app/(tabs)/plan.tsx']) {
+      for (const group of code(file).match(/<ListGroup[\s\S]*?<\/ListGroup>/g) ?? []) {
+        const rows = group.match(/<ListRow/g) ?? [];
+        const icons = group.match(/^\s*icon="/gm) ?? [];
+        expect([0, rows.length]).toContain(icons.length);
+      }
+    }
   });
 });
 

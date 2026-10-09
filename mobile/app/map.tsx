@@ -1,14 +1,10 @@
-import { useRouter } from 'expo-router';
+import { Redirect } from 'expo-router';
 
-import { MapScreen } from '../components/MapScreen';
-import { Screen } from '../components/ui';
-
+/**
+ * The map is a view of the diary now, behind the List / Map switch in its
+ * header, not a screen of its own. This route stays so an old link or a
+ * bookmarked /map still lands somewhere sensible: on the diary, map showing.
+ */
 export default function MapRoute() {
-  const router = useRouter();
-
-  return (
-    <Screen title="Map" eyebrow="Where you eat" onBack={() => router.back()} bottomInset={48}>
-      <MapScreen />
-    </Screen>
-  );
+  return <Redirect href={{ pathname: '/history', params: { view: 'map' } }} />;
 }

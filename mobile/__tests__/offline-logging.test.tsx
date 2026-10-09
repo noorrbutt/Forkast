@@ -22,6 +22,7 @@ jest.mock('expo-router', () => ({
   // when a screen loses focus, only that rendering a screen using the real
   // hook does not throw.
   useFocusEffect: jest.fn(),
+  useLocalSearchParams: () => ({}),
   useRouter: () => ({ push: jest.fn(), navigate: mockNavigate, back: jest.fn(), canGoBack: () => true }),
 }));
 

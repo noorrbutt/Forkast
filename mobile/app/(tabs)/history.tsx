@@ -1,4 +1,4 @@
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, Text, View } from 'react-native';
 
@@ -6,6 +6,8 @@ import { DayGroup } from '../../components/diary/DayGroup';
 import { groupByDay, type DiaryDay } from '../../components/diary/diaryDays';
 import { DeleteMealDialog, MealActionMenu, RepeatMealDialog } from '../../components/diary/DiaryDialogs';
 import { DiaryDaySkeleton } from '../../components/diary/DiaryDaySkeleton';
+import { DiaryViewToggle, type DiaryView } from '../../components/diary/DiaryViewToggle';
+import { MapScreen } from '../../components/MapScreen';
 import { Empty, ErrorState, Loading, Screen, UndoSnackbar, useScreenInsets } from '../../components/ui';
 import { useDeleteLog, useInfiniteLogs, useRepeatLog } from '../../hooks/useLogs';
 import { useSoftDelete } from '../../hooks/useSoftDelete';
@@ -23,6 +25,11 @@ import { useLayout, useTheme } from '../../theme';
  * a hierarchy the content does not have and push the rest below the fold.
  * The row components live in components/diary/; this file owns the data,
  * the list, and the screen-level dialogs.
+ *
+ * The header's List / Map switch shows the same diary as places instead of
+ * days. The map used to be its own destination, reached from a row on Home;
+ * it is a view of these meals, so it lives here. /map still resolves, and
+ * lands on this screen with the map showing (?view=map).
  */
 
 /** How long the confirmation stays on a row before the row goes quiet again. */
@@ -175,6 +182,13 @@ function DiaryList({
 
 export default function HistoryScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ view?: string }>();
+  const [view, setView] = useState<DiaryView>(params.view === 'map' ? 'map' : 'list');
+  // A tab screen stays mounted, so a later /map (or ?view=list) arrives as a
+  // param change rather than a fresh mount.
+  useEffect(() => {
+    if (params.view === 'map' || params.view === 'list') setView(params.view);
+  }, [params.view]);
   const logs = useInfiniteLogs();
   const repeat = useRepeatLog();
   const deleteLog = useDeleteLog();
@@ -334,6 +348,26 @@ export default function HistoryScreen() {
     if (logs.hasNextPage && !logs.isFetchingNextPage) void logs.fetchNextPage();
   }, [logs]);
 
+  const toggle = <DiaryViewToggle view={view} onChange={setView} />;
+  const eyebrow = logs.data ? `${formatNumber(total)} logged` : undefined;
+  const snackbar = (
+    <UndoSnackbar
+      message={lastDeleted ? `Deleted ${lastDeleted.dishName}.` : null}
+      onUndo={undoDelete}
+    />
+  );
+
+  // The map scrolls as an ordinary page, so it takes Screen's own scroll and
+  // padding rather than the list's FlatList set-up below.
+  if (view === 'map') {
+    return (
+      <Screen title="Your diary" eyebrow={eyebrow} headerRight={toggle}>
+        <MapScreen />
+        {snackbar}
+      </Screen>
+    );
+  }
+
   return (
     <Screen
       // The list does its own scrolling, because a hundred rows in a ScrollView
@@ -344,7 +378,8 @@ export default function HistoryScreen() {
       scroll={false}
       padded={false}
       title="Your diary"
-      eyebrow={logs.data ? `${formatNumber(total)} logged` : undefined}
+      eyebrow={eyebrow}
+      headerRight={toggle}
     >
       <DiaryList
         days={days}
@@ -361,10 +396,7 @@ export default function HistoryScreen() {
         onLogFirst={() => router.navigate('/log')}
       />
 
-      <UndoSnackbar
-        message={lastDeleted ? `Deleted ${lastDeleted.dishName}.` : null}
-        onUndo={undoDelete}
-      />
+      {snackbar}
 
       <RepeatMealDialog
         log={pending}

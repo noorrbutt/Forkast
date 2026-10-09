@@ -11,7 +11,7 @@ import { TodayStrip } from '../../components/home/TodayStrip';
 import { openSlots, todaysMeals, type Slot } from '../../components/home/todayMeals';
 import { VerifyEmailBanner } from '../../components/home/VerifyEmailBanner';
 import { WeekStrip } from '../../components/home/WeekStrip';
-import { ErrorState, ListGroup, ListRow, Screen } from '../../components/ui';
+import { ErrorState, Screen } from '../../components/ui';
 import { useDashboard } from '../../hooks/useInsights';
 import { useLogs } from '../../hooks/useLogs';
 import { usePlans } from '../../hooks/usePlans';
@@ -123,16 +123,6 @@ export default function DashboardScreen() {
               onLogSlot={logSlot}
               onOpenPlan={() => router.push('/plan')}
             />
-
-            <ListGroup>
-              <ListRow
-                icon="map"
-                label="Map"
-                hint="Where you eat, grouped by area."
-                onPress={() => router.push('/map')}
-                last
-              />
-            </ListGroup>
 
             {/* Below the fold on a phone: a glance at the week. The chart and
                 the month comparison it summarises live on Trends. */}
