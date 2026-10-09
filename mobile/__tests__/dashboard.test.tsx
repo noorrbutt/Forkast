@@ -8,7 +8,7 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -138,6 +138,44 @@ const TREND = {
   },
 };
 
+/** A local time today, as the ISO string the server would send. */
+function todayAt(hour: number): string {
+  const at = new Date();
+  at.setHours(hour, 0, 0, 0);
+  return at.toISOString();
+}
+
+function typedMeal(id: string, dish: string, calories: number, hour: number, isJunk: boolean) {
+  return {
+    has_photo: false,
+    id,
+    dish_name: dish,
+    category_id: 3,
+    restaurant_id: null,
+    area: null,
+    rating: 4,
+    fun_scale: null,
+    friend_scale: null,
+    serving_size: 'medium',
+    estimated_calories: calories,
+    estimate_source: 'ai',
+    calorie_source: 'category',
+    protein_g: null,
+    carbs_g: null,
+    fat_g: null,
+    refined: true,
+    created_at: todayAt(hour),
+    category: { id: 3, slug: 'biryani', name: 'Biryani', is_junk: isJunk },
+    restaurant: null,
+  };
+}
+
+/** Two typed meals today, no photos: the everyday case the strip has to carry. */
+const TODAY_LOGS = [
+  typedMeal('log-lunch', 'chicken biryani', 640, 13, false),
+  typedMeal('log-breakfast', 'paratha', 420, 8, true),
+];
+
 function signedInWith(today: Today, logs = 12) {
   mockedHydrate.mockResolvedValue({ access_token: 'a', refresh_token: 'r' });
   mockedApi.get.mockImplementation(async (url: string) => {
@@ -155,6 +193,9 @@ function signedInWith(today: Today, logs = 12) {
     }
     if (url === '/dashboard') return { data: dashboard(today, logs) };
     if (url === '/trend') return { data: TREND };
+    if (url === '/logs') {
+      return { data: logs === 0 ? { items: [], total: 0 } : { items: TODAY_LOGS, total: logs } };
+    }
     // Nothing entered, which is the state the burn input opens in.
     if (url === '/burn/today') return { data: null };
     return { data: null };
@@ -231,9 +272,12 @@ async function open(today: Today) {
 
 /** Renders the screen for an account that has logged nothing at all. */
 async function openEmpty() {
-  signedInWith(NO_TARGET, 0);
+  signedInWith({ target: null, consumed: 0, burned: 0, net: 0, remaining: null }, 0);
   const screen = render(<DashboardScreen />, { wrapper });
-  await waitFor(() => expect(screen.getByText('Nothing to count yet')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('Today')).toBeTruthy());
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
   return screen;
 }
 
@@ -259,7 +303,7 @@ describe('hierarchy', () => {
 
     // Net and target are still on screen, but in one caption-size line rather
     // than as a figure plus a title-size status plus an explanatory sentence.
-    const key = screen.getByText('1,600 net of 2,000 kcal target');
+    const key = screen.getByText('1,600 net of 2,000 kcal');
     expect(flat(key.props.style).fontSize).toBe(type.caption.fontSize);
     expect(screen.queryByText('400 kcal left')).toBeNull();
     expect(screen.queryByText(/The ring measures/)).toBeNull();
@@ -277,16 +321,36 @@ describe('hierarchy', () => {
     expect(sizes[1]).toBeLessThanOrEqual(type.displaySm.fontSize);
   });
 
-  it('shows the two numbers the hero is made of, and only those two', async () => {
+  it('shows eaten and burned as one quiet inline pair, not two more figures', async () => {
     const screen = await open(UNDER);
 
-    expect(screen.getByText('1,800')).toBeTruthy();
-    expect(screen.getByText('kcal eaten')).toBeTruthy();
-    expect(screen.getByText('200')).toBeTruthy();
-    expect(screen.getByText('kcal burned')).toBeTruthy();
+    const eaten = screen.getByText('1,800 eaten');
+    const burned = screen.getByText('200 burned');
+    expect(flat(eaten.props.style).fontSize).toBe(type.body.fontSize);
+    expect(flat(burned.props.style).fontSize).toBe(type.body.fontSize);
+    // No second-level numerals competing with the hero any more.
+    expect(textSizes(screen)).not.toContain(type.displaySm.fontSize);
+  });
 
-    const supporting = textSizes(screen).filter((size) => size === type.displaySm.fontSize);
-    expect(supporting).toHaveLength(2);
+  it('mutes "0 burned" when nothing has been burned, and still lets it be changed', async () => {
+    const screen = await open({ ...UNDER, burned: 0, net: 1800, remaining: 200 });
+
+    const burned = screen.getByTestId('hero-burned');
+    expect(burned.props.children).toBe('0 burned');
+    const color = (StyleSheet.flatten(burned.props.style) as { color?: string }).color;
+    expect([palettes.dark.muted, palettes.light.muted]).toContain(color);
+    expect(screen.getByRole('button', { name: '0 kcal burned' })).toBeTruthy();
+    // With nothing burned, net is what was eaten, so the line drops "net".
+    expect(screen.getByText('1,800 of 2,000 kcal')).toBeTruthy();
+  });
+
+  it('keeps the ring small, beside the figure rather than around it', async () => {
+    const screen = await open(UNDER);
+
+    const ring = screen.getByRole('progressbar');
+    expect((StyleSheet.flatten(ring.props.style) as { width?: number }).width).toBe(96);
+    // And the explainer sentence under the old ring is gone.
+    expect(screen.queryByText(/net of 2,000 kcal target/)).toBeNull();
   });
 
   it('stays under the six card ceiling', async () => {
@@ -306,7 +370,7 @@ describe('the ring', () => {
     const screen = await open(UNDER);
 
     // A meter that moves for an unexplained reason is worse than no meter.
-    expect(screen.getByText(/net of 2,000 kcal target/)).toBeTruthy();
+    expect(screen.getByText(/net of 2,000 kcal/)).toBeTruthy();
   });
 
   it('draws no ring when there is no target, and offers to set one', async () => {
@@ -330,11 +394,11 @@ describe('the ring', () => {
   it('reads as over in words, not only in colour', async () => {
     const screen = await open(OVER);
 
-    // 200 over, at hero size. (200 burned is also on screen, at displaySm.)
+    // 200 over, at hero size.
     const sizes = screen.getAllByText('200').map((node) => flat(node.props.style).fontSize);
     expect(sizes).toContain(type.hero.fontSize);
     expect(screen.getByText('kcal over')).toBeTruthy();
-    expect(screen.getByText('2,200 net of 2,000 kcal target')).toBeTruthy();
+    expect(screen.getByText('2,200 net of 2,000 kcal')).toBeTruthy();
   });
 });
 
@@ -531,14 +595,48 @@ describe('while the day is still loading', () => {
   });
 });
 
+describe('the Today strip', () => {
+  it("shows today's meals as tiles, oldest first, labelled for a screen reader", async () => {
+    const screen = await open(UNDER);
+    await waitFor(() => expect(screen.getByTestId('today-tile-log-breakfast')).toBeTruthy());
+
+    expect(screen.getByRole('button', { name: 'Breakfast, Paratha, 420 kcal' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Lunch, Chicken Biryani, 640 kcal' })).toBeTruthy();
+  });
+
+  it('opens a meal from its tile', async () => {
+    const screen = await open(UNDER);
+    await waitFor(() => expect(screen.getByTestId('today-tile-log-lunch')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('today-tile-log-lunch'));
+    expect(mockPush).toHaveBeenCalledWith('/logs/log-lunch');
+  });
+
+  it('always leaves a way in to Log, since the raised button is hidden on Home', async () => {
+    const screen = await open(UNDER);
+    await waitFor(() => expect(screen.getByTestId('today-tile-log-lunch')).toBeTruthy());
+
+    const ghosts = screen.getAllByRole('button', { name: /^Log / });
+    expect(ghosts.length).toBeGreaterThan(0);
+
+    fireEvent.press(ghosts[0]);
+    expect(mockNavigate).toHaveBeenCalledWith({
+      pathname: '/log',
+      params: { slot: expect.any(String) },
+    });
+  });
+});
+
 describe('nothing logged yet', () => {
-  it('invites an action instead of drawing a hero with no value behind it', async () => {
+  it('turns the empty day into the call to action, as ghost tiles', async () => {
     const screen = await openEmpty();
 
-    // No focal value yet, so no hero. An empty screen is an invitation to act,
-    // not a hole to plug with a ring reading zero.
-    expect(textSizes(screen).filter((size) => size >= 44)).toHaveLength(0);
-    expect(screen.getByText('Log your first meal')).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /^Log / }).length).toBeGreaterThan(0),
+    );
+    // No meal tiles, and no separate empty-state block competing with them.
+    expect(screen.queryByTestId(/^today-tile-/)).toBeNull();
+    expect(screen.queryByText('Nothing to count yet')).toBeNull();
   });
 });
 

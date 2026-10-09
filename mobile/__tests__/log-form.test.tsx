@@ -21,6 +21,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 const mockNavigate = jest.fn();
 const mockPush = jest.fn();
+// What Home's ghost tile passes along; reset per test.
+let mockParams: { slot?: string } = {};
 
 jest.mock('expo-router', () => ({
   // A no-op is enough for every test here: nothing exercises what happens
@@ -28,6 +30,7 @@ jest.mock('expo-router', () => ({
   // hook does not throw.
   useFocusEffect: jest.fn(),
   useRouter: () => ({ push: mockPush, navigate: mockNavigate, back: jest.fn(), canGoBack: () => true }),
+  useLocalSearchParams: () => mockParams,
 }));
 
 jest.mock('../lib/api', () => {
@@ -180,6 +183,29 @@ async function fillTheMinimum(screen: ReturnType<typeof render>) {
   fireEvent.press(screen.getByText('Pizza'));
   await waitFor(() => expect(screen.queryByPlaceholderText('Search')).toBeNull());
 }
+
+describe('arriving from a ghost tile on Home', () => {
+  afterEach(() => {
+    mockParams = {};
+  });
+
+  it('names the slot it was sent for', () => {
+    mockParams = { slot: 'lunch' };
+    const screen = render(<LogScreen />, { wrapper });
+    expect(screen.getByText('What did you have for lunch?')).toBeTruthy();
+  });
+
+  it('asks the plain question without one, or with one it does not know', () => {
+    mockParams = { slot: '' };
+    const plain = render(<LogScreen />, { wrapper });
+    expect(plain.getByText('What did you eat?')).toBeTruthy();
+    plain.unmount();
+
+    mockParams = { slot: 'brunch' };
+    const unknown = render(<LogScreen />, { wrapper });
+    expect(unknown.getByText('What did you eat?')).toBeTruthy();
+  });
+});
 
 describe('the two name fields', () => {
   it('says which one is the optional lookup and which one is saved', () => {

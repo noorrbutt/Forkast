@@ -12,7 +12,8 @@ import type { Slot } from './todayMeals';
  *
  * Home's second answer, after how much is left. Meals run oldest first so
  * the row reads like the day did; the open slots follow as ghost tiles, so on
- * a fresh morning the whole strip is three ways into Log. It scrolls
+ * a fresh morning the whole strip is three ways into Log, and once every
+ * slot is filled or past one "Another meal" ghost stays at the end. It scrolls
  * sideways and bleeds through the right-hand gutter, so the fourth tile
  * cut off at the edge says there is more.
  *
@@ -32,7 +33,7 @@ export function TodayStrip({
   loading: boolean;
   failed: boolean;
   onOpen: (id: Uuid) => void;
-  onLogSlot: (slot: Slot) => void;
+  onLogSlot: (slot: Slot | null) => void;
 }) {
   const { colors, layout, radius, spacing, type } = useTheme();
   const size = useTileSize(spacing.md);
@@ -68,8 +69,13 @@ export function TodayStrip({
                 ...meals.map((log) => (
                   <MealTile key={log.id} log={log} size={size} onOpen={onOpen} />
                 )),
-                ...open.map((slot) => (
-                  <GhostSlotTile key={slot} slot={slot} size={size} onPress={onLogSlot} />
+                ...(open.length > 0 ? open : [null]).map((slot) => (
+                  <GhostSlotTile
+                    key={slot ?? 'any'}
+                    slot={slot}
+                    size={size}
+                    onPress={onLogSlot}
+                  />
                 )),
               ]}
         </ScrollView>

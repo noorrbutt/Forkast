@@ -21,19 +21,21 @@ export function GhostSlotTile({
   size,
   onPress,
 }: {
-  slot: Slot;
+  /** Null once every slot is filled or past: a plain "another meal" tile, so
+   * Home never loses its way in to Log while the raised button is hidden. */
+  slot: Slot | null;
   size: TileSize;
-  onPress: (slot: Slot) => void;
+  onPress: (slot: Slot | null) => void;
 }) {
   const { colors, radius, spacing, type } = useTheme();
-  const label = SLOT_LABELS[slot];
+  const label = slot ? SLOT_LABELS[slot] : 'Another meal';
 
   return (
     <Pressable
-      testID={`today-ghost-${slot}`}
+      testID={`today-ghost-${slot ?? 'any'}`}
       onPress={() => onPress(slot)}
       accessibilityRole="button"
-      accessibilityLabel={`Log ${label.toLowerCase()}`}
+      accessibilityLabel={slot ? `Log ${label.toLowerCase()}` : 'Log a meal'}
       accessibilityHint="Opens Log"
       style={({ pressed }) => ({
         width: size.width,

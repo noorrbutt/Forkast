@@ -159,7 +159,7 @@ describe('moving between tabs', () => {
 
 describe('the raised centre button', () => {
   it('still navigates to the log tab', () => {
-    const { screen, navigate } = mountBar(0);
+    const { screen, navigate } = mountBar(1);
 
     fireEvent.press(screen.getByLabelText('Log a meal'));
 
@@ -167,7 +167,7 @@ describe('the raised centre button', () => {
   });
 
   it('says what it does, since a plus sign on its own does not', () => {
-    const { screen } = mountBar(0);
+    const { screen } = mountBar(1);
 
     expect(screen.getByLabelText('Log a meal').props.accessibilityHint).toBe(
       'Record something you ate',
@@ -181,6 +181,21 @@ describe('the raised centre button', () => {
     // The other four keep their places.
     expect(screen.getByLabelText('Home')).toBeTruthy();
     expect(screen.getByLabelText('Profile')).toBeTruthy();
+  });
+
+  it('is not drawn on Home, whose Today strip is the way in to Log there', () => {
+    const { screen } = mountBar(0);
+
+    expect(screen.queryByLabelText('Log a meal')).toBeNull();
+    expect(screen.getByLabelText('Diary')).toBeTruthy();
+  });
+
+  it('is drawn on every other tab', () => {
+    for (const index of [1, 3, 4]) {
+      const { screen } = mountBar(index);
+      expect(screen.getByLabelText('Log a meal')).toBeTruthy();
+      screen.unmount();
+    }
   });
 
   it('does not sit in the row it is raised above, so the other tabs stay even', () => {

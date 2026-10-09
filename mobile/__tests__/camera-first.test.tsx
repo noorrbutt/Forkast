@@ -20,6 +20,7 @@ jest.mock('expo-router', () => ({
   // hook does not throw.
   useFocusEffect: jest.fn(),
   useRouter: () => ({ push: jest.fn(), navigate: jest.fn(), back: jest.fn(), canGoBack: () => true }),
+  useLocalSearchParams: () => ({}),
 }));
 
 jest.mock('../lib/api', () => {

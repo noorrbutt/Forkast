@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
 
 import { ConfirmEstimate } from '../../components/log/ConfirmEstimate';
@@ -54,6 +54,8 @@ function ServingSizeQuestion({ form, hint }: { form: LogForm; hint?: string }) {
 export default function LogScreen() {
   const { colors, layout, spacing, type } = useTheme();
   const router = useRouter();
+  const { slot } = useLocalSearchParams<{ slot?: string }>();
+  const slotName = slot === 'breakfast' || slot === 'lunch' || slot === 'dinner' ? slot : null;
   const form = useLogForm();
   const {
     saved,
@@ -131,7 +133,12 @@ export default function LogScreen() {
       <Screen title="Log a meal">
         <View style={column}>
           <View style={{ gap: spacing.sm, paddingBottom: spacing.sm }}>
-            <Text style={[type.display, { color: colors.text }]}>What did you eat?</Text>
+            {/* Named for the slot when Home's ghost tile for it sent you here.
+                The slot itself is read off the time the meal is saved, which
+                is why Home only offers slots whose hours have not passed. */}
+            <Text style={[type.display, { color: colors.text }]}>
+              {slotName ? `What did you have for ${slotName}?` : 'What did you eat?'}
+            </Text>
             <Text style={[type.body, { color: colors.muted }]}>
               Snap a photo and Forkast guesses the dish, the portion and the calories. Typing it in
               yourself works just as well.

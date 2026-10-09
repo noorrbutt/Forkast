@@ -200,6 +200,10 @@ export function FloatingTabBar({ state, descriptors, navigation, insets }: Botto
         // nothing, sitting over the form it was supposed to lead to. The
         // spacer in the row stays, so the other four tabs do not shift.
         if (focused) return null;
+        // Nor on Home, whose Today strip is the way in to Log there: a ghost
+        // tile per open slot, or one "Another meal" tile once they are filled,
+        // so there is always a log action on screen without this one.
+        if (state.routes[state.index]?.name === 'index') return null;
         return (
           <Pressable
             key={route.key}

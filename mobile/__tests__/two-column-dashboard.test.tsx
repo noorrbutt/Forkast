@@ -136,7 +136,7 @@ describe('the dashboard at expanded width', () => {
     mockHeight = 844;
 
     const { getByText } = render(<DashboardScreen />, { wrapper });
-    const heading = await waitFor(() => getByText('Calories by day'));
+    const heading = await waitFor(() => getByText('Today'));
 
     expect(rowDirectionAbove(heading)).not.toBe('row');
   });
@@ -146,7 +146,7 @@ describe('the dashboard at expanded width', () => {
     mockHeight = 1366;
 
     const { getByText } = render(<DashboardScreen />, { wrapper });
-    const heading = await waitFor(() => getByText('Calories by day'));
+    const heading = await waitFor(() => getByText('Today'));
 
     expect(rowDirectionAbove(heading)).toBe('row');
   });
