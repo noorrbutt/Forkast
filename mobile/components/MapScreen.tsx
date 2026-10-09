@@ -94,6 +94,18 @@ function groupByArea(restaurants: Restaurant[], logs: FoodLog[]): AreaGroup[] {
 
 
 
+/**
+ * A Google Maps style that keeps the map legible and takes its colour away:
+ * most of the saturation gone everywhere, with water and parks dropped
+ * further, since those were the two fills fighting the app's palette.
+ */
+const QUIET_MAP_STYLE = [
+  { stylers: [{ saturation: -80 }] },
+  { featureType: 'water', stylers: [{ saturation: -90 }, { lightness: -10 }] },
+  { featureType: 'poi.park', stylers: [{ saturation: -95 }] },
+  { featureType: 'poi', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+];
+
 /** Karachi, so an account with no coordinates yet still opens somewhere sane. */
 const FALLBACK_REGION = {
   latitude: 24.8607,
@@ -229,6 +241,14 @@ export function MapScreen() {
             // PROVIDER_DEFAULT means Apple Maps on iOS and Google Maps on
             // Android. Forcing Google on iOS would need a key for no benefit.
             provider={PROVIDER_DEFAULT}
+            // Quieted toward the app's own ink and saffron. The stock maps
+            // brought saturated blue water and green parks, the loudest
+            // colours on any screen in the app, behind pins that are meant to
+            // be the only thing on the map asking to be looked at. Apple Maps
+            // takes no colour style, only its own muted variant; Google Maps
+            // on Android takes a style that drains most of the saturation.
+            mapType={Platform.OS === 'ios' ? 'mutedStandard' : 'standard'}
+            customMapStyle={QUIET_MAP_STYLE}
             initialRegion={regionFor(pins)}
           >
             {pins.map((pin) => (
@@ -284,7 +304,10 @@ export function MapScreen() {
       {!MAPS_UNAVAILABLE || Platform.OS === 'web' ? (
         <Text style={[type.caption, { color: colors.muted }]}>
           {!MAPS_UNAVAILABLE
-            ? 'Grouped by area, with counts. Places without coordinates do not get a pin yet.'
+            ? // The counts are in the list below, not on the pins: a pin shows
+              // its count only when tapped, and pins that share a spot are not
+              // merged. This used to read as if the map itself was clustered.
+              'The list below groups your places by area, with visit counts. Places without coordinates do not get a pin yet.'
             : 'Grouped by area. The map itself is native only, so it does not draw in a browser.'}
         </Text>
       ) : null}
