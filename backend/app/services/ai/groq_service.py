@@ -158,10 +158,11 @@ PLAN_SCHEMA: dict[str, Any] = {
                                 "type": "object",
                                 "properties": {
                                     "slot": {"type": "string"},
-                                    "suggestion": {"type": "string"},
+                                    "dish": {"type": "string"},
+                                    "note": {"type": "string"},
                                     "approx_calories": {"type": "integer"},
                                 },
-                                "required": ["slot", "suggestion", "approx_calories"],
+                                "required": ["slot", "dish", "approx_calories"],
                                 "additionalProperties": False,
                             },
                         },
@@ -643,5 +644,7 @@ class GroqAIService:
             day.day = normalise_text(day.day)
             for meal in day.meals:
                 meal.slot = normalise_text(meal.slot)
-                meal.suggestion = normalise_text(meal.suggestion)
+                meal.dish = normalise_text(meal.dish)
+                if meal.note:
+                    meal.note = normalise_text(meal.note)
         return plan

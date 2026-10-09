@@ -138,7 +138,7 @@ async def test_the_plan_reply_is_parsed_and_tagged_with_the_model() -> None:
                     {
                         "day": "Monday",
                         "meals": [
-                            {"slot": "Lunch", "suggestion": "Grilled boti", "approx_calories": 600}
+                            {"slot": "Lunch", "dish": "Grilled boti", "approx_calories": 600}
                         ],
                     }
                 ],
@@ -322,7 +322,7 @@ async def test_a_plan_is_cleaned_before_it_is_stored() -> None:
                         "meals": [
                             {
                                 "slot": "Lunch",
-                                "suggestion": "Grilled boti\u2014no naan.",
+                                "dish": "Grilled boti\u2014no naan.",
                                 "approx_calories": 600,
                             }
                         ],
@@ -338,7 +338,7 @@ async def test_a_plan_is_cleaned_before_it_is_stored() -> None:
     everything = " ".join(
         [plan.summary, *plan.nudges]
         + [d.day for d in plan.days]
-        + [m.suggestion for d in plan.days for m in d.meals]
+        + [m.dish for d in plan.days for m in d.meals]
     )
     assert not [c for c in everything if ord(c) > 0x2000], everything
     assert "three-day" in plan.summary
@@ -368,7 +368,7 @@ _PLAN_JSON = json.dumps(
         "days": [
             {
                 "day": "Day 1",
-                "meals": [{"slot": "breakfast", "suggestion": "Oats", "approx_calories": 300}],
+                "meals": [{"slot": "breakfast", "dish": "Oats", "approx_calories": 300}],
             }
         ],
         "nudges": ["Drink water."],

@@ -100,8 +100,12 @@ Fill the fields as follows:
   on, for example "Lighter lunches built around the karahi and biryani you
   already order." It is shown as the plan's subtitle, so no greeting, no "Hey",
   no preamble and no sign-off. Put anything conversational in `nudges` instead.
-- `days`: three days. Each has a `day` label and breakfast, lunch and dinner,
-  with an `approx_calories` per meal that adds up to something sane for the goal.
+- `days`: three days. Each has a `day` label and breakfast, lunch and dinner.
+  For each meal, `dish` is just the food itself, for example "Grilled salmon
+  with quinoa" -- never an instruction or a sentence. Put any advice about it,
+  for example "keep it simple, skip the extra sauce", in `note` instead, and
+  leave `note` out entirely when there is nothing worth adding. `approx_calories`
+  is per meal and should add up to something sane for the goal.
 - `nudges`: two to four short lines, each grounded in a specific pattern you can
   actually see in the logs, for example "pizza four times this week". If the
   history is too thin to support a claim, say something encouraging about

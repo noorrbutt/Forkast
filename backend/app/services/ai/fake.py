@@ -178,17 +178,18 @@ class DeterministicAIService:
                 meals=[
                     PlanMeal(
                         slot="Breakfast",
-                        suggestion="Eggs with one paratha swapped for toast",
+                        dish="Eggs with one paratha swapped for toast",
                         approx_calories=420,
                     ),
                     PlanMeal(
                         slot="Lunch",
-                        suggestion="Grilled chicken with rice and salad",
+                        dish="Grilled chicken with rice and salad",
                         approx_calories=650,
                     ),
                     PlanMeal(
                         slot="Dinner",
-                        suggestion="Daal chawal with a side of yoghurt",
+                        dish="Daal chawal with a side of yoghurt",
+                        note="Keep it simple, skip the extra sauce",
                         approx_calories=550,
                     ),
                 ],

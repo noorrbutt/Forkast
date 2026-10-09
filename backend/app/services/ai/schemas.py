@@ -134,7 +134,12 @@ class PlanRequest(BaseModel):
 
 class PlanMeal(BaseModel):
     slot: str
-    suggestion: str
+    # Just the dish, e.g. "Grilled salmon with quinoa" -- no instructions.
+    # Those belong in `note`, so a client can show them in a smaller, separate
+    # line instead of running them into the dish name as one sentence.
+    dish: str
+    # Optional advice about the dish, e.g. "keep it simple, skip extra sauces".
+    note: str | None = None
     approx_calories: int
 
 
