@@ -49,7 +49,7 @@ import DashboardScreen from '../app/(tabs)/index';
 import { Card, Icon, ListGroup, Skeleton } from '../components/ui';
 import { AuthProvider } from '../hooks/useAuth';
 import { api, hydrateTokens } from '../lib/api';
-import { ThemeProvider, palettes, split, type } from '../theme';
+import { ThemeProvider, palettes, type } from '../theme';
 import { series } from '../theme/tokens';
 import type { Dashboard, Today } from '../lib/types';
 
@@ -258,7 +258,7 @@ function uppercaseLabels(screen: Screen): string[] {
 async function open(today: Today) {
   signedInWith(today, 12);
   const screen = render(<DashboardScreen />, { wrapper });
-  await waitFor(() => expect(screen.getByText('Calories by day')).toBeTruthy());
+  await waitFor(() => expect(screen.getByText('This week')).toBeTruthy());
   // The burn input runs a query of its own, which settles after this one. Left
   // to land on its own it updates outside act, and that warning is noise that
   // hides the next real one.
@@ -432,124 +432,18 @@ describe('icons and labels', () => {
   it('writes its section headings in sentence case at title size', async () => {
     const screen = await open(UNDER);
 
-    expect(flat(screen.getByText('Calories by day').props.style).fontSize).toBe(
-      type.title.fontSize,
-    );
-    expect(screen.getByText('September against August')).toBeTruthy();
-  });
-});
-
-describe('the chart', () => {
-  it('names every series rather than leaving the colours to speak', async () => {
-    const screen = await open(UNDER);
-
-    // Three now. The eaten bar used to be one saffron block, which said how
-    // much was eaten and nothing about what it was, and spent the brand colour
-    // on a chart to say it.
-    expect(screen.getByText('Junk')).toBeTruthy();
-    expect(screen.getByText('Everything else')).toBeTruthy();
-    expect(screen.getByText('Burned')).toBeTruthy();
-  });
-
-  it('never draws a data mark in the brand colour', async () => {
-    // Saffron means "you can press this". A chart wearing it weakens that and
-    // tells the reader nothing about the food.
-    const screen = await open(UNDER);
-    const chart = screen.getByLabelText(/Calories by day/);
-    const fills = new Set<string>();
-
-    const walk = (node: { props?: Record<string, unknown>; children?: unknown[] }) => {
-      const style = flat((node.props as { style?: unknown })?.style) as {
-        backgroundColor?: string;
-      };
-      if (style?.backgroundColor) fills.add(style.backgroundColor);
-      for (const child of node.children ?? []) {
-        if (child && typeof child === 'object') walk(child as never);
-      }
-    };
-    walk(chart as never);
-
-    expect(fills.size).toBeGreaterThan(0);
-    expect([...fills]).not.toContain(palettes.dark.accentFill);
-    expect([...fills]).not.toContain(palettes.light.accentFill);
-  });
-
-  it('splits a day by what the food was, not just how much of it there was', async () => {
-    // Two days of 2,000 kcal, one all junk and one none, are the same bar
-    // unless the bar is split. Both halves have to be drawn.
-    const screen = await open(UNDER);
-    const chart = screen.getByLabelText(/Calories by day/);
-    const fills = new Set<string>();
-
-    const walk = (node: { props?: Record<string, unknown>; children?: unknown[] }) => {
-      const style = flat((node.props as { style?: unknown })?.style) as {
-        backgroundColor?: string;
-      };
-      if (style?.backgroundColor) fills.add(style.backgroundColor);
-      for (const child of node.children ?? []) {
-        if (child && typeof child === 'object') walk(child as never);
-      }
-    };
-    walk(chart as never);
-
-    // Whichever theme the runner resolved to, both halves have to be present.
-    const lower = [...fills].map((fill) => fill.toLowerCase());
-    const theme = lower.includes(split.dark.junk.toLowerCase()) ? split.dark : split.light;
-
-    expect(lower).toContain(theme.junk.toLowerCase());
-    expect(lower).toContain(theme.clean.toLowerCase());
-  });
-
-  it('gives the bars a real y axis rather than a caption standing in for one', async () => {
-    const screen = await open(UNDER);
-
-    // The tallest eaten day is 2,370, so the scale runs to 3,000 in round steps.
-    expect(screen.getByText('1k')).toBeTruthy();
-    expect(screen.getByText('2k')).toBeTruthy();
-    expect(screen.getByText('3k')).toBeTruthy();
-    expect(screen.queryByText(/Tallest bar/)).toBeNull();
-  });
-
-  it('draws the daily target as a line to read the bars against', async () => {
-    const screen = await open(UNDER);
-
-    expect(screen.getByTestId('calorie-target-line')).toBeTruthy();
-    expect(screen.getByText('Daily target')).toBeTruthy();
-  });
-
-  it('draws no target line when there is no target', async () => {
-    const screen = await open(NO_TARGET);
-
-    expect(screen.queryByTestId('calorie-target-line')).toBeNull();
-  });
-
-  it('labels the axis with dates, so a fortnight never names two bars "Fri"', async () => {
-    const screen = await open(UNDER);
-
-    // Fourteen days from Sep 4, a tick every third day.
-    for (const tick of ['Sep 4', 'Sep 7', 'Sep 10', 'Sep 13', 'Sep 16']) {
-      expect(screen.getByText(tick)).toBeTruthy();
-    }
-    expect(screen.queryByText('Fri')).toBeNull();
+    expect(flat(screen.getByText('Today').props.style).fontSize).toBe(type.title.fontSize);
+    expect(flat(screen.getByText('This week').props.style).fontSize).toBe(type.title.fontSize);
   });
 });
 
 describe('the month trend', () => {
-  it('compares a pace per day, never a part month total against a whole one', async () => {
+  it('is not on Home any more: it lives on Trends', async () => {
     const screen = await open(UNDER);
-    await waitFor(() => expect(screen.getByText('Calories a day')).toBeTruthy());
 
-    // 12 days of September against 31 of August. The totals differ by 2,600
-    // kcal and 6 meals almost entirely because September is not over yet.
-    expect(screen.queryByText(/Down 2,600/)).toBeNull();
-    expect(screen.queryByText(/Down 6 meals/)).toBeNull();
-
-    expect(screen.getByText('1,530')).toBeTruthy();
-    expect(screen.getByText('Down 150 kcal a day on August')).toBeTruthy();
-    // 12 / 12 = 1.0 against 18 / 31 = 0.6.
-    expect(screen.getByText('1.0')).toBeTruthy();
-    expect(screen.getByText('Up 0.4 a day on August')).toBeTruthy();
-    expect(screen.getByText(/12 days of September so far and all 31 of August/)).toBeTruthy();
+    expect(screen.queryByText('Calories by day')).toBeNull();
+    expect(screen.queryByText('September against August')).toBeNull();
+    expect(screen.queryByText('Calories a day')).toBeNull();
   });
 
   it('promises the plan length the plan actually has', async () => {
@@ -557,6 +451,56 @@ describe('the month trend', () => {
 
     expect(screen.getByText('Three days of meals shaped around your goal.')).toBeTruthy();
     expect(screen.queryByText(/a week of suggestions/i)).toBeNull();
+  });
+});
+
+describe('the week strip', () => {
+  it('draws the last seven days, not the fortnight', async () => {
+    const screen = await open(UNDER);
+
+    expect(screen.getAllByTestId(/^week-bar-/)).toHaveLength(7);
+    expect(screen.getByTestId('week-bar-2026-09-17')).toBeTruthy();
+    expect(screen.queryByTestId('week-bar-2026-09-10')).toBeNull();
+  });
+
+  it('draws the target as a line to read the bars against, and none without one', async () => {
+    const withTarget = await open(UNDER);
+    expect(withTarget.getByTestId('week-target-line')).toBeTruthy();
+    withTarget.unmount();
+
+    const without = await open(NO_TARGET);
+    expect(without.queryByTestId('week-target-line')).toBeNull();
+  });
+
+  it("wears the ring's status colours, never the brand colour", async () => {
+    const screen = await open(UNDER);
+    const fills = screen
+      .getAllByTestId(/^week-bar-/)
+      .map((bar) =>
+        String(
+          (StyleSheet.flatten(bar.props.style) as { backgroundColor?: string }).backgroundColor,
+        ).toLowerCase(),
+      );
+
+    const accent = [palettes.dark.accentFill, palettes.light.accentFill].map((c) =>
+      c.toLowerCase(),
+    );
+    for (const fill of fills) expect(accent).not.toContain(fill);
+    // 1,200 to 2,370 against a 2,000 target: some inside, some past.
+    const status = [
+      palettes.dark.success,
+      palettes.light.success,
+      palettes.dark.danger,
+      palettes.light.danger,
+    ].map((c) => c.toLowerCase());
+    expect(fills.every((fill) => status.includes(fill))).toBe(true);
+  });
+
+  it('links to Trends', async () => {
+    const screen = await open(UNDER);
+
+    fireEvent.press(screen.getByText('See trends'));
+    expect(mockPush).toHaveBeenCalledWith('/trends');
   });
 });
 
@@ -685,10 +629,6 @@ describe('colour on the dashboard', () => {
     // anything that is not a string is dropped rather than assumed.
     return found.filter((value) => typeof value === 'string').map((value) => value.toLowerCase());
   };
-
-
-
-
 
   it('never paints the meter in a data series colour', async () => {
     // series[0] is the only cold hue in the whole token file and it is named by

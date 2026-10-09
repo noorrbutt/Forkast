@@ -1,9 +1,8 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { RefreshControl, Text, View } from 'react-native';
+import { RefreshControl, View } from 'react-native';
 
 import { BurnDialog } from '../../components/BurnDialog';
-import { CalorieBars } from '../../components/CalorieBars';
 import { HomeHero } from '../../components/home/HomeHero';
 import { HomeSkeleton } from '../../components/home/HomeSkeleton';
 import { NextCard } from '../../components/home/NextCard';
@@ -11,9 +10,9 @@ import { chooseNextStep } from '../../components/home/nextStep';
 import { TodayStrip } from '../../components/home/TodayStrip';
 import { openSlots, todaysMeals, type Slot } from '../../components/home/todayMeals';
 import { VerifyEmailBanner } from '../../components/home/VerifyEmailBanner';
-import { TrendCard } from '../../components/trends/TrendCard';
-import { Card, ErrorState, ListGroup, ListRow, Screen } from '../../components/ui';
-import { useDashboard, useTrend } from '../../hooks/useInsights';
+import { WeekStrip } from '../../components/home/WeekStrip';
+import { ErrorState, ListGroup, ListRow, Screen } from '../../components/ui';
+import { useDashboard } from '../../hooks/useInsights';
 import { useLogs } from '../../hooks/useLogs';
 import { usePlans } from '../../hooks/usePlans';
 import { describeError } from '../../lib/api';
@@ -31,11 +30,10 @@ import { useLayout, useTheme } from '../../theme';
 export default function DashboardScreen() {
   // Burned is asked for, never parked on the screen as a form.
   const [burnOpen, setBurnOpen] = useState(false);
-  const { colors, layout, spacing, type } = useTheme();
+  const { colors, layout, spacing } = useTheme();
   const { isExpanded } = useLayout();
   const router = useRouter();
   const dashboard = useDashboard();
-  const trend = useTrend();
   // The newest page of the diary, which holds today unless more than twenty
   // meals were logged since midnight. Shares the diary's cache invalidation.
   const logs = useLogs();
@@ -56,8 +54,8 @@ export default function DashboardScreen() {
       scroll
       refreshControl={
         <RefreshControl
-          refreshing={dashboard.isRefetching || trend.isRefetching || logs.isRefetching}
-          onRefresh={() => void Promise.all([dashboard.refetch(), trend.refetch(), logs.refetch()])}
+          refreshing={dashboard.isRefetching || logs.isRefetching}
+          onRefresh={() => void Promise.all([dashboard.refetch(), logs.refetch()])}
           tintColor={colors.accent}
         />
       }
@@ -136,16 +134,15 @@ export default function DashboardScreen() {
               />
             </ListGroup>
 
+            {/* Below the fold on a phone: a glance at the week. The chart and
+                the month comparison it summarises live on Trends. */}
             {data ? (
-              <Card>
-                <View style={{ gap: spacing.lg }}>
-                  <Text style={[type.title, { color: colors.text }]}>Calories by day</Text>
-                  <CalorieBars data={data.calories_by_day ?? []} target={data.today.target} />
-                </View>
-              </Card>
+              <WeekStrip
+                days={data.calories_by_day ?? []}
+                target={data.today.target}
+                onSeeTrends={() => router.push('/trends')}
+              />
             ) : null}
-
-            <TrendCard trend={trend} />
           </View>
         </View>
       </View>
