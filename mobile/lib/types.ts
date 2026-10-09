@@ -284,6 +284,7 @@ export type MonthTotals = {
   meals_logged: number;
   junk_ratio: number;
   avg_calories_per_day: number;
+  days_logged: number;
   days_counted: number;
 };
 

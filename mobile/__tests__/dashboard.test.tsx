@@ -120,6 +120,7 @@ const TREND = {
     meals_logged: 12,
     junk_ratio: 0.3,
     avg_calories_per_day: 1_530,
+    days_logged: 9,
     days_counted: 12,
   },
   last_month: {
@@ -128,6 +129,7 @@ const TREND = {
     meals_logged: 18,
     junk_ratio: 0.4,
     avg_calories_per_day: 1_680,
+    days_logged: 25,
     days_counted: 31,
   },
   change: {

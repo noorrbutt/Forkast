@@ -105,6 +105,7 @@ const TREND = {
     meals_logged: 12,
     junk_ratio: 0.3,
     avg_calories_per_day: 1_530,
+    days_logged: 9,
     days_counted: 12,
   },
   last_month: {
@@ -113,6 +114,7 @@ const TREND = {
     meals_logged: 18,
     junk_ratio: 0.4,
     avg_calories_per_day: 1_680,
+    days_logged: 25,
     days_counted: 31,
   },
   change: {
@@ -291,9 +293,12 @@ describe('the month trend', () => {
 
     expect(screen.getByText('1,530')).toBeTruthy();
     expect(screen.getByText('Down 150 kcal a day on August')).toBeTruthy();
-    // 12 / 12 = 1.0 against 18 / 31 = 0.6.
-    expect(screen.getByText('1.0')).toBeTruthy();
-    expect(screen.getByText('Up 0.4 a day on August')).toBeTruthy();
-    expect(screen.getByText(/12 days of September so far and all 31 of August/)).toBeTruthy();
+    // Averaged over logged days, not calendar days: 12 meals / 9 logged days
+    // = 1.3, against 18 / 25 = 0.7.
+    expect(screen.getByText('1.3')).toBeTruthy();
+    expect(screen.getByText('Up 0.6 a day on August')).toBeTruthy();
+    expect(
+      screen.getByText(/9 of 12 in September so far, 25 of 31 in August/),
+    ).toBeTruthy();
   });
 });

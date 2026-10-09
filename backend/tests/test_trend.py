@@ -85,6 +85,7 @@ async def test_a_new_account_gets_zeroes_for_both_months(auth_client: AsyncClien
         assert period["meals_logged"] == 0
         assert period["junk_ratio"] == 0.0
         assert period["avg_calories_per_day"] == 0.0
+        assert period["days_logged"] == 0
         assert period["days_counted"] > 0
     assert body["change"] == {
         "total_calories": 0,
@@ -173,9 +174,13 @@ async def test_the_junk_ratio_is_computed_per_month(auth_client: AsyncClient) ->
     assert body["change"]["junk_ratio"] == pytest.approx(0.5)
 
 
-async def test_this_month_is_averaged_over_the_days_so_far(auth_client: AsyncClient) -> None:
-    """Dividing a three day old month by thirty would show every user a collapse
-    in intake that reverses itself by the end of the month."""
+async def test_this_month_counts_the_calendar_length_but_averages_over_logged_days(
+    auth_client: AsyncClient,
+) -> None:
+    """days_counted is the month's length so far, for coverage context. The
+    average itself divides by days_logged instead: dividing a single logged
+    day by the whole month so far would make anyone who skips a day look like
+    they eat a fraction of what they do, worse the more days they skipped."""
     await _set_timezone(auth_client, "Asia/Karachi")
     categories = await _categories(auth_client)
     today = dt.datetime.now(KARACHI).date()
@@ -185,12 +190,13 @@ async def test_this_month_is_averaged_over_the_days_so_far(auth_client: AsyncCli
     this_month = (await auth_client.get(TREND)).json()["this_month"]
 
     assert this_month["days_counted"] == today.day
-    assert this_month["avg_calories_per_day"] == pytest.approx(
-        round(meal["estimated_calories"] / today.day, 1)
-    )
+    assert this_month["days_logged"] == 1
+    assert this_month["avg_calories_per_day"] == pytest.approx(meal["estimated_calories"])
 
 
-async def test_last_month_is_averaged_over_its_full_length(auth_client: AsyncClient) -> None:
+async def test_last_month_also_averages_over_logged_days_not_its_full_length(
+    auth_client: AsyncClient,
+) -> None:
     await _set_timezone(auth_client, "Asia/Karachi")
     categories = await _categories(auth_client)
     _, last_start = _month_starts(dt.datetime.now(KARACHI).date())
@@ -203,8 +209,28 @@ async def test_last_month_is_averaged_over_its_full_length(auth_client: AsyncCli
 
     days_in_last_month = calendar.monthrange(last_start.year, last_start.month)[1]
     assert last_month["days_counted"] == days_in_last_month
-    assert last_month["avg_calories_per_day"] == pytest.approx(
-        round(meal["estimated_calories"] / days_in_last_month, 1)
+    assert last_month["days_logged"] == 1
+    assert last_month["avg_calories_per_day"] == pytest.approx(meal["estimated_calories"])
+
+
+async def test_averaging_over_several_logged_days(auth_client: AsyncClient) -> None:
+    await _set_timezone(auth_client, "Asia/Karachi")
+    categories = await _categories(auth_client)
+    today = dt.datetime.now(KARACHI).date()
+
+    meals = [
+        await _log(auth_client, categories["biryani"], dish=f"meal {offset}")
+        for offset in range(3)
+    ]
+
+    this_month = (await auth_client.get(TREND)).json()["this_month"]
+
+    # All three logged the same local day, so this is still one logged day,
+    # not three -- the average divides by distinct days, not by meal count.
+    assert this_month["days_logged"] == 1
+    assert this_month["days_counted"] == today.day
+    assert this_month["avg_calories_per_day"] == pytest.approx(
+        round(sum(m["estimated_calories"] for m in meals), 1)
     )
 
 

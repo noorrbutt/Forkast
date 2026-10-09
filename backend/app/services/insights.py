@@ -559,6 +559,7 @@ async def _month_totals(
                 func.count(FoodLog.id),
                 func.coalesce(func.sum(FoodLog.estimated_calories), 0),
                 func.coalesce(func.sum(case((FoodCategory.is_junk, 1), else_=0)), 0),
+                func.count(func.distinct(_local_day(user))),
             )
             .select_from(FoodLog)
             .join(FoodCategory, FoodCategory.id == FoodLog.category_id)
@@ -569,19 +570,31 @@ async def _month_totals(
             )
         )
     ).one()
-    meals, total_calories, junk_count = int(row[0]), int(row[1]), int(row[2])
+    meals, total_calories, junk_count, days_logged = (
+        int(row[0]),
+        int(row[1]),
+        int(row[2]),
+        int(row[3]),
+    )
 
-    # A month with nothing in it is an answer, not an absence. Every field stays
-    # a number so the client can draw a flat column and a "down on last month"
-    # arrow without a null check on each metric; `days` is never zero, so the
-    # average has nothing to guard against either.
+    # Averaged over days actually logged, not the calendar length of the
+    # period: dividing by every day including ones with nothing logged made
+    # anyone who skips a day look like they eat a fraction of what they do,
+    # the fewer days they logged the worse the distortion. A period with
+    # nothing logged has no logged days to divide by, so the average is 0
+    # rather than a division by zero.
+    #
+    # A month with nothing in it is an answer, not an absence. Every field
+    # stays a number so the client can draw a flat column and a "down on last
+    # month" arrow without a null check on each metric.
     return TrendPeriod(
         month=start,
         total_calories=total_calories,
         meals_logged=meals,
         junk_ratio=round(junk_count / meals, 4) if meals else 0.0,
-        avg_calories_per_day=round(total_calories / days, 1),
+        avg_calories_per_day=round(total_calories / days_logged, 1) if days_logged else 0.0,
         days_counted=days,
+        days_logged=days_logged,
     )
 
 

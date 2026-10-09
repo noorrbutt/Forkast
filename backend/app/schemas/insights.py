@@ -144,10 +144,16 @@ class TrendPeriod(BaseModel):
     total_calories: int
     meals_logged: int
     junk_ratio: float
+    # The denominator behind avg_calories_per_day: days with at least one log
+    # in this period, never the calendar length of it. Dividing by every day
+    # including ones with nothing logged understated anyone who skips a day,
+    # worse the more days they skipped.
+    days_logged: int
     avg_calories_per_day: float
-    # The denominator behind the average. The current month counts only the
+    # The calendar length of the period. The current month counts only the
     # days that have actually happened, so this is not always the length of the
-    # month and the client must not assume it is.
+    # month and the client must not assume it is. Shown as coverage context
+    # ("logged 3 of 9 days"), not used as a divisor.
     days_counted: int
 
 

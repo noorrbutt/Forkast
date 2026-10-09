@@ -55,10 +55,16 @@ function describeChange(change: number, unit: string, against: string): string {
   return `${change > 0 ? 'Up' : 'Down'} ${formatNumber(Math.abs(change))} ${unit} on ${against}`;
 }
 
-/** Meals logged per day of the period, to one decimal place. */
-function mealsPerDay(period: { meals_logged: number; days_counted: number }): number {
-  if (period.days_counted <= 0) return 0;
-  return Math.round((period.meals_logged / period.days_counted) * 10) / 10;
+/**
+ * Meals logged per logged day, to one decimal place.
+ *
+ * Divided by days_logged, not the period's calendar length: a day with
+ * nothing logged is not a day eating zero meals, it is a day with no data,
+ * and counting it as zero understated everyone who ever skipped a day.
+ */
+function mealsPerDay(period: { meals_logged: number; days_logged: number }): number {
+  if (period.days_logged <= 0) return 0;
+  return Math.round((period.meals_logged / period.days_logged) * 10) / 10;
 }
 
 /**
@@ -106,8 +112,10 @@ export function TrendCard({ trend }: { trend: ReturnType<typeof useTrend> }) {
   // current month is only as old as today, so its total against a whole
   // finished month always read as a collapse ("Down 11,113 kcal" on the 8th)
   // that a footnote then had to walk back. Both periods are divided by their
-  // own days_counted, which the server sends for exactly this, so the two
-  // figures cover equal footing whatever the date.
+  // own days_logged (not days_counted: a day with nothing logged is missing
+  // data, not a zero-calorie day, and counting it as one understated anyone
+  // who skipped a day), so the two figures cover equal footing whatever the
+  // date and whatever got missed.
   const caloriesPace = Math.round(now.avg_calories_per_day);
   const caloriesChange = caloriesPace - Math.round(before.avg_calories_per_day);
   const nowMeals = mealsPerDay(now);
@@ -206,7 +214,7 @@ export function TrendCard({ trend }: { trend: ReturnType<typeof useTrend> }) {
 
             <Text style={[type.caption, { color: colors.muted }]}>
               {comparable
-                ? `Daily averages from the ${formatNumber(now.days_counted)} ${now.days_counted === 1 ? 'day' : 'days'} of ${thisName} so far and all ${formatNumber(before.days_counted)} of ${lastName}.`
+                ? `Averages from days actually logged: ${formatNumber(now.days_logged)} of ${formatNumber(now.days_counted)} in ${thisName} so far, ${formatNumber(before.days_logged)} of ${formatNumber(before.days_counted)} in ${lastName}.`
                 : `Nothing logged in ${lastName}, so there is nothing to compare against. Next month this fills in.`}
             </Text>
           </>
