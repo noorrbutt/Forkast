@@ -77,7 +77,11 @@ export function HomeHero({
     // pullUp off: Home has no header, so pulling up would put the figure
     // under the status bar on a notched phone.
     <HeroWash pullUp={false}>
-      <View style={{ gap: spacing.lg, paddingBottom: spacing.xxxl }}>
+      {/* HeroWash already pays spacing.xxl of its own paddingBottom, so this
+          only needs to separate the eaten/burned line from the hero above it,
+          not open a second gap before the Today strip starts. It used to add
+          xxxl on top of that, which read as 80pt of dead air under the ring. */}
+      <View style={{ gap: spacing.lg, paddingBottom: spacing.xs }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
           <View style={{ flex: 1, gap: spacing.xs }}>
             <Hero
