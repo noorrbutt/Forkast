@@ -11,6 +11,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import * as ImagePicker from 'expo-image-picker';
 import type { ReactNode } from 'react';
+import { StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 jest.mock('expo-router', () => ({
@@ -187,6 +188,17 @@ describe('the capture screen', () => {
     expect(screen.getByText('Type it in instead')).toBeTruthy();
     // The manual form is not mounted yet at all.
     expect(screen.queryByPlaceholderText('Chicken karahi')).toBeNull();
+  });
+
+  it('draws both alternatives to the photo in one secondary style', () => {
+    // One was ink on an outline and the other saffron text on the same
+    // outline, a difference that meant nothing. The label colour is what told
+    // them apart, so that is what has to match.
+    const screen = openLogScreen();
+    const inkOf = (label: string) =>
+      (StyleSheet.flatten(screen.getByText(label).props.style) as { color?: string }).color;
+
+    expect(inkOf('Type it in instead')).toBe(inkOf('Choose from library'));
   });
 
   it('opens the manual form when typing is chosen instead', () => {

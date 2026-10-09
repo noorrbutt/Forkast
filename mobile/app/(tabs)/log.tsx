@@ -158,9 +158,12 @@ export default function LogScreen() {
               disabled={busy}
               onPress={() => void captureAndEstimate(false)}
             />
+            {/* The same secondary style as the library button above. Both are
+                the alternative to the photo, and one was outlined while the
+                other was saffron text, a difference that meant nothing. */}
             <Button
               label="Type it in instead"
-              variant="ghost"
+              variant="secondary"
               size="lg"
               full
               disabled={busy}
