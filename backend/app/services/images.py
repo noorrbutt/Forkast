@@ -108,3 +108,37 @@ def compress_for_estimation(data: bytes) -> bytes:
         buffer = io.BytesIO()
         image.save(buffer, format="JPEG", quality=JPEG_QUALITY, optimize=True)
         return buffer.getvalue()
+
+
+# The bounds a caller may ask a served photo to be shrunk to. The floor keeps
+# a typo from producing a smear; the ceiling is MAX_DIMENSION because asking
+# for more than that is asking for the original.
+MIN_THUMBNAIL_EDGE = 64
+MAX_THUMBNAIL_EDGE = MAX_DIMENSION
+
+
+def thumbnail(data: bytes, max_edge: int) -> tuple[bytes, str] | None:
+    """`data` re-encoded as a JPEG whose longest edge is at most `max_edge`.
+
+    For a photo shown at tile size, such as the strip of today's meals on
+    Home, where the full stored image is several times the bytes the screen
+    can draw. Same pipeline as compress_for_estimation, so a portrait photo
+    stays upright here too.
+
+    None when there is nothing to gain: the photo is already within the bound,
+    or Pillow cannot decode bytes that passed sniff. The caller serves the
+    original either way, which is always a correct answer, just a larger one.
+    """
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            if max(image.size) <= max_edge:
+                return None
+            image = ImageOps.exif_transpose(image) or image
+            image = image.convert("RGB")
+            image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+
+            buffer = io.BytesIO()
+            image.save(buffer, format="JPEG", quality=JPEG_QUALITY, optimize=True)
+            return buffer.getvalue(), "image/jpeg"
+    except (OSError, ValueError):
+        return None

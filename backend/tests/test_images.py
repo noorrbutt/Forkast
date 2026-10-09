@@ -7,7 +7,7 @@ import io
 import pytest
 from PIL import Image
 
-from app.services.images import JPEG_QUALITY, MAX_DIMENSION, compress_for_estimation
+from app.services.images import JPEG_QUALITY, MAX_DIMENSION, compress_for_estimation, thumbnail
 
 
 def _photo(width: int, height: int, *, fmt: str = "PNG", exif: bytes | None = None) -> bytes:
@@ -71,3 +71,21 @@ def test_portrait_orientation_survives_the_downscale() -> None:
     with Image.open(io.BytesIO(compressed)) as result:
         assert result.size[1] > result.size[0]
         assert max(result.size) <= MAX_DIMENSION
+
+
+def test_thumbnail_bounds_the_longest_edge_of_a_portrait_photo() -> None:
+    result = thumbnail(_photo(600, 900), 300)
+
+    assert result is not None
+    data, content_type = result
+    assert content_type == "image/jpeg"
+    with Image.open(io.BytesIO(data)) as image:
+        assert image.size == (200, 300)
+
+
+def test_thumbnail_declines_a_photo_already_inside_the_bound() -> None:
+    assert thumbnail(_photo(200, 100), 300) is None
+
+
+def test_thumbnail_declines_bytes_it_cannot_decode() -> None:
+    assert thumbnail(bytes.fromhex("ffd8ffe0") + b"\x00" * 32, 300) is None

@@ -8,8 +8,10 @@ it goes wrong are about what gets accepted and who can see it.
 from __future__ import annotations
 
 import base64
+import io
 
 from httpx import AsyncClient
+from PIL import Image
 
 from app.models import MAX_PHOTO_BYTES
 
@@ -230,3 +232,72 @@ async def test_photo_routes_need_authentication(client: AsyncClient) -> None:
     fake = "01a00000-0000-7000-8000-000000000000"
     assert (await client.get(f"{LOGS}/{fake}/photo")).status_code == 401
     assert (await client.delete(f"{LOGS}/{fake}/photo")).status_code == 401
+
+
+def _large_png(width: int = 900, height: int = 600) -> bytes:
+    """A real photo-sized PNG, so there is something for ?w= to shrink."""
+    buffer = io.BytesIO()
+    Image.new("RGB", (width, height), color=(200, 60, 40)).save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+async def test_a_thumbnail_is_shrunk_to_the_asked_edge(auth_client: AsyncClient) -> None:
+    log_id = await _log(auth_client)
+    original = _large_png()
+    await auth_client.put(f"{LOGS}/{log_id}/photo", files=_upload(original))
+
+    fetched = await auth_client.get(f"{LOGS}/{log_id}/photo", params={"w": 300})
+
+    assert fetched.status_code == 200
+    assert fetched.headers["content-type"].startswith("image/jpeg")
+    assert fetched.headers["content-length"] == str(len(fetched.content))
+    assert fetched.headers["cache-control"] == "private, max-age=86400"
+    with Image.open(io.BytesIO(fetched.content)) as result:
+        assert result.size == (300, 200)
+
+
+async def test_without_w_the_original_is_served_untouched(auth_client: AsyncClient) -> None:
+    log_id = await _log(auth_client)
+    original = _large_png()
+    await auth_client.put(f"{LOGS}/{log_id}/photo", files=_upload(original))
+
+    fetched = await auth_client.get(f"{LOGS}/{log_id}/photo")
+
+    assert fetched.content == original
+
+
+async def test_a_photo_already_smaller_than_w_is_served_as_is(auth_client: AsyncClient) -> None:
+    log_id = await _log(auth_client)
+    await auth_client.put(f"{LOGS}/{log_id}/photo", files=_upload(PNG))
+
+    fetched = await auth_client.get(f"{LOGS}/{log_id}/photo", params={"w": 300})
+
+    assert fetched.status_code == 200
+    assert fetched.content == PNG
+    assert fetched.headers["content-type"].startswith("image/png")
+
+
+async def test_an_undecodable_photo_falls_back_to_the_original(auth_client: AsyncClient) -> None:
+    # Passes the signature check, cannot be decoded: still a picture-shaped
+    # answer rather than a 500.
+    log_id = await _log(auth_client)
+    await auth_client.put(f"{LOGS}/{log_id}/photo", files=_upload(JPEG, "m.jpg", "image/jpeg"))
+
+    fetched = await auth_client.get(f"{LOGS}/{log_id}/photo", params={"w": 300})
+
+    assert fetched.status_code == 200
+    assert fetched.content == JPEG
+
+
+async def test_w_out_of_bounds_is_refused(auth_client: AsyncClient) -> None:
+    log_id = await _log(auth_client)
+    await auth_client.put(f"{LOGS}/{log_id}/photo", files=_upload(PNG))
+
+    assert (await auth_client.get(f"{LOGS}/{log_id}/photo", params={"w": 10})).status_code == 422
+    assert (await auth_client.get(f"{LOGS}/{log_id}/photo", params={"w": 5000})).status_code == 422
+
+
+async def test_a_thumbnail_needs_authentication_too(client: AsyncClient) -> None:
+    fake = "01a00000-0000-7000-8000-000000000000"
+    response = await client.get(f"{LOGS}/{fake}/photo", params={"w": 300})
+    assert response.status_code == 401

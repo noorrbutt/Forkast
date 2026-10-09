@@ -22,6 +22,7 @@ from fastapi import (
     status,
 )
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import CurrentUser, RateLimiterDep, SessionDep
 from app.config import get_settings
@@ -33,7 +34,12 @@ from app.services import jobs
 from app.services import logs as logs_service
 from app.services.ai.base import AIService
 from app.services.ai.deps import EstimateSource, get_ai_service, get_estimate_source
-from app.services.images import check_upload
+from app.services.images import (
+    MAX_THUMBNAIL_EDGE,
+    MIN_THUMBNAIL_EDGE,
+    check_upload,
+    thumbnail,
+)
 from app.services.insights import build_trend
 from app.services.rate_limit import account_identity
 
@@ -242,22 +248,39 @@ async def set_photo(
 
 
 @logs_router.get("/{log_id}/photo")
-async def get_photo(log_id: uuid.UUID, session: SessionDep, user: CurrentUser) -> Response:
+async def get_photo(
+    log_id: uuid.UUID,
+    session: SessionDep,
+    user: CurrentUser,
+    w: int | None = Query(default=None, ge=MIN_THUMBNAIL_EDGE, le=MAX_THUMBNAIL_EDGE),
+) -> Response:
     """The image bytes.
 
     Deliberately returns the file rather than a URL. That keeps the storage
     decision behind this route: moving the bytes to object storage later becomes
     a redirect from here, and no client changes.
+
+    `w` asks for a copy no longer than that on its longest edge, for a photo
+    drawn at tile size. A query parameter on this route rather than a second
+    route, so ownership, the 404s and the cache headers are the same code
+    path whichever size is asked for. Resized per request rather than stored:
+    the stored photo is already capped at about 1024px, so the work is small,
+    and the response is cached by the client for a day like the original.
     """
     photo = await logs_service.get_photo(session, user, log_id)
+    content, media_type = photo.data, photo.content_type
+    if w is not None:
+        resized = await run_in_threadpool(thumbnail, photo.data, w)
+        if resized is not None:
+            content, media_type = resized
     return Response(
-        content=photo.data,
-        media_type=photo.content_type,
+        content=content,
+        media_type=media_type,
         headers={
             # The bytes for a given photo never change; a replacement is a new
             # row with a new id, so this is safe to hold onto.
             "Cache-Control": "private, max-age=86400",
-            "Content-Length": str(photo.byte_size),
+            "Content-Length": str(len(content)),
         },
     )
 
