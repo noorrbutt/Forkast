@@ -231,7 +231,10 @@ export default function PlanRoute() {
                             <Text style={[type.caption, { color: colors.muted }]}>
                               {titleCase(meal.slot)}
                             </Text>
-                            <Text style={[type.body, { color: colors.text }]}>{meal.suggestion}</Text>
+                            <Text style={[type.body, { color: colors.text }]}>{meal.dish}</Text>
+                            {meal.note ? (
+                              <Text style={[type.caption, { color: colors.muted }]}>{meal.note}</Text>
+                            ) : null}
                           </View>
                           <Text
                             style={[

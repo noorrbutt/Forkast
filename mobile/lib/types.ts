@@ -367,7 +367,8 @@ export type WeeklyDigest = {
 
 export type PlanMeal = {
   slot: string;
-  suggestion: string;
+  dish: string;
+  note: string | null;
   approx_calories: number;
   estimate_source: EstimateSource;
 };

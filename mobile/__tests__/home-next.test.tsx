@@ -42,19 +42,20 @@ function plan(madeDaysAgo = 0): Plan {
         meals: [
           {
             slot: 'Breakfast',
-            suggestion: 'oats with berries',
+            dish: 'oats with berries',
             approx_calories: 350,
             estimate_source: 'ai',
           },
           {
             slot: 'Lunch',
-            suggestion: 'grilled salmon with quinoa',
+            dish: 'grilled salmon with quinoa',
+            note: 'skip the toast',
             approx_calories: 600,
             estimate_source: 'ai',
           },
           {
             slot: 'Dinner',
-            suggestion: 'daal and rice',
+            dish: 'daal and rice',
             approx_calories: 650,
             estimate_source: 'ai',
           },
@@ -154,7 +155,7 @@ describe('the card', () => {
     return { screen, onLogSlot, onOpenPlan };
   }
 
-  it('reads a plan as one line: slot, dish, calories', () => {
+  it('reads a plan as separate eyebrow, dish and note', () => {
     const step = chooseNextStep({
       today: UNDER,
       meals: [A_MEAL],
@@ -164,8 +165,9 @@ describe('the card', () => {
     });
     const { screen, onOpenPlan } = show(step);
 
-    expect(screen.getByText("Today's plan")).toBeTruthy();
-    expect(screen.getByText('Lunch, grilled salmon with quinoa, 600 kcal')).toBeTruthy();
+    expect(screen.getByText('Lunch · 600 kcal')).toBeTruthy();
+    expect(screen.getByText('grilled salmon with quinoa')).toBeTruthy();
+    expect(screen.getByText('skip the toast')).toBeTruthy();
     fireEvent.press(screen.getByText('See the plan'));
     expect(onOpenPlan).toHaveBeenCalled();
   });

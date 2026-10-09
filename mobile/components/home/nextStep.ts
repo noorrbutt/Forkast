@@ -84,7 +84,19 @@ export function chooseNextStep({
   return { kind: 'make-plan', expired: false };
 }
 
-/** The one line a plan suggestion reads as: "Lunch, grilled salmon with quinoa, 600 kcal". */
-export function planLine(step: Extract<NextStep, { kind: 'plan' }>): string {
-  return `${step.slotLabel}, ${step.meal.suggestion}, ${formatNumber(step.meal.approx_calories)} kcal`;
+/**
+ * A plan suggestion's three parts, kept separate rather than joined into one
+ * sentence: "Lunch · 600 kcal" as the eyebrow, the dish as the headline, and
+ * the model's note, if any, as a smaller line beneath it.
+ */
+export function planSummary(step: Extract<NextStep, { kind: 'plan' }>): {
+  eyebrow: string;
+  dish: string;
+  note: string | null;
+} {
+  return {
+    eyebrow: `${step.slotLabel} · ${formatNumber(step.meal.approx_calories)} kcal`,
+    dish: step.meal.dish,
+    note: step.meal.note,
+  };
 }
