@@ -325,6 +325,16 @@ describe('a run in progress', () => {
   });
 });
 
+describe('the record row', () => {
+  it('names the last junk meal as a fact, not as a slip', async () => {
+    const view = await show(RUNNING);
+    await waitFor(() => view.getByText('7'));
+
+    expect(view.getByText('Most recent junk meal')).toBeTruthy();
+    expect(view.queryByText(/slip/i)).toBeNull();
+  });
+});
+
 describe('a run that has just been broken', () => {
   it('reports the zero rather than hiding it', async () => {
     const view = await show(BROKEN);

@@ -276,7 +276,11 @@ export default function StreaksScreen() {
                     is the only part of this row they can act on. */}
                 <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.lg }}>
                   <View style={{ flex: 1, gap: spacing.xs }}>
-                    <Text style={[type.body, { color: colors.muted }]}>Last slip</Text>
+                    <Text style={[type.body, { color: colors.muted }]}>
+                      {/* Not "Last slip": that names one brownie after a long run as a
+                          lapse. A neutral fact, same data. */}
+                      Most recent junk meal
+                    </Text>
                     {data.last_junk_date && data.last_junk_dish ? (
                       <Text style={[type.caption, { color: colors.muted }]}>
                         {displayDish(data.last_junk_dish)}
