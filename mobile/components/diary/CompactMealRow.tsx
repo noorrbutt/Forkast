@@ -24,8 +24,11 @@ const CALORIES = 64;
  * or success tokens the rest of the app already uses for junk versus clean,
  * not a one-off colour invented for this row, and a neutral tile when a log
  * (rare, but possible) carries no category at all.
+ *
+ * Exported because Home's no-photo meal tile draws the same glyph chip, and
+ * one meal should wear one colour wherever it is shown.
  */
-function categoryTileTone(
+export function categoryTileTone(
   colors: ReturnType<typeof useTheme>['colors'],
   category: FoodLog['category'],
 ): { fill: string; ink: string } {
