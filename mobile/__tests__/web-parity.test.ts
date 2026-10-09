@@ -334,6 +334,7 @@ describe('the content column', () => {
     'app/(tabs)/streaks.tsx',
     'app/logs/[id].tsx',
     'app/setup.tsx',
+    'app/trends.tsx',
     'components/MapScreen.tsx',
   ];
 

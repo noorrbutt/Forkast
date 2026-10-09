@@ -104,6 +104,7 @@ function RootNavigator() {
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="setup" />
         <Stack.Screen name="map" />
+        <Stack.Screen name="trends" />
         <Stack.Screen name="logs/[id]" />
       </Stack>
     </>
