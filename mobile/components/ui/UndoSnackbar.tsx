@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AccessibilityInfo, Pressable, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../../theme';
 import { quick } from '../../theme/motion';
@@ -24,8 +25,13 @@ type UndoSnackbarProps = {
  * onto it by chance the undo window may already have closed.
  */
 export function UndoSnackbar({ message, onUndo }: UndoSnackbarProps) {
-  const { colors, radius, spacing, type, isDark } = useTheme();
+  const { colors, layout, radius, spacing, type, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const opacity = useSharedValue(0);
+  // Clears the floating tab bar, which sits at insets.bottom + tabBarInset
+  // and stands layout.tabBarHeight tall. A flat spacing.xxl landed underneath
+  // it on most phones, so the toast and its Undo button were invisible.
+  const bottomOffset = insets.bottom + layout.tabBarInset + layout.tabBarHeight + spacing.sm;
 
   useEffect(() => {
     if (message) {
@@ -46,7 +52,7 @@ export function UndoSnackbar({ message, onUndo }: UndoSnackbarProps) {
           position: 'absolute',
           left: spacing.lg,
           right: spacing.lg,
-          bottom: spacing.xxl,
+          bottom: bottomOffset,
         },
         animatedStyle,
       ]}
