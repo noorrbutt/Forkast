@@ -70,12 +70,7 @@ export function TodayStrip({
                   <MealTile key={log.id} log={log} size={size} onOpen={onOpen} />
                 )),
                 ...(open.length > 0 ? open : [null]).map((slot) => (
-                  <GhostSlotTile
-                    key={slot ?? 'any'}
-                    slot={slot}
-                    size={size}
-                    onPress={onLogSlot}
-                  />
+                  <GhostSlotTile key={slot ?? 'any'} slot={slot} size={size} onPress={onLogSlot} />
                 )),
               ]}
         </ScrollView>

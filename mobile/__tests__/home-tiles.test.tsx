@@ -101,9 +101,10 @@ describe('the no-photo tile', () => {
 
     const tile = screen.getByTestId('today-tile-log-1');
     const fill = String(flat(tile.props.style).backgroundColor).toLowerCase();
-    expect([palettes.dark.surfaceAlt.toLowerCase(), palettes.light.surfaceAlt.toLowerCase()]).toContain(
-      fill,
-    );
+    expect([
+      palettes.dark.surfaceAlt.toLowerCase(),
+      palettes.light.surfaceAlt.toLowerCase(),
+    ]).toContain(fill);
 
     // The same "meal" glyph the diary's compact row uses, tinted by category.
     const icons = screen.UNSAFE_queryAllByType(Icon);
@@ -111,9 +112,9 @@ describe('the no-photo tile', () => {
     const glyphFill = String(
       flat(screen.getByTestId('today-tile-glyph').props.style).backgroundColor,
     ).toLowerCase();
-    expect([palettes.dark.successSoft, palettes.light.successSoft].map((c) => c.toLowerCase())).toContain(
-      glyphFill,
-    );
+    expect(
+      [palettes.dark.successSoft, palettes.light.successSoft].map((c) => c.toLowerCase()),
+    ).toContain(glyphFill);
   });
 
   it('tints the glyph as junk for a junk meal', () => {
@@ -127,9 +128,9 @@ describe('the no-photo tile', () => {
     const glyphFill = String(
       flat(screen.getByTestId('today-tile-glyph').props.style).backgroundColor,
     ).toLowerCase();
-    expect([palettes.dark.dangerSoft, palettes.light.dangerSoft].map((c) => c.toLowerCase())).toContain(
-      glyphFill,
-    );
+    expect(
+      [palettes.dark.dangerSoft, palettes.light.dangerSoft].map((c) => c.toLowerCase()),
+    ).toContain(glyphFill);
   });
 
   it('opens the meal it shows', () => {
@@ -258,7 +259,14 @@ describe('the strip', () => {
 
   it('says so when the meals did not load, rather than showing a blank row', () => {
     const screen = render(
-      <TodayStrip meals={[]} open={[]} loading={false} failed onOpen={jest.fn()} onLogSlot={jest.fn()} />,
+      <TodayStrip
+        meals={[]}
+        open={[]}
+        loading={false}
+        failed
+        onOpen={jest.fn()}
+        onLogSlot={jest.fn()}
+      />,
       { wrapper },
     );
     expect(screen.getByText(/did not load/)).toBeTruthy();
@@ -268,7 +276,9 @@ describe('the strip', () => {
 describe('photo urls', () => {
   it('leaves the full-size url alone for the diary and the meal screen', () => {
     expect(photoSource('abc', 't', 3).uri).toMatch(/\/logs\/abc\/photo\?v=3$/);
-    expect(photoSource('abc', 't', 3, TILE_PHOTO_EDGE).uri).toMatch(/\/logs\/abc\/photo\?v=3&w=560$/);
+    expect(photoSource('abc', 't', 3, TILE_PHOTO_EDGE).uri).toMatch(
+      /\/logs\/abc\/photo\?v=3&w=560$/,
+    );
   });
 });
 
@@ -317,6 +327,8 @@ describe('which slot a meal belongs to', () => {
   });
 
   it('labels a small-hours meal without inventing a slot for it', () => {
-    expect(tileLabel(meal({ created_at: todayAt(2) }))).toBe('Late night, Chicken Biryani, 640 kcal');
+    expect(tileLabel(meal({ created_at: todayAt(2) }))).toBe(
+      'Late night, Chicken Biryani, 640 kcal',
+    );
   });
 });

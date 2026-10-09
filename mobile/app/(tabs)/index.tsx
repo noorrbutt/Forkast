@@ -6,6 +6,8 @@ import { BurnDialog } from '../../components/BurnDialog';
 import { CalorieBars } from '../../components/CalorieBars';
 import { HomeHero } from '../../components/home/HomeHero';
 import { HomeSkeleton } from '../../components/home/HomeSkeleton';
+import { NextCard } from '../../components/home/NextCard';
+import { chooseNextStep } from '../../components/home/nextStep';
 import { TodayStrip } from '../../components/home/TodayStrip';
 import { openSlots, todaysMeals, type Slot } from '../../components/home/todayMeals';
 import { VerifyEmailBanner } from '../../components/home/VerifyEmailBanner';
@@ -13,6 +15,7 @@ import { TrendCard } from '../../components/trends/TrendCard';
 import { Card, ErrorState, ListGroup, ListRow, Screen } from '../../components/ui';
 import { useDashboard, useTrend } from '../../hooks/useInsights';
 import { useLogs } from '../../hooks/useLogs';
+import { usePlans } from '../../hooks/usePlans';
 import { describeError } from '../../lib/api';
 import type { Uuid } from '../../lib/types';
 import { useLayout, useTheme } from '../../theme';
@@ -36,6 +39,8 @@ export default function DashboardScreen() {
   // The newest page of the diary, which holds today unless more than twenty
   // meals were logged since midnight. Shares the diary's cache invalidation.
   const logs = useLogs();
+  // The newest plan, for the next card. Same query the plan screen reads.
+  const plans = usePlans();
 
   const data = dashboard.data;
   const now = new Date();
@@ -109,13 +114,19 @@ export default function DashboardScreen() {
               onLogSlot={logSlot}
             />
 
+            <NextCard
+              step={chooseNextStep({
+                today: data?.today ?? null,
+                meals,
+                open,
+                plan: plans.data?.[0] ?? null,
+                now,
+              })}
+              onLogSlot={logSlot}
+              onOpenPlan={() => router.push('/plan')}
+            />
+
             <ListGroup>
-              <ListRow
-                icon="plan"
-                label="AI meal plan"
-                hint="Three days of meals shaped around your goal."
-                onPress={() => router.push('/plan')}
-              />
               <ListRow
                 icon="map"
                 label="Map"

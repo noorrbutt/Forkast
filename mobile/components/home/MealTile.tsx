@@ -136,7 +136,11 @@ export function NoPhotoMealTile({ log, size, onOpen }: TileProps) {
     <TileFrame log={log} size={size} onOpen={onOpen} testID={`today-tile-${log.id}`}>
       <View style={{ flex: 1, padding: spacing.md, justifyContent: 'space-between' }}>
         <View
-          style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+          }}
         >
           <KcalPill calories={log.estimated_calories} overPhoto={false} />
           <View

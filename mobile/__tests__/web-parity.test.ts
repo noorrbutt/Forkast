@@ -231,9 +231,10 @@ describe('icons name a destination, never a heading', () => {
   it('puts one on each of the dashboard navigation rows', () => {
     const source = code('app/(tabs)/index.tsx');
 
-    // Two rows now. The diary row went, because Diary is a tab in the bar.
+    // One row now. The diary row went, because Diary is a tab in the bar,
+    // and the plan moved into Home's next card.
     expect(source).toMatch(/icon="map"/);
-    expect(source).toMatch(/icon="plan"/);
+    expect(source).toMatch(/<NextCard/);
   });
 
   it('gives every row an icon or none, because a bare row breaks the group edge', () => {
