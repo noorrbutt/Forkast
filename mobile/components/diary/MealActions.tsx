@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { FormError, Icon } from '../ui';
 import { useTheme } from '../../theme';
@@ -30,13 +30,6 @@ export function MealActions({
   error,
 }: Pick<MealRowProps, 'log' | 'onRepeat' | 'onAskDelete' | 'sending' | 'confirmed' | 'error'>) {
   const { colors, radius, spacing, type } = useTheme();
-  const { width } = useWindowDimensions();
-  // Below this, "Log again" and "Delete" together start to crowd a narrow
-  // phone. Delete's label is the one that gives way -- its trash icon alone
-  // still reads, and Log again is the action most worth spelling out since
-  // it is the one someone reaches for on every ordinary repeat visit.
-  const narrow = width < 360;
-
   return (
     <View style={{ gap: spacing.xs }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
@@ -94,14 +87,18 @@ export function MealActions({
             gap: spacing.xs,
             height: PILL_HEIGHT,
             borderRadius: radius.pill,
-            paddingHorizontal: spacing.md,
+            paddingHorizontal: spacing.sm,
             backgroundColor: pressed ? colors.dangerSoft : 'transparent',
           })}
         >
-          <Icon name="trash" size={16} color={colors.danger} />
-          {narrow ? null : (
-            <Text style={[type.caption, { color: colors.danger, fontWeight: '600' }]}>Delete</Text>
-          )}
+          {/* Icon only, in muted ink. It sat beside Log again at the same
+              weight, a labelled pill in red against a labelled pill in
+              saffron, so the rare destructive action competed with the
+              everyday one. The glyph still names it, the accessibility label
+              says "Delete", and the confirmation dialog it opens is unchanged,
+              so nothing about how safe it is has moved. Red is kept for that
+              dialog and the press state, where the action is actually taken. */}
+          <Icon name="trash" size={16} color={colors.muted} />
         </Pressable>
       </View>
 

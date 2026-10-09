@@ -486,7 +486,9 @@ describe('deleting a meal from the diary', () => {
     // why), but both sit inside the same immediate container either row
     // shape wraps them in, so the row's own parent is exactly where to look
     // for its footer's Delete button.
-    const texts = within(row.parent).getAllByText('Delete');
+    // By its accessibility label: the footer Delete is an icon with no visible
+    // word, so it sits quieter than Log again beside it.
+    const texts = within(row.parent).getAllByLabelText('Delete');
     if (texts.length !== 1) {
       throw new Error(`expected exactly one footer Delete for ${dishName}, found ${texts.length}`);
     }
