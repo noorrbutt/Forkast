@@ -59,8 +59,17 @@ export function todaysMeals(logs: readonly FoodLog[], now: Date): FoodLog[] {
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 }
 
-/** The slots nothing has been logged in yet today, in the day's order. */
-export function openSlots(meals: readonly FoodLog[]): Slot[] {
+/**
+ * The slots nothing has been logged in yet today and that can still be.
+ *
+ * A slot whose hours have passed is left out. A meal's slot is read off the
+ * time it is logged, so "Log breakfast" tapped at 8pm would file the meal as
+ * dinner; offering it would promise something the save cannot keep. Before
+ * 5am no slot has started yet, so all three are open.
+ */
+export function openSlots(meals: readonly FoodLog[], now: Date): Slot[] {
   const filled = new Set(meals.map((log) => slotOf(new Date(log.created_at))));
-  return SLOTS.filter((slot) => !filled.has(slot));
+  const current = slotOf(now);
+  const from = current === null ? 0 : SLOTS.indexOf(current);
+  return SLOTS.filter((slot, index) => index >= from && !filled.has(slot));
 }

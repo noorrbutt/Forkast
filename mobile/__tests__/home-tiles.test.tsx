@@ -17,6 +17,8 @@ jest.mock('../lib/api', () => {
 });
 
 import { MealTile, NoPhotoMealTile, PhotoMealTile, tileLabel } from '../components/home/MealTile';
+import { GhostSlotTile } from '../components/home/GhostSlotTile';
+import { TodayStrip } from '../components/home/TodayStrip';
 import { TILE_PHOTO_EDGE, photoSource } from '../hooks/usePhoto';
 import { openSlots, slotOf, todaysMeals } from '../components/home/todayMeals';
 import { Icon } from '../components/ui';
@@ -198,6 +200,71 @@ describe('the photo tile', () => {
   });
 });
 
+describe('the ghost slot tile', () => {
+  it('is a button named for the meal it logs, and passes its slot on', () => {
+    const onPress = jest.fn();
+    const screen = render(<GhostSlotTile slot="breakfast" size={SIZE} onPress={onPress} />, {
+      wrapper,
+    });
+
+    const tile = screen.getByRole('button', { name: 'Log breakfast' });
+    expect(screen.getByText('Breakfast')).toBeTruthy();
+    expect(flat(tile.props.style).borderStyle).toBe('dashed');
+
+    fireEvent.press(tile);
+    expect(onPress).toHaveBeenCalledWith('breakfast');
+  });
+});
+
+describe('the strip', () => {
+  it('runs meals oldest first, then the open slots as ghosts', () => {
+    const screen = render(
+      <TodayStrip
+        meals={[meal({ id: 'a' }), meal({ id: 'b', has_photo: true })]}
+        open={['dinner']}
+        loading={false}
+        failed={false}
+        onOpen={jest.fn()}
+        onLogSlot={jest.fn()}
+      />,
+      { wrapper },
+    );
+
+    const ids = screen
+      .getAllByRole('button')
+      .map((node) => node.props.testID as string | undefined);
+    expect(ids).toEqual(['today-tile-a', 'today-tile-b', 'today-ghost-dinner']);
+    expect(screen.getByTestId('today-strip').props.horizontal).toBe(true);
+  });
+
+  it('is all ghosts on a day with nothing logged, which is the call to action', () => {
+    const onLogSlot = jest.fn();
+    const screen = render(
+      <TodayStrip
+        meals={[]}
+        open={['breakfast', 'lunch', 'dinner']}
+        loading={false}
+        failed={false}
+        onOpen={jest.fn()}
+        onLogSlot={onLogSlot}
+      />,
+      { wrapper },
+    );
+
+    fireEvent.press(screen.getByRole('button', { name: 'Log lunch' }));
+    expect(onLogSlot).toHaveBeenCalledWith('lunch');
+    expect(screen.getAllByRole('button')).toHaveLength(3);
+  });
+
+  it('says so when the meals did not load, rather than showing a blank row', () => {
+    const screen = render(
+      <TodayStrip meals={[]} open={[]} loading={false} failed onOpen={jest.fn()} onLogSlot={jest.fn()} />,
+      { wrapper },
+    );
+    expect(screen.getByText(/did not load/)).toBeTruthy();
+  });
+});
+
 describe('photo urls', () => {
   it('leaves the full-size url alone for the diary and the meal screen', () => {
     expect(photoSource('abc', 't', 3).uri).toMatch(/\/logs\/abc\/photo\?v=3$/);
@@ -231,7 +298,22 @@ describe('which slot a meal belongs to', () => {
 
     const today = todaysMeals(logs, new Date());
     expect(today.map((log) => log.id)).toEqual(['breakfast', 'dinner']);
-    expect(openSlots(today)).toEqual(['lunch']);
+    const morning = new Date();
+    morning.setHours(7, 0, 0, 0);
+    expect(openSlots(today, morning)).toEqual(['lunch']);
+  });
+
+  it('only offers slots that have not already passed', () => {
+    const at = (hour: number) => {
+      const date = new Date();
+      date.setHours(hour, 0, 0, 0);
+      return date;
+    };
+    expect(openSlots([], at(3))).toEqual(['breakfast', 'lunch', 'dinner']);
+    expect(openSlots([], at(9))).toEqual(['breakfast', 'lunch', 'dinner']);
+    expect(openSlots([], at(13))).toEqual(['lunch', 'dinner']);
+    expect(openSlots([], at(20))).toEqual(['dinner']);
+    expect(openSlots([meal({ created_at: todayAt(19) })], at(20))).toEqual([]);
   });
 
   it('labels a small-hours meal without inventing a slot for it', () => {

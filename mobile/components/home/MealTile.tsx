@@ -36,12 +36,15 @@ const MAX_WIDTH = 132;
  *
  * Worked out from the width rather than fixed at 112, so the fourth tile
  * peeks in on an SE and on a Pro Max alike instead of only on the phone the
- * number was chosen on. `gutter` is the left padding the strip starts after;
- * the strip itself runs to the right edge of the screen.
+ * number was chosen on. The strip starts at the content column's left edge
+ * and runs on through the right-hand gutter, so that is the width it has;
+ * on a wide window the column's cap binds and the tile stops growing.
  */
-export function useTileSize(gutter: number, gap: number): TileSize {
+export function useTileSize(gap: number): TileSize {
   const { width } = useWindowDimensions();
-  const available = width - gutter;
+  const { layout } = useTheme();
+  const available =
+    Math.min(width, layout.contentWidth + layout.screenPadding * 2) - layout.screenPadding;
   const raw = (available - gap * Math.floor(VISIBLE_TILES)) / VISIBLE_TILES;
   const tileWidth = Math.round(Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, raw)));
   return { width: tileWidth, height: Math.round(tileWidth * ASPECT) };
