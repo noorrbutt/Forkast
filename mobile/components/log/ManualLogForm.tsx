@@ -97,8 +97,16 @@ export function ManualLogForm({
       {/* Group one: the meal, and the two answers the estimate is built out
           of. No heading, because the question above it is the heading. */}
       <View style={group}>
+        {/* Two fields, two jobs, and the labels now say which. This one is an
+            optional shortcut: it looks up dishes other people logged, and
+            picking one fills in the dish name AND its category below in one
+            tap. The Dish field is the meal's own name, and it is the one that
+            is saved. Merging them was considered and left: the shortcut
+            rewrites the category too, which a plain name field must never do
+            behind someone's back while they type. */}
         <Field
-          label="Search"
+          label="Find a dish others have logged (optional)"
+          hint="Picking one fills in the dish and its category below."
           value={query}
           onChangeText={setQuery}
           placeholder="Biryani, ramen, burger"
@@ -165,7 +173,8 @@ export function ManualLogForm({
         ) : null}
 
         <Field
-          label="Dish"
+          label="Dish name"
+          hint="What you ate, in your own words. This is what goes in your diary."
           value={dishName}
           onChangeText={setDishName}
           placeholder="Chicken karahi"

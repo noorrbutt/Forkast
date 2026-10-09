@@ -181,6 +181,17 @@ async function fillTheMinimum(screen: ReturnType<typeof render>) {
   await waitFor(() => expect(screen.queryByPlaceholderText('Search')).toBeNull());
 }
 
+describe('the two name fields', () => {
+  it('says which one is the optional lookup and which one is saved', () => {
+    const screen = renderManualForm();
+
+    expect(screen.getByText('Find a dish others have logged (optional)')).toBeTruthy();
+    expect(screen.getByText('Picking one fills in the dish and its category below.')).toBeTruthy();
+    expect(screen.getByText('Dish name')).toBeTruthy();
+    expect(screen.queryByText('Search')).toBeNull();
+  });
+});
+
 describe('choosing a category', () => {
   it('finds a cuisine by name, not only the category names under it', async () => {
     const screen = renderManualForm();
