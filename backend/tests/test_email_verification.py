@@ -86,7 +86,9 @@ async def test_registration_sends_a_hashed_verification_token(
         select(EmailVerificationToken).where(EmailVerificationToken.user_id == user.id)
     )
     assert stored is not None
-    raw_token = parse_qs(urlsplit(params["textContent"].split(": ", maxsplit=1)[1]).query)["token"][0]
+    raw_token = parse_qs(urlsplit(params["textContent"].split(": ", maxsplit=1)[1]).query)["token"][
+        0
+    ]
     assert stored.token_hash == hash_refresh_token(raw_token)
     assert stored.token_hash != raw_token
 

@@ -168,9 +168,7 @@ async def test_a_spent_freeze_keeps_bridging_the_same_day_on_later_reads(
     await _log_clean_streak(auth_client, categories, 3, today)
     # Earns the day-3 milestone and its freeze before the slip.
     await auth_client.get(STREAKS)
-    await _log(
-        auth_client, categories["fries"], dish="regrettable", when=dt.datetime.now(KARACHI)
-    )
+    await _log(auth_client, categories["fries"], dish="regrettable", when=dt.datetime.now(KARACHI))
 
     first = (await auth_client.get(STREAKS)).json()
     assert first["current_streak"] == 3
@@ -192,9 +190,7 @@ async def test_freeze_just_used_on_is_reported_once(auth_client: AsyncClient) ->
 
     await _log_clean_streak(auth_client, categories, 3, today)
     await auth_client.get(STREAKS)
-    await _log(
-        auth_client, categories["fries"], dish="regrettable", when=dt.datetime.now(KARACHI)
-    )
+    await _log(auth_client, categories["fries"], dish="regrettable", when=dt.datetime.now(KARACHI))
 
     first = (await auth_client.get(STREAKS)).json()
     assert first["freeze_just_used_on"] == today.isoformat()

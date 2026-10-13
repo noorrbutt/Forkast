@@ -318,9 +318,7 @@ class Settings(BaseSettings):
                 "AI_PROVIDER=fake for the deterministic local estimator."
             )
 
-        has_brevo_key = bool(
-            self.brevo_api_key and self.brevo_api_key.get_secret_value().strip()
-        )
+        has_brevo_key = bool(self.brevo_api_key and self.brevo_api_key.get_secret_value().strip())
         has_brevo_sender = bool(self.brevo_from_email.strip())
         if has_brevo_key != has_brevo_sender:
             raise ValueError("BREVO_API_KEY and BREVO_FROM_EMAIL must be configured together.")
