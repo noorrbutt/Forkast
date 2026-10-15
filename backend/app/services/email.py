@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from email.utils import parseaddr
 from html import escape
 from typing import Any
 
@@ -19,32 +18,33 @@ BREVO_SEND_URL = "https://api.brevo.com/v3/smtp/email"
 def _send_link_email(to: str, link: str, *, subject: str, intro: str, action: str) -> None:
     settings = get_settings()
     api_key = settings.brevo_api_key
-    sender = settings.brevo_from_email
+    address = settings.email_from_address
     has_key = api_key is not None and bool(api_key.get_secret_value().strip())
-    has_sender = bool(sender and sender.strip())
+    has_sender = bool(address and address.strip())
     if not has_key or not has_sender:
         # Deliberately a no-op rather than an error: local dev, CI and tests
         # all run with no Brevo credentials configured, and none of them
         # should need one just to register a user. But the job handler that
         # calls this treats a plain return as success and marks the job done,
         # so without a log line here, a deployment that forgot to set
-        # BREVO_API_KEY / BREVO_FROM_EMAIL sends nothing and nothing ever
+        # BREVO_API_KEY / EMAIL_FROM_ADDRESS sends nothing and nothing ever
         # says why -- every verification and reset email vanishes silently.
         logger.warning(
             "email_send_skipped_no_provider to=%s subject=%r missing=%s",
             to,
             subject,
-            "BREVO_API_KEY" if not has_key else "BREVO_FROM_EMAIL",
+            "BREVO_API_KEY" if not has_key else "EMAIL_FROM_ADDRESS",
         )
         return
 
-    # Accepts either a plain address or the "Name <address>" form, the same
-    # shape RESEND_FROM_EMAIL used to take, so an existing sender value keeps
-    # working unchanged.
-    name, address = parseaddr(sender)
     safe_link = escape(link, quote=True)
     payload: dict[str, Any] = {
-        "sender": {"email": address, "name": name} if name else {"email": address},
+        # Always sent explicitly, name included. Brevo's send API falls back
+        # to the account's own default -- or, for an unauthenticated sender,
+        # rewrites the visible From outright -- the moment a request omits
+        # name, which an address with nothing to parse a name out of used to
+        # do silently.
+        "sender": {"name": settings.email_from_name, "email": address},
         "to": [{"email": to}],
         "subject": subject,
         "htmlContent": f'<p>{intro}</p><p><a href="{safe_link}">{action}</a></p>',

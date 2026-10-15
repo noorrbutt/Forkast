@@ -160,7 +160,8 @@ Email (both or neither):
 | Name | Value |
 | --- | --- |
 | `BREVO_API_KEY` | Brevo key |
-| `BREVO_FROM_EMAIL` | Verified sender |
+| `EMAIL_FROM_ADDRESS` | Verified sender, on an authenticated domain |
+| `APP_DOMAIN` | Required alongside the two above outside local dev |
 
 Optional, with their defaults in `backend/app/config.py`:
 

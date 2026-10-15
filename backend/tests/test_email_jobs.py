@@ -30,7 +30,8 @@ def _mock_brevo(monkeypatch: pytest.MonkeyPatch, *, side_effect=None) -> Mock:
     send = Mock(side_effect=side_effect)
     settings = SimpleNamespace(
         brevo_api_key=SecretStr("xkeysib-test-key"),
-        brevo_from_email="Forkast <noreply@example.test>",
+        email_from_name="Forkast",
+        email_from_address="noreply@example.test",
     )
     monkeypatch.setattr(email_service, "get_settings", lambda: settings)
     monkeypatch.setattr(email_service, "send_via_brevo", send)

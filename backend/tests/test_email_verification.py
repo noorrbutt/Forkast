@@ -28,7 +28,8 @@ def _mock_brevo(monkeypatch: pytest.MonkeyPatch, *, side_effect=None) -> Mock:
     send = Mock(side_effect=side_effect)
     settings = SimpleNamespace(
         brevo_api_key=SecretStr("xkeysib-test-key"),
-        brevo_from_email="Forkast <noreply@example.test>",
+        email_from_name="Forkast",
+        email_from_address="noreply@example.test",
     )
     monkeypatch.setattr(email_service, "get_settings", lambda: settings)
     monkeypatch.setattr(email_service, "send_via_brevo", send)
@@ -55,15 +56,41 @@ def _settings_args() -> dict[str, str]:
 
 
 def test_brevo_settings_must_be_configured_together() -> None:
-    with pytest.raises(ValidationError, match="BREVO_API_KEY and BREVO_FROM_EMAIL"):
+    with pytest.raises(ValidationError, match="BREVO_API_KEY and EMAIL_FROM_ADDRESS"):
         Settings(_env_file=None, **_settings_args(), BREVO_API_KEY="xkeysib-test-key")
 
-    with pytest.raises(ValidationError, match="BREVO_API_KEY and BREVO_FROM_EMAIL"):
+    with pytest.raises(ValidationError, match="BREVO_API_KEY and EMAIL_FROM_ADDRESS"):
         Settings(
             _env_file=None,
             **_settings_args(),
-            BREVO_FROM_EMAIL="Forkast <noreply@example.test>",
+            EMAIL_FROM_ADDRESS="noreply@example.test",
         )
+
+
+def test_a_real_email_provider_in_production_needs_an_app_domain() -> None:
+    """A forkast:// link mailed to a real inbox does nothing when tapped, so
+    this is refused at startup rather than at the first support ticket."""
+    args = {**_settings_args(), "ENVIRONMENT": "production"}
+    with pytest.raises(ValidationError, match="APP_DOMAIN must be set"):
+        Settings(
+            _env_file=None,
+            **args,
+            BREVO_API_KEY="xkeysib-test-key",
+            EMAIL_FROM_ADDRESS="noreply@example.test",
+            TRUST_PROXY_HEADERS="false",
+            CORS_ORIGINS="https://forkast.app",
+        )
+
+
+def test_a_real_email_provider_in_local_dev_does_not_need_an_app_domain() -> None:
+    """The forkast:// fallback is exactly what local dev is for: no public
+    domain to verify, and testing against a real provider is still useful."""
+    Settings(
+        _env_file=None,
+        **_settings_args(),
+        BREVO_API_KEY="xkeysib-test-key",
+        EMAIL_FROM_ADDRESS="noreply@example.test",
+    )
 
 
 async def test_registration_sends_a_hashed_verification_token(

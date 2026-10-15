@@ -18,7 +18,7 @@ from __future__ import annotations
 import datetime as dt
 import secrets
 import uuid
-from urllib.parse import quote
+from urllib.parse import urlencode
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, func, select, update
@@ -116,7 +116,7 @@ def deep_link(path: str, **params: str) -> str:
     exactly as it always did.
     """
     settings = get_settings()
-    query = "&".join(f"{key}={quote(value, safe='')}" for key, value in params.items())
+    query = urlencode(params)
     if settings.app_domain:
         return f"https://{settings.app_domain}/{path}?{query}"
     return f"forkast://{path}?{query}"

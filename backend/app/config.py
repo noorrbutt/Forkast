@@ -128,16 +128,25 @@ class Settings(BaseSettings):
     # provider serves, such as plans or text calorie refinement.
     photo_estimate_enabled: bool = Field(default=True, alias="PHOTO_ESTIMATE_ENABLED")
     brevo_api_key: SecretStr | None = Field(default=None, alias="BREVO_API_KEY")
-    brevo_from_email: str = Field(default="", alias="BREVO_FROM_EMAIL")
+    # Split rather than one "Name <address>" field: Brevo's send API takes
+    # sender.name and sender.email as two separate fields, and a name has to
+    # be sent explicitly on every request or Brevo falls back to the account
+    # default (or rewrites the From header outright for an unauthenticated
+    # sender). A combined field invited exactly the bug this split fixes: a
+    # bare address with no name parsed out of it sent no name at all.
+    email_from_name: str = Field(default="Forkast", alias="EMAIL_FROM_NAME")
+    email_from_address: str = Field(default="", alias="EMAIL_FROM_ADDRESS")
 
     cors_origins: str = Field(default="*", alias="CORS_ORIGINS")
 
     # The public host that serves the App Links / Universal Links fallback
     # pages and the two /.well-known verification files (see app/web.py).
     # Empty by default -- the API works without it -- which is what makes
-    # password reset and email verification fall back to the forkast:// scheme
-    # in _send_password_reset_email_safely / _send_verification_email_safely
-    # rather than mail out an https link nothing actually serves yet.
+    # deep_link() in services/auth.py fall back to the bare forkast:// scheme
+    # rather than mail out an https link nothing actually serves yet. Outside
+    # local dev that fallback is refused below once an email provider is
+    # actually configured, since a forkast:// link mailed to a real inbox
+    # does not do anything when tapped.
     #
     # No scheme, no trailing slash: just the hostname, e.g. "forkast.app".
     app_domain: str = Field(default="", alias="APP_DOMAIN")
@@ -319,9 +328,31 @@ class Settings(BaseSettings):
             )
 
         has_brevo_key = bool(self.brevo_api_key and self.brevo_api_key.get_secret_value().strip())
-        has_brevo_sender = bool(self.brevo_from_email.strip())
+        has_brevo_sender = bool(self.email_from_address.strip())
         if has_brevo_key != has_brevo_sender:
-            raise ValueError("BREVO_API_KEY and BREVO_FROM_EMAIL must be configured together.")
+            raise ValueError(
+                "BREVO_API_KEY and EMAIL_FROM_ADDRESS must be configured together."
+            )
+
+        # A deep link mailed out as forkast://... is dead on arrival: no mail
+        # client linkifies a bare custom scheme from an email body, let alone
+        # navigates to it on tap. That fallback exists for local dev, where no
+        # real provider is configured and nothing is actually mailed out to
+        # hit this problem. The moment a real provider -- Brevo here -- is
+        # configured outside dev, an unset APP_DOMAIN stops being a quiet
+        # default and starts being every verification and reset link in
+        # production doing nothing when clicked, so it fails at startup
+        # instead of at the first support ticket.
+        if (
+            self.environment is Environment.production
+            and has_brevo_key
+            and not self.app_domain.strip()
+        ):
+            raise ValueError(
+                "APP_DOMAIN must be set when BREVO_API_KEY is configured outside "
+                "local dev: an email provider with no domain to link to sends "
+                "forkast:// links that no mail client will open."
+            )
 
         if self.cors_origin_list == ["*"] and urlsplit(self.database_url).hostname not in {
             "localhost",

@@ -201,7 +201,7 @@ list. The ones you will touch most:
 | `JWT_SECRET` | none | Generate with `openssl rand -hex 32` |
 | `AI_PROVIDER` | `fake` | `fake` is the local estimator. `groq` needs `GROQ_API_KEY` |
 | `PHOTO_ESTIMATE_ENABLED` | `true` | Kill switch for photo estimation alone |
-| `BREVO_API_KEY`, `BREVO_FROM_EMAIL` | empty | Verification and reset emails |
+| `BREVO_API_KEY`, `EMAIL_FROM_ADDRESS` | empty | Verification and reset emails. `EMAIL_FROM_NAME` defaults to `Forkast` |
 | `GOOGLE_CLIENT_IDS` | empty | Audiences accepted for Google sign in. Empty turns the feature off |
 | `CORS_ORIGINS` | `*` | Restrict this in production |
 | `TRUST_PROXY_HEADERS`, `TRUSTED_PROXY_HOPS` | `false`, `1` | Only enable behind a proxy you control, or callers can spoof their rate-limit identity |
@@ -432,7 +432,9 @@ Production checklist:
 - [ ] A real `JWT_SECRET`, and `CORS_ORIGINS` narrowed from `*`
 - [ ] `AI_PROVIDER=groq` with a key, if you want real estimates. Startup warns when
       production is backed by the local estimator
-- [ ] `BREVO_API_KEY` and a verified sender address
+- [ ] `BREVO_API_KEY`, `EMAIL_FROM_ADDRESS` (verified in Brevo, on an
+      authenticated domain) and `APP_DOMAIN` -- startup refuses to boot with
+      the first and no domain to link to
 - [ ] `TRUST_PROXY_HEADERS=true` and the correct `TRUSTED_PROXY_HOPS`, only if a
       proxy you control sits in front
 - [ ] At least one worker running
