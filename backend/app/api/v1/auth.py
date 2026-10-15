@@ -57,7 +57,7 @@ async def _reject_breached_password(password: str) -> None:
     if await run_in_threadpool(is_password_breached, password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This password has appeared in a data breach â€” please choose another.",
+            detail="This password has appeared in a data breach - please choose another.",
         )
 
 
