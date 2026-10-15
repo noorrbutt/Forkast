@@ -7,7 +7,12 @@ what they ate, which is not data to hold onto after they ask you not to.
 
 from __future__ import annotations
 
+import datetime as dt
+
+import pytest
 from httpx import AsyncClient
+
+from app.api.v1 import insights as insights_module
 
 ME = "/api/v1/me"
 EXPORT = "/api/v1/me/export"
@@ -96,6 +101,36 @@ async def test_export_is_json_or_csv_and_only_contains_the_callers_data(
     assert "first meal" in csv_response.text
     assert "second meal" not in csv_response.text
     assert "burn_logs" in csv_response.text
+
+
+async def test_export_filename_uses_the_users_local_date(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Not the server's: the rest of this file buckets everything by the
+    caller's own timezone, and a filename is no less user-facing for being a
+    filename than the dashboard or streak figures are."""
+    registered = (
+        await client.post(
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Export",
+                "last_name": "Date",
+                "email": "export-date@forkast.app",
+                "password": "password123",
+            },
+        )
+    ).json()
+    headers = {"Authorization": f"Bearer {registered['access_token']}"}
+
+    elsewhere = dt.date(2026, 1, 1)
+    monkeypatch.setattr(insights_module, "today_for", lambda user: elsewhere)
+
+    response = await client.get(EXPORT, headers=headers)
+
+    assert response.status_code == 200
+    assert f'forkast-export-{elsewhere.isoformat()}.json"' in response.headers[
+        "content-disposition"
+    ]
 
 
 async def test_export_csv_neutralises_formula_looking_dish_names(client: AsyncClient) -> None:

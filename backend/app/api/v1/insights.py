@@ -12,7 +12,6 @@ lives in services/profile.py.
 
 from __future__ import annotations
 
-import datetime as dt
 import uuid
 from typing import Annotated, Literal
 
@@ -58,6 +57,7 @@ from app.services.insights import (
     build_reminder_signal,
     build_weekly_digest,
     compute_streaks,
+    today_for,
 )
 from app.services.rate_limit import account_identity
 from app.services.security import decode_access_token
@@ -96,7 +96,11 @@ async def export_me(
     await limiter.hit("data-export", account_identity(user.id), limit=5, window_seconds=60 * 60)
 
     export = await profile_service.build_export(session, user)
-    filename = f"forkast-export-{dt.date.today().isoformat()}"
+    # The user's own calendar day, not the server's: bucketing by anything
+    # else is the exact bug the per-user timezone exists to avoid everywhere
+    # else in this file, and a filename is no less user-facing for being a
+    # filename.
+    filename = f"forkast-export-{today_for(user).isoformat()}"
     if format == "json":
         return Response(
             content=export.model_dump_json(indent=2),
