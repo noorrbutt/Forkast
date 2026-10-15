@@ -13,19 +13,67 @@
 # long-running process, and belong on whatever actually runs cron where this
 # is deployed, not inside compose.
 services:
+  # pg_trgm is created by migration 0001, same as any other schema object --
+  # nothing extra needed here for it. 18, not whatever "postgres:latest" would
+  # resolve to today, because uuidv7() does not exist before 18 and the app
+  # relies on it.
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: forkast
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d forkast"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - forkast-postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
   api:
     build: .
     env_file: .env
+    # Overrides whatever DATABASE_URL .env carries for a bare-metal run
+    # (typically localhost, which inside this container is the container
+    # itself, not the postgres service above) -- compose's own network gives
+    # every service a DNS name matching its service name.
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/forkast
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "8010:8010"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8010/health', timeout=4)"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
     restart: unless-stopped
 
   worker:
     build: .
     env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/forkast
     # Migrations already ran as part of the api service's own CMD; a second
     # `alembic upgrade head` racing it on startup is harmless (alembic is
     # idempotent against a schema already at head) but unnecessary, so the
     # worker's own entrypoint skips straight to the worker itself.
     command: python -m app.worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # Not just postgres: migrations run inside api's own CMD, before its
+      # /health check can pass, so waiting on api itself (not only on
+      # postgres accepting connections) is what actually keeps the worker
+      # from querying tables that don't exist yet.
+      api:
+        condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  forkast-postgres-data:

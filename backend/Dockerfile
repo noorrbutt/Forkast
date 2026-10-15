@@ -25,6 +25,12 @@ USER forkast
 
 EXPOSE 8010
 
+# No curl in -slim; python's stdlib is already here and costs nothing extra.
+# Checks /health, not /ready: liveness should not flap because Postgres had a
+# slow moment, only because this process itself stopped answering.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8010/health', timeout=4)" || exit 1
+
 # Migrations run before the server starts, not as a separate manual step, so
 # a deploy that forgets to run alembic by hand never quietly serves the old
 # schema against a newer one.
