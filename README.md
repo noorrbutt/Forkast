@@ -102,7 +102,7 @@ store, so there is no Redis to run.
 | Calorie estimation | Real, with a deterministic local estimator by default |
 | Groq | Implemented, off by default. Set `AI_PROVIDER=groq` and a key |
 | Google sign in | Real, off until configured. Needs a development build |
-| Map | Real, except in Expo Go on Android. See [The map](#the-map) |
+| Map | Real, except in Expo Go on Android. See [docs/MAP_SETUP.md](docs/MAP_SETUP.md) |
 
 ## Quick start
 
@@ -312,91 +312,15 @@ separately.
 
 ### The map
 
-It draws real pins everywhere except Expo Go on Android, where it falls back to a
-list grouped by area.
-
-Expo removed Google Maps from the Expo Go client on Android in SDK 53, and Google
-is the only provider `react-native-maps` has there, so a map renders as a blank
-grey rectangle. No API key fixes it, because in Expo Go the app runs under Expo's
-package name and signature and a config plugin only applies during a native
-build.
-
-To get it on Android, build a development client:
-
-```bash
-npx expo login
-eas env:create --environment development --name GOOGLE_MAPS_API_KEY --value "AIza..." --visibility secret
-eas build --profile development --platform android
-```
-
-The variable is registered with EAS rather than exported in your shell, because
-the build runs on EAS servers and never sees your local environment. `VAR=... eas
-build` is the shape that looks obviously right and silently produces a build with
-no key in it, and on PowerShell it is not even valid syntax. (`eas build --local`
-does read your shell.)
-
-The key ships inside the APK either way, so restrict it by package name and SHA-1
-in the Google Cloud console rather than treating secrecy as the control.
+Real pins everywhere except Expo Go on Android, where it falls back to a list
+grouped by area, and why no API key fixes that in Expo Go. See
+[docs/MAP_SETUP.md](docs/MAP_SETUP.md).
 
 ### Continue with Google
 
-Off unless you configure it. With no client ids the button is not drawn, the
-`/auth/google` route answers 503, and everything else works exactly as before.
-With no audience to check a token against, a token whose audience nobody checks
-is one anybody can mint for their own Google client, so the route stays shut.
-
-You need three OAuth clients, because Google issues one per platform and the
-token the app sends carries whichever client asked for it. In the Google Cloud
-console, under Google Auth Platform then Clients:
-
-| Client | What it asks for | Where the value comes from |
-| --- | --- | --- |
-| Android | Package name and SHA-1 | `com.forkast.app`, and the fingerprint of whichever key signs the build |
-| iOS | Bundle ID | `com.forkast.app` |
-| Web | Authorised JavaScript origins and redirect URIs | the origin the browser build is served from, exactly as typed |
-
-Register one Android client per signing key, not one in total. A debug build, an
-EAS build and a Play release are signed by three different keys and Google
-matches on the fingerprint.
-
-```bash
-# The key a local `npx expo run:android` build is signed with
-keytool -keystore ~/.android/debug.keystore -list -v -alias androiddebugkey -storepass android
-
-# The key EAS signs with
-eas credentials
-```
-
-For the Play Store, use the fingerprint under "App signing key certificate" in
-the Play Console (Test and release, Setup, App signing), not the upload key, or
-sign in works for you and for nobody who installed from Play.
-
-Then set the ids. The client ids are not secrets: an OAuth client id ships inside
-the bundle. What protects an account is the API refusing a token whose audience
-it was not told about. A client secret, if Google hands you one, belongs in none
-of these files.
-
-```bash
-# backend/.env: web and iOS ids, comma separated. Android has no id of its own;
-# that client is matched by package name and fingerprint.
-GOOGLE_CLIENT_IDS=<web id>,<ios id>
-
-# mobile/.env.local, for a local run
-EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=<web id>
-EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=<ios id>
-
-# EAS, for a build, which never sees your local environment
-eas env:create --environment development --name EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID --value "<web id>"
-eas env:create --environment development --name EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID --value "<ios id>"
-```
-
-The web client id is needed on every platform, the phone included: it is the
-audience the ID token is minted for on Android. The iOS URL scheme is derived
-from the iOS id by the app config, so there is no fourth value to keep in step.
-
-**It does not work in Expo Go.** The sign in library ships native code, so the Go
-client cannot load it. Build a development client. Google also refuses to
-redirect to an `exp://` address, so the pure JavaScript route is shut there too.
+Off unless configured: no client ids means no button, and `/auth/google`
+answers 503. Setting it up needs three OAuth clients (Android, iOS, web) and
+does not work inside Expo Go. See [docs/GOOGLE_SIGNIN.md](docs/GOOGLE_SIGNIN.md).
 
 ## Deployment
 
@@ -486,33 +410,10 @@ CronJob, Railway's cron, `cron(1)` beside the container) at these commands.
 
 ### App Links and Universal Links
 
-Password reset and email verification links used to be bare `forkast://` links.
-On Android any installed app can register for a custom scheme, and most mail
-clients do not linkify one, so the link was both interceptable and often not
-clickable. Set three variables and both platforms switch to `https://` links on
-your own domain, with `forkast://` kept only as what the fallback web page
-(`app/web.py`) hands off to.
-
-```bash
-# backend/.env
-APP_DOMAIN=forkast.app
-APPLE_APP_ID_PREFIX=<Apple Team ID, from App Store Connect > Membership>
-ANDROID_SHA256_CERT_FINGERPRINT=<from `eas credentials`, or the Play Console's
-                                   App signing key certificate>
-
-# mobile/.env.local, or eas env:create for a build. Same domain, no scheme
-EXPO_PUBLIC_APP_DOMAIN=forkast.app
-```
-
-`APP_DOMAIN` alone is not enough: the backend serves
-`/.well-known/apple-app-site-association` and `/.well-known/assetlinks.json` as
-404 until the matching Team ID or fingerprint is set too. A verification file
-that names no real app is worse than none. All three empty, the default, is not a
-partial setup; it is local development working as it always did.
-
-None of this works unless those two files are served from `APP_DOMAIN` at its
-real HTTPS origin, so the backend must be reachable there, behind a reverse proxy
-or directly.
+Three variables switch password reset and email verification from bare
+`forkast://` links (interceptable on Android, often not even clickable from
+mail) to `https://` links on your own domain. See
+[docs/APP_LINKS.md](docs/APP_LINKS.md).
 
 ## Repository layout
 
@@ -567,49 +468,9 @@ Worth knowing before you change things:
 
 ## Troubleshooting
 
-**Port 8010, not 8000.** Another project on the original dev machine owns 8000.
-Windows lets two processes bind the same port rather than refusing, so the
-symptom is not a bind error, it is your requests being answered by the wrong
-server. If a response looks like it came from a different app, that is why.
-
-**`localhost` does not work from a phone.** Expo Go runs on the handset, where
-`localhost` is the handset. Put your machine's LAN address in
-`mobile/.env.local`:
-
-```
-EXPO_PUBLIC_API_URL=http://192.168.1.10:8010
-```
-
-Find it with `ipconfig` (Windows) or `ip addr` / `ifconfig`. It is a DHCP lease,
-so it changes when you rejoin the network. After editing it, do a full reload in
-Expo Go; hot refresh will not pick it up. `curl http://<that ip>:8010/health`
-from the phone's browser is the fastest way to confirm the path works.
-
-**Windows firewall.** The phone cannot reach the laptop until the firewall allows
-it, and if Windows has classified the network as Public then Private profile
-rules do not apply. Check with `Get-NetConnectionProfile`, then in an elevated
-shell:
-
-```powershell
-Set-NetConnectionProfile -InterfaceAlias "Wi-Fi" -NetworkCategory Private
-New-NetFirewallRule -DisplayName "Forkast API" -Direction Inbound -LocalPort 8010 -Protocol TCP -Action Allow -Profile Private
-New-NetFirewallRule -DisplayName "Expo Metro"  -Direction Inbound -LocalPort 8081 -Protocol TCP -Action Allow -Profile Private
-```
-
-**Expo Go sign in.** On SDK 57 you must sign in twice: `npx expo login` in the
-terminal, and again inside the Expo Go app. A QR scan alone will fail.
-
-**`pip install` fails on a wheel.** Intended. Check your Python version is
-3.12 or 3.14 rather than letting pip compile from source.
-
-**Tests refuse to start.** `TEST_DATABASE_URL` is unset or points at the same
-database as `DATABASE_URL`. The suite truncates tables, so it refuses on purpose.
-
-**Estimates never get "refined".** No worker is running, or the AI circuit
-breaker is open. Check `GET /queue`.
-
-**Migrations fail with "function uuidv7() does not exist".** You are on
-PostgreSQL older than 18.
+Port conflicts, `localhost` not reaching a phone, the Windows firewall, Expo Go
+sign in, a `pip install` wheel failure, and a few more. See
+[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 ## Documentation
 
@@ -622,6 +483,10 @@ PostgreSQL older than 18.
 | [docs/VERCEL_DEPLOY.md](docs/VERCEL_DEPLOY.md) | Serverless deployment with Neon |
 | [docs/WEB_DEPLOY.md](docs/WEB_DEPLOY.md) | Publishing the browser build |
 | [docs/PLAY_STORE.md](docs/PLAY_STORE.md) | Release checklist |
+| [docs/GOOGLE_SIGNIN.md](docs/GOOGLE_SIGNIN.md) | Setting up "Continue with Google" |
+| [docs/MAP_SETUP.md](docs/MAP_SETUP.md) | Getting the real map working in a development build |
+| [docs/APP_LINKS.md](docs/APP_LINKS.md) | `https://` deep links for reset and verification emails |
+| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common local setup problems |
 | [docs/legal/](docs/legal) | Privacy policy, terms, refunds, tracking and store disclosures |
 
 ## Contributing and security
