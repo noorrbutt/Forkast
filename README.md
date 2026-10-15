@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/noorrbutt/Forkast/actions/workflows/ci.yml/badge.svg)](https://github.com/noorrbutt/Forkast/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/python-3.14-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
 ![Expo SDK](https://img.shields.io/badge/Expo-SDK%2057-000020?logo=expo&logoColor=white)
@@ -86,7 +86,7 @@ figure you will not.
 | Auth | Argon2 password hashing, short-lived JWT access tokens, rotating refresh tokens, Google ID token verification |
 | Background work | A `jobs` table written in the same transaction as the change that needs it, drained by a worker with exponential backoff and a dead-letter state |
 | AI | Groq, behind a provider seam. A deterministic local estimator is the default |
-| Email | Resend |
+| Email | Brevo |
 | App | React Native 0.86 on Expo SDK 57, Expo Router, TanStack Query, Reanimated |
 | CI | GitHub Actions against a real PostgreSQL 18 service container |
 
@@ -110,7 +110,7 @@ store, so there is no Redis to run.
 
 | Tool | Version | Notes |
 |---|---|---|
-| Python | 3.14 | Via conda below. The pins were resolved against 3.14 |
+| Python | 3.12+ | Via conda below. Production runs 3.12; CI also tests 3.14 |
 | Node | 22.13 or newer | Expo SDK 57's floor. Enforced by `engines` and checked in CI |
 | PostgreSQL | 18 | Needs `pg_trgm`, which ships with it. `uuidv7()` does not exist before 18 |
 | conda | any | Only to create the environment |
@@ -118,7 +118,7 @@ store, so there is no Redis to run.
 ### 1. Python environment
 
 ```bash
-conda create -n forkast python=3.14 -y
+conda create -n forkast python=3.12 -y
 conda activate forkast
 pip install -r backend/requirements-dev.txt --only-binary :all:
 ```
@@ -126,8 +126,9 @@ pip install -r backend/requirements-dev.txt --only-binary :all:
 `--only-binary :all:` is deliberate. It turns a missing wheel into a loud
 failure instead of a silent source build that may or may not find a compiler.
 The pins are exact for the same reason: SQLAlchemy is held at 2.0.53 because
-2.0.54 shipped without a wheel for Python 3.14. Use `requirements.txt` instead
-if you only want to run the server and not the tests or linter.
+2.0.54 shipped without a wheel for Python 3.14, which CI also runs against.
+Use `requirements.txt` instead if you only want to run the server and not the
+tests or linter.
 
 ### 2. Databases
 
@@ -598,8 +599,8 @@ New-NetFirewallRule -DisplayName "Expo Metro"  -Direction Inbound -LocalPort 808
 **Expo Go sign in.** On SDK 57 you must sign in twice: `npx expo login` in the
 terminal, and again inside the Expo Go app. A QR scan alone will fail.
 
-**`pip install` fails on a wheel.** Intended. Check your Python version is 3.14
-rather than letting pip compile from source.
+**`pip install` fails on a wheel.** Intended. Check your Python version is
+3.12 or 3.14 rather than letting pip compile from source.
 
 **Tests refuse to start.** `TEST_DATABASE_URL` is unset or points at the same
 database as `DATABASE_URL`. The suite truncates tables, so it refuses on purpose.
