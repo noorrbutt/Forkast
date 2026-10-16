@@ -10,17 +10,29 @@ type HeroWashProps = {
   /** Bleeds past the screen gutter so the colour reaches the edges. */
   bleed?: number;
   /**
-   * Whether to pull up into the space above, as well as out to the sides.
+   * How far to pull up into the space above, as well as out to the sides.
    *
-   * On a screen with a header there is a header's worth of padding to reclaim,
-   * and the wash should start under it rather than below it. On a screen
-   * without one there is only the safe area inset, so pulling up puts the wash
-   * and whatever sits on it into the status bar. The dashboard is the second
-   * kind, and it is the only screen where this matters, which is why it is a
-   * prop rather than a guess made inside here.
+   * `true` pulls up by `bleed`, the amount a screen WITH a header has already
+   * reclaimed above the wash. `false` pulls up by nothing, for a screen
+   * without a header, where that space is only the safe area inset -- pulling
+   * up by `bleed` there would put the wash, and whatever sits on it, into the
+   * status bar.
+   *
+   * A number pulls up by exactly that much instead, which is for a header-less
+   * screen that wants the wash to reach the very top of the window: pass
+   * `insets.top + spacing.lg` (Screen's own top padding for that case) and the
+   * wash starts at y=0 while its content stays exactly where it would have
+   * sat without this, because the same amount comes back as this component's
+   * own `paddingTop`.
    */
-  pullUp?: boolean;
+  pullUp?: boolean | number;
 };
+
+/** How much of the space above to reclaim, for whichever shape `pullUp` was given. */
+function pullAmount(pullUp: boolean | number, bleed: number): number {
+  if (typeof pullUp === 'number') return pullUp;
+  return pullUp ? bleed : 0;
+}
 
 /**
  * A soft field of colour under the one number a screen leads with.
@@ -42,10 +54,19 @@ type HeroWashProps = {
  */
 export function HeroWash({ children, bleed = 24, pullUp = true }: HeroWashProps) {
   const { spacing, isDark } = useTheme();
+  const amount = pullAmount(pullUp, bleed);
 
   return (
-    <View style={{ marginHorizontal: -bleed, marginTop: pullUp ? -bleed : 0 }}>
+    <View
+      testID="hero-wash-outer"
+      // `amount === 0` rather than `-amount`, which would otherwise be -0 for
+      // the common pullUp={false} case: visually identical to 0, but a
+      // needless foot-gun for anything that reads this style back and
+      // compares it with strict equality.
+      style={{ marginHorizontal: -bleed, marginTop: amount === 0 ? 0 : -amount }}
+    >
       <LinearGradient
+        testID="hero-wash-gradient"
         colors={(isDark ? heroWash.dark : heroWash.light) as [string, string, ...string[]]}
         // Slightly off axis, so the light has a direction and the field does
         // not read as a flat band, but mostly downward, and the last stop is
@@ -63,7 +84,7 @@ export function HeroWash({ children, bleed = 24, pullUp = true }: HeroWashProps)
           paddingHorizontal: bleed,
           // The reclaimed margin is paid back as padding when it was taken, so
           // the content sits where it would have without the wash.
-          paddingTop: (pullUp ? bleed : 0) + spacing.lg,
+          paddingTop: amount + spacing.lg,
           paddingBottom: spacing.xxl,
         }}
       >

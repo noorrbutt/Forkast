@@ -106,6 +106,27 @@ export function Screen({
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <ScreenInsetContext.Provider value={insetValue}>{body}</ScreenInsetContext.Provider>
 
+      {/* A screen with no frosted header has nothing covering the status
+          bar, so scrolled content -- Home's wash included -- prints straight
+          over the clock and carrier text. This is a plain scrim for exactly
+          that strip, never shown over the header (which already covers it)
+          or on a bleed-top screen (the welcome arch, which draws its own
+          full-bleed art under the status bar on purpose). */}
+      {!hasHeader && !bleedTop ? (
+        <Frosted
+          testID="status-bar-scrim"
+          intensity={50}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: insets.top,
+          }}
+          pointerEvents="none"
+        />
+      ) : null}
+
       {hasHeader ? (
         <Frosted
           intensity={50}

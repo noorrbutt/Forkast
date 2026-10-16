@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Hero, HeroWash, Ring } from '../ui';
 import { formatNumber } from '../../lib/format';
@@ -70,13 +71,18 @@ export function HomeHero({
   onEditBurn: () => void;
 }) {
   const { colors, spacing, type } = useTheme();
+  const insets = useSafeAreaInsets();
   const reading = readToday(today);
   const burnedNothing = today.burned === 0;
 
   return (
-    // pullUp off: Home has no header, so pulling up would put the figure
-    // under the status bar on a notched phone.
-    <HeroWash pullUp={false}>
+    // Home has no header, so Screen's own top padding (insets.top + spacing.lg)
+    // is what the wash needs to reach y=0 under the status bar instead of
+    // starting below it -- pulling up by a flat `bleed` here, the way a
+    // screen WITH a header does, would put the figure under the status bar
+    // on a notched phone, which is why this is the numeric form rather than
+    // `true`.
+    <HeroWash pullUp={insets.top + spacing.lg}>
       {/* HeroWash already pays spacing.xxl of its own paddingBottom, so this
           only needs to separate the eaten/burned line from the hero above it,
           not open a second gap before the Today strip starts. It used to add
