@@ -133,6 +133,39 @@ const SAVED = {
   restaurant: null,
 };
 
+const recentMeal = (id: string, dishName: string, createdAt: string, calories = 600) => ({
+  id,
+  has_photo: false,
+  dish_name: dishName,
+  category_id: 11,
+  restaurant_id: null,
+  area: null,
+  rating: 4,
+  fun_scale: null,
+  friend_scale: null,
+  serving_size: 'medium',
+  estimated_calories: calories,
+  estimate_source: 'local',
+  created_at: createdAt,
+  category: CATEGORIES[0],
+  restaurant: null,
+});
+
+/** Newest first, the same order GET /logs already answers in. "Karahi" and
+ * "karahi" name the same dish with different casing, to exercise the
+ * dedupe; "fries" is the fourth distinct dish once that dedupe runs, which
+ * is what pushes "biryani" -- the fifth -- past the four-row cap. */
+const RECENT_LOGS = [
+  recentMeal('log-6', 'chicken tikka', '2026-09-20T19:00:00Z', 500),
+  recentMeal('log-5', 'daal chawal', '2026-09-20T13:00:00Z', 450),
+  recentMeal('log-4', 'Karahi', '2026-09-19T19:00:00Z', 820),
+  recentMeal('log-3', 'karahi', '2026-09-19T13:00:00Z', 800),
+  recentMeal('log-2', 'fries', '2026-09-18T19:00:00Z', 350),
+  recentMeal('log-1', 'biryani', '2026-09-18T13:00:00Z', 700),
+];
+
+const REPEATED = { ...RECENT_LOGS[0], id: 'log-fresh', created_at: '2026-09-21T13:00:00Z' };
+
 /** What a phone camera hands back: far too big for the server, before resizing. */
 const CAMERA_SHOT = {
   canceled: false,
@@ -212,14 +245,21 @@ describe('arriving from a ghost tile on Home', () => {
   });
 });
 
-describe('the two name fields', () => {
-  it('says which one is the optional lookup and which one is saved', () => {
+describe('the one dish field', () => {
+  it('has a single dish field, not a separate lookup and name', () => {
     const screen = renderManualForm();
 
-    expect(screen.getByText('Find a dish others have logged (optional)')).toBeTruthy();
-    expect(screen.getByText('Picking one fills in the dish and its category below.')).toBeTruthy();
     expect(screen.getByText('Dish name')).toBeTruthy();
+    expect(screen.queryByText('Find a dish others have logged (optional)')).toBeNull();
     expect(screen.queryByText('Search')).toBeNull();
+  });
+
+  it('searches the catalog off the one field, not a second one', async () => {
+    const screen = renderManualForm();
+
+    fireEvent.changeText(screen.getByPlaceholderText('Chicken karahi'), 'pizza');
+
+    await waitFor(() => expect(mockedApi.get).toHaveBeenCalledWith('/search', expect.anything()));
   });
 });
 
@@ -417,5 +457,80 @@ describe('a photo picked before there is a meal to put it on', () => {
 
     await waitFor(() => expect(screen.getByText('820')).toBeTruthy());
     expect(mockedApi.put).not.toHaveBeenCalled();
+  });
+});
+
+describe('Recent, on the capture screen', () => {
+  it('is hidden when there is no history', async () => {
+    mockedApi.get.mockImplementation(async (url: string) => {
+      if (url.endsWith('/health')) return { data: { status: 'ok', ai_provider: 'fake' } };
+      if (url === '/logs') return { data: { items: [], total: 0 } };
+      return { data: null };
+    });
+
+    const screen = render(<LogScreen />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText('What did you eat?')).toBeTruthy());
+    expect(screen.queryByText('Recent')).toBeNull();
+  });
+
+  it('shows up to four dishes, newest first, deduped case-insensitively', async () => {
+    mockedApi.get.mockImplementation(async (url: string) => {
+      if (url.endsWith('/health')) return { data: { status: 'ok', ai_provider: 'fake' } };
+      if (url === '/logs') return { data: { items: RECENT_LOGS, total: RECENT_LOGS.length } };
+      return { data: null };
+    });
+
+    const screen = render(<LogScreen />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText('Recent')).toBeTruthy());
+    // "Karahi" and "karahi" are the same dish said twice; the newer of the
+    // two (log-4, 820 kcal) is the one that should survive the dedupe.
+    expect(screen.getByText('820 kcal')).toBeTruthy();
+    expect(screen.queryByText('800 kcal')).toBeNull();
+    expect(screen.getByText('fries')).toBeTruthy();
+    // Five distinct dishes survive the dedupe, capped at four: "biryani"
+    // (log-1, the oldest) is the one that should have been dropped.
+    expect(screen.queryByText('biryani')).toBeNull();
+  });
+
+  it('repeats a tapped dish with no confirmation, through the same endpoint Log again uses', async () => {
+    mockedApi.get.mockImplementation(async (url: string) => {
+      if (url.endsWith('/health')) return { data: { status: 'ok', ai_provider: 'fake' } };
+      if (url === '/logs') return { data: { items: RECENT_LOGS, total: RECENT_LOGS.length } };
+      return { data: null };
+    });
+    mockedApi.post.mockResolvedValue({ data: REPEATED });
+
+    const screen = render(<LogScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByText('chicken tikka')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('chicken tikka'));
+
+    await waitFor(() =>
+      expect(mockedApi.post).toHaveBeenCalledWith('/logs/log-6/repeat'),
+    );
+    // Lands on the ordinary saved state, the same one a typed or photo save
+    // reaches, with Undo offered on top of it.
+    await waitFor(() => expect(screen.getByText('500')).toBeTruthy());
+    expect(screen.getByText('Undo')).toBeTruthy();
+  });
+
+  it('Undo deletes the meal the tap just created', async () => {
+    mockedApi.get.mockImplementation(async (url: string) => {
+      if (url.endsWith('/health')) return { data: { status: 'ok', ai_provider: 'fake' } };
+      if (url === '/logs') return { data: { items: RECENT_LOGS, total: RECENT_LOGS.length } };
+      return { data: null };
+    });
+    mockedApi.post.mockResolvedValue({ data: REPEATED });
+
+    const screen = render(<LogScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByText('chicken tikka')).toBeTruthy());
+    fireEvent.press(screen.getByText('chicken tikka'));
+    await waitFor(() => expect(screen.getByText('Undo')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('Undo'));
+
+    await waitFor(() => expect(mockedApi.delete).toHaveBeenCalledWith('/logs/log-fresh'));
   });
 });

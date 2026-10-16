@@ -1,15 +1,22 @@
 import axios from 'axios';
 import * as Crypto from 'expo-crypto';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { SelectOption } from '../ui';
 import { useCategories, useCuisines, useDishHints, useSearch } from '../../hooks/useCatalog';
 import { useEstimatorSource } from '../../hooks/useHealth';
-import { useCreateLog } from '../../hooks/useLogs';
-import { useEstimatePhoto, useSetPhoto, usePhotoPicker, type PickedPhoto } from '../../hooks/usePhoto';
+import { useCreateLog, useDeleteLog, useLogs, useRepeatLog } from '../../hooks/useLogs';
+import {
+  useEstimateOrder,
+  useEstimatePhoto,
+  useSetPhoto,
+  usePhotoPicker,
+  type PickedPhoto,
+} from '../../hooks/usePhoto';
 import { useRestaurants } from '../../hooks/useRestaurants';
 import { describeError } from '../../lib/api';
 import { haptics } from '../../lib/haptics';
+import { recentDishes } from './recentDishes';
 import type {
   DishHint,
   FoodLog,
@@ -21,6 +28,21 @@ import type {
   Uuid,
 } from '../../lib/types';
 import { scaledPhotoEstimate } from './photoEstimate';
+
+/** One row of the order review sheet: an OrderItem plus the editable state
+ * the checkbox, the name field and the qty stepper each need, and the qty
+ * the estimate actually started at, which the calorie figure scales against
+ * as the stepper moves it. */
+export type OrderRow = {
+  selected: boolean;
+  name: string;
+  qty: number;
+  baseQty: number;
+  kcalMin: number;
+  kcalMax: number;
+  categoryId: RefId | null;
+  confidence: 'high' | 'medium' | 'low';
+};
 
 /** Stands for "no cuisine filter". Never collides with an id, which is numeric. */
 const ANY_CUISINE = 'any';
@@ -55,7 +77,6 @@ export type PhotoStatus = 'none' | 'uploading' | 'attached' | 'failed';
 export function useLogForm() {
   const estimatorSource = useEstimatorSource();
 
-  const [query, setQuery] = useState('');
   const [cuisineId, setCuisineId] = useState<RefId | null>(null);
   const [categoryId, setCategoryId] = useState<RefId | null>(null);
   const [dishName, setDishNameRaw] = useState('');
@@ -74,14 +95,35 @@ export function useLogForm() {
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
   const [photoStatus, setPhotoStatus] = useState<PhotoStatus>('none');
   const [saved, setSaved] = useState<FoodLog | null>(null);
+  // The log a one-tap Recent repeat just created, for as long as Undo is
+  // still offered underneath the saved state. Separate from `saved` itself:
+  // `saved` also holds a meal that arrived through the ordinary photo/manual
+  // path, which was never a repeat and must never show an Undo it has no
+  // use for.
+  const [undoLog, setUndoLog] = useState<FoodLog | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+    };
+  }, []);
   // The screen opens on the camera and only ever leaves it forward, to
   // confirm or to manual, or back to itself on "Log another". Nothing sends
   // it back to capture from manual: once someone has chosen to type, forcing
   // them back through the camera on the next field would be the app
   // second-guessing a choice it already asked for.
-  const [mode, setMode] = useState<'capture' | 'confirm' | 'manual'>('capture');
+  const [mode, setMode] = useState<'capture' | 'confirm' | 'manual' | 'order'>('capture');
   const [estimate, setEstimate] = useState<PhotoEstimate | null>(null);
   const [estimateNotice, setEstimateNotice] = useState<string | null>(null);
+  // The order review step's own state: the restaurant name the screenshot
+  // carried (if any), one editable row per item, and how many were actually
+  // logged once "Log N items" is pressed -- null means nothing has been
+  // logged yet, which is what keeps the sheet showing instead of a success
+  // state nobody asked for.
+  const [orderRestaurantName, setOrderRestaurantName] = useState<string | null>(null);
+  const [orderRows, setOrderRows] = useState<OrderRow[]>([]);
+  const [orderNotice, setOrderNotice] = useState<string | null>(null);
+  const [orderLoggedCount, setOrderLoggedCount] = useState<number | null>(null);
   // Which of estimate.portion_options was tapped, null until one is. Only
   // ever meaningful while estimate.portion_ambiguous is true; the calorie and
   // macro preview falls back to estimate's own single guess otherwise, so
@@ -105,18 +147,32 @@ export function useLogForm() {
   // sets the cuisine it belongs to, and refetching at that exact moment would
   // empty the list under the field that had just been filled in.
   const categories = useCategories(null);
-  const search = useSearch(query);
-  // Debounced on the dish name itself, so chips update as someone types the
-  // dish directly rather than only through the separate "find a dish" field.
+  // Both debounced on the dish name field itself now that it is the one and
+  // only dish input -- it used to be a separate "find a dish" field driving
+  // `search` while this typed into `dishName`, which was the same question
+  // asked twice.
+  const search = useSearch(dishName);
   const dishHints = useDishHints(dishName);
+  // The diary's own newest meals, for the Recent section on the capture
+  // screen: a dedicated fetch rather than reusing whatever page Home or the
+  // diary happen to have cached, so this works the same whether or not
+  // either of those screens has been visited this session.
+  const recentLogsQuery = useLogs();
+  const recentLogs = useMemo(
+    () => recentDishes(recentLogsQuery.data?.items ?? []),
+    [recentLogsQuery.data],
+  );
   // A second, independent search against whatever a photo guessed, so the
   // confirm screen can offer the same quick dish/category chips the form
   // already has without the two queries fighting over one piece of state.
   const guessSearch = useSearch(estimate?.dish_guess ?? '');
   const restaurants = useRestaurants(restaurantName);
   const createLog = useCreateLog();
+  const repeatLog = useRepeatLog();
+  const deleteLog = useDeleteLog();
   const uploadPhoto = useSetPhoto();
   const estimatePhoto = useEstimatePhoto();
+  const estimateOrder = useEstimateOrder();
   const photoPicker = usePhotoPicker();
 
   const selectedCategory = useMemo(
@@ -172,7 +228,6 @@ export function useLogForm() {
 
   const resetForm = () => {
     clientIdRef.current = Crypto.randomUUID();
-    setQuery('');
     setCuisineId(null);
     setCategoryId(null);
     setDishName('');
@@ -192,9 +247,19 @@ export function useLogForm() {
     setEstimate(null);
     setEstimateNotice(null);
     setPortionCalories(null);
+    setOrderRestaurantName(null);
+    setOrderRows([]);
+    setOrderNotice(null);
+    setOrderLoggedCount(null);
     createLog.reset();
     uploadPhoto.reset();
     estimatePhoto.reset();
+    estimateOrder.reset();
+    if (undoTimer.current) {
+      clearTimeout(undoTimer.current);
+      undoTimer.current = null;
+    }
+    setUndoLog(null);
   };
 
   /**
@@ -230,6 +295,162 @@ export function useLogForm() {
         setEstimateNotice(describeError(error));
       },
     });
+  };
+
+  /** How long a one-tap Recent repeat stays undoable. */
+  const RECENT_UNDO_MS = 6000;
+
+  const clearUndoTimer = () => {
+    if (undoTimer.current) {
+      clearTimeout(undoTimer.current);
+      undoTimer.current = null;
+    }
+  };
+
+  const dismissUndo = () => {
+    clearUndoTimer();
+    setUndoLog(null);
+  };
+
+  /**
+   * One tap on a Recent row: repeat it through the same POST
+   * /logs/{id}/repeat the diary's own "Log again" uses, with no confirmation
+   * first -- a row already named and priced is what the diary's confirm
+   * dialog exists to surface, and a Recent row already shows both.
+   *
+   * Lands on the ordinary saved state (same as a photo or typed save), with
+   * an Undo offered for a few seconds on top of it: a one-tap action with no
+   * confirmation needs a way back more than a confirmed one does.
+   */
+  const repeatRecent = (logId: Uuid) => {
+    if (repeatLog.isPending) return;
+    repeatLog.mutate(logId, {
+      onSuccess: (copy) => {
+        haptics.tap();
+        clearUndoTimer();
+        setSaved(copy);
+        setUndoLog(copy);
+        undoTimer.current = setTimeout(() => setUndoLog(null), RECENT_UNDO_MS);
+      },
+      onError: () => haptics.error(),
+    });
+  };
+
+  /** Takes back the meal `repeatRecent` just created. */
+  const undoRecent = () => {
+    if (!undoLog) return;
+    const id = undoLog.id;
+    dismissUndo();
+    setSaved((current) => (current?.id === id ? null : current));
+    deleteLog.mutate(id);
+  };
+
+  /**
+   * Pick a delivery-order screenshot from the library and read it into
+   * editable rows on the order review step.
+   *
+   * Library only, never the camera: a screenshot already exists as a photo
+   * on the device, and ImagePicker's library mode is the one picker that
+   * works inside Expo Go, with no dev build needed, unlike a share-sheet
+   * intent straight from Foodpanda/Uber Eats (out of scope for the same
+   * reason).
+   */
+  const importOrder = async () => {
+    setOrderNotice(null);
+    const picked = await photoPicker.pick(false);
+    if (!picked) return;
+
+    estimateOrder.mutate(picked, {
+      onSuccess: (result) => {
+        haptics.tap();
+        setOrderRestaurantName(result.restaurant_name);
+        setOrderRows(
+          result.items.map((item) => ({
+            selected: true,
+            name: item.name,
+            qty: item.qty,
+            baseQty: item.qty,
+            kcalMin: item.kcal_min,
+            kcalMax: item.kcal_max,
+            categoryId: item.category_id,
+            confidence: item.confidence,
+          })),
+        );
+        setOrderLoggedCount(null);
+        setMode('order');
+      },
+      onError: (error) => {
+        haptics.error();
+        if (axios.isAxiosError(error) && error.response?.status === 429) {
+          setOrderNotice("You've hit the order-scan limit for now, try typing these in.");
+          setMode('manual');
+          return;
+        }
+        setOrderNotice(describeError(error));
+      },
+    });
+  };
+
+  const toggleOrderRow = (index: number) => {
+    setOrderRows((rows) =>
+      rows.map((row, i) => (i === index ? { ...row, selected: !row.selected } : row)),
+    );
+  };
+
+  const setOrderRowName = (index: number, name: string) => {
+    setOrderRows((rows) => rows.map((row, i) => (i === index ? { ...row, name } : row)));
+  };
+
+  const setOrderRowQty = (index: number, qty: number) => {
+    const next = Math.max(1, qty);
+    setOrderRows((rows) => rows.map((row, i) => (i === index ? { ...row, qty: next } : row)));
+  };
+
+  // There is no single catch-all category in the seed data (see
+  // app/seed/data.py -- "continental" there is a whole cuisine, not one
+  // category), so an item the desi table had no match for needs some other
+  // fallback to stay loggable without the review sheet growing a category
+  // picker of its own. 'beverage' is the least wrong guess for the kind of
+  // line item that typically has no dish match -- a soda, a side drink --
+  // and the review sheet's editable name still lets someone fix the dish
+  // name itself before logging.
+  const fallbackCategoryId = useMemo(
+    () => (categories.data ?? []).find((c) => c.slug === 'beverage')?.id ?? null,
+    [categories.data],
+  );
+
+  /**
+   * Turn every selected row into its own ordinary POST /logs call.
+   *
+   * Fired without waiting on the network (mutate, not mutateAsync): each
+   * call's onMutate inserts its optimistic row into the diary immediately,
+   * same as a single typed log, and each carries its own client_id, so a
+   * save that is offline right now is queued and later retried exactly like
+   * any other log -- a retried create_log call is deduped by client_id, so
+   * two attempts at the same row can never become two meals.
+   */
+  const logOrderItems = () => {
+    const selected = orderRows.filter((row) => row.selected && row.name.trim().length > 0);
+    for (const row of selected) {
+      const categoryId = row.categoryId ?? fallbackCategoryId;
+      if (categoryId === null) continue;
+      const midpoint = (row.kcalMin + row.kcalMax) / 2;
+      const scaled = Math.round(midpoint * (row.qty / row.baseQty));
+      const input: LogInput = {
+        dish_name: row.name.trim(),
+        category_id: categoryId,
+        // No per-item rating control on the review sheet (checkbox, qty
+        // stepper and name only, per the brief); 4 matches the form's own
+        // default for a log nobody has rated.
+        rating: 4,
+        serving_size: nearestServingSize(scaled / midpoint),
+        estimated_calories: scaled,
+        client_id: Crypto.randomUUID(),
+      };
+      if (orderRestaurantName) input.restaurant_name = orderRestaurantName;
+      createLog.mutate(input);
+    }
+    setOrderLoggedCount(selected.length);
   };
 
   const pickCuisine = (next: RefId | null) => {
@@ -366,8 +587,6 @@ export function useLogForm() {
 
   return {
     estimatorSource,
-    query,
-    setQuery,
     cuisineId,
     setCuisineId,
     categoryId,
@@ -399,6 +618,12 @@ export function useLogForm() {
     setPhotoStatus,
     saved,
     setSaved,
+    undoLog,
+    undoRecent,
+    dismissUndo,
+    recentLogs,
+    repeatRecent,
+    repeatLog,
     mode,
     setMode,
     estimate,
@@ -414,6 +639,7 @@ export function useLogForm() {
     restaurants,
     createLog,
     estimatePhoto,
+    estimateOrder,
     photoPicker,
     selectedCategory,
     cuisineOptions,
@@ -427,6 +653,15 @@ export function useLogForm() {
     chooseCategory,
     attachPhoto,
     submit,
+    orderRestaurantName,
+    orderRows,
+    orderNotice,
+    orderLoggedCount,
+    importOrder,
+    toggleOrderRow,
+    setOrderRowName,
+    setOrderRowQty,
+    logOrderItems,
   };
 }
 

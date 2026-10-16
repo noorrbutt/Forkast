@@ -5,9 +5,12 @@ import { ConfirmEstimate } from '../../components/log/ConfirmEstimate';
 import { useLogFormStyles } from '../../components/log/formStyles';
 import { LogSaved } from '../../components/log/LogSaved';
 import { ManualLogForm } from '../../components/log/ManualLogForm';
+import { OrderReviewForm } from '../../components/log/OrderReviewForm';
+import { RecentMeals } from '../../components/log/RecentMeals';
 import { useLogForm, type LogForm } from '../../components/log/useLogForm';
-import { Button, Chip, ControlLabel, FormError, Loading, Screen } from '../../components/ui';
+import { Button, Chip, ControlLabel, FormError, Loading, Screen, UndoSnackbar } from '../../components/ui';
 import { SERVING_LABELS } from '../../lib/format';
+import type { FoodLog } from '../../lib/types';
 import { SERVING_SIZES } from '../../lib/types';
 import { useTheme } from '../../theme';
 
@@ -60,6 +63,11 @@ export default function LogScreen() {
   const {
     saved,
     setSaved,
+    undoLog,
+    undoRecent,
+    recentLogs,
+    repeatRecent,
+    repeatLog,
     mode,
     setMode,
     estimate,
@@ -69,9 +77,11 @@ export default function LogScreen() {
     photoStatus,
     estimatorSource,
     estimatePhoto,
+    estimateOrder,
     photoPicker,
     resetForm,
     captureAndEstimate,
+    importOrder,
     attachPhoto,
   } = form;
 
@@ -122,12 +132,20 @@ export default function LogScreen() {
             }}
           />
         </View>
+        {/* Only ever set by a one-tap Recent repeat (repeatRecent), never by
+            the ordinary photo/manual save above, which already asked for
+            everything it needed up front and has nothing to take back. */}
+        <UndoSnackbar
+          message={undoLog ? `Logged ${undoLog.dish_name} again.` : null}
+          onUndo={undoRecent}
+        />
       </Screen>
     );
   }
 
   if (mode === 'capture') {
     const busy = photoPicker.preparing || estimatePhoto.isPending;
+    const orderBusy = photoPicker.preparing || estimateOrder.isPending;
 
     return (
       <Screen title="Log a meal">
@@ -146,6 +164,7 @@ export default function LogScreen() {
           </View>
 
           {busy ? <Loading label="Looking at your photo" /> : null}
+          {orderBusy ? <Loading label="Reading your order" /> : null}
           {estimateNotice ? <FormError>{estimateNotice}</FormError> : null}
 
           <View style={{ gap: spacing.md }}>
@@ -155,6 +174,7 @@ export default function LogScreen() {
               size="lg"
               full
               loading={busy}
+              disabled={orderBusy}
               onPress={() => void captureAndEstimate(true)}
             />
             <Button
@@ -162,8 +182,23 @@ export default function LogScreen() {
               variant="secondary"
               size="lg"
               full
-              disabled={busy}
+              disabled={busy || orderBusy}
               onPress={() => void captureAndEstimate(false)}
+            />
+            {/* Library mode only: a delivery order is a screenshot that
+                already exists on the device, not a live photo, and this is
+                the one picker mode that works inside Expo Go with no dev
+                build. A share-sheet intent straight from the delivery app is
+                a nicer entry point but needs a dev build, so it is out of
+                scope for now. */}
+            <Button
+              label="Import a delivery order"
+              variant="secondary"
+              size="lg"
+              full
+              loading={orderBusy}
+              disabled={busy || orderBusy}
+              onPress={() => void importOrder()}
             />
             {/* The same secondary style as the library button above. Both are
                 the alternative to the photo, and one was outlined while the
@@ -173,13 +208,19 @@ export default function LogScreen() {
               variant="secondary"
               size="lg"
               full
-              disabled={busy}
+              disabled={busy || orderBusy}
               onPress={() => {
                 setEstimateNotice(null);
                 setMode('manual');
               }}
             />
           </View>
+
+          <RecentMeals
+            logs={recentLogs}
+            pending={repeatLog.isPending ? repeatLog.variables ?? null : null}
+            onRepeat={(log: FoodLog) => repeatRecent(log.id)}
+          />
         </View>
       </Screen>
     );
@@ -194,6 +235,16 @@ export default function LogScreen() {
             estimate={estimate}
             servingSizeQuestion={<ServingSizeQuestion form={form} />}
           />
+        </View>
+      </Screen>
+    );
+  }
+
+  if (mode === 'order') {
+    return (
+      <Screen title="Log a meal" onBack={resetForm}>
+        <View style={column}>
+          <OrderReviewForm form={form} />
         </View>
       </Screen>
     );

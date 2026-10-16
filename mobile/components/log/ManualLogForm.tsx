@@ -37,8 +37,6 @@ export function ManualLogForm({
   const { colors, spacing, type } = useTheme();
   const { optionRow, optionChip, group } = useLogFormStyles();
   const {
-    query,
-    setQuery,
     search,
     estimateNotice,
     dishName,
@@ -79,12 +77,17 @@ export function ManualLogForm({
     createLog,
   } = form;
 
-  // Results only count once the query is long enough to have produced them, so
-  // this is undefined rather than empty while someone is still typing the first
-  // letter. Held in one const so the blocks below narrow off it.
-  const results = query.trim().length >= 2 ? search.data : undefined;
+  // Results only count once the dish name is long enough to have produced
+  // them, so this is undefined rather than empty while someone is still
+  // typing the first letter. Held in one const so the blocks below narrow
+  // off it.
+  const results = dishName.trim().length >= 2 ? search.data : undefined;
+  const hasDesiHints = Boolean(dishHints.data && dishHints.data.length > 0);
   const noMatches =
-    results !== undefined && results.dishes.length === 0 && results.categories.length === 0;
+    results !== undefined &&
+    results.dishes.length === 0 &&
+    results.categories.length === 0 &&
+    !hasDesiHints;
 
   return (
     <>
@@ -108,93 +111,33 @@ export function ManualLogForm({
       {/* Group one: the meal, and the two answers the estimate is built out
           of. No heading, because the question above it is the heading. */}
       <View style={group}>
-        {/* Two fields, two jobs, and the labels now say which. This one is an
-            optional shortcut: it looks up dishes other people logged, and
-            picking one fills in the dish name AND its category below in one
-            tap. The Dish field is the meal's own name, and it is the one that
-            is saved. Merging them was considered and left: the shortcut
-            rewrites the category too, which a plain name field must never do
-            behind someone's back while they type. */}
-        <Field
-          label="Find a dish others have logged (optional)"
-          hint="Picking one fills in the dish and its category below."
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Biryani, ramen, burger"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-
-        {search.isFetching ? <Loading label="Searching" /> : null}
-
-        {noMatches ? (
-          <View style={{ gap: spacing.md, alignItems: 'flex-start' }}>
-            <Text style={[type.caption, { color: colors.muted }]}>
-              Nothing matched. Forkast only knows the dishes people have logged so far, so name
-              the dish below and pick the category it belongs to.
-            </Text>
-            <Button label="Clear the search" variant="secondary" onPress={() => setQuery('')} />
-          </View>
-        ) : null}
-
-        {/* Results sit directly under the field that produced them, with no
-            heading and no surface. Both would be saying the obvious. */}
-        {results && results.dishes.length > 0 ? (
-          <View style={{ gap: spacing.sm }}>
-            <ControlLabel>Dishes people logged</ControlLabel>
-            <View style={optionRow}>
-              {results.dishes.slice(0, 8).map((dish, index) => (
-                <Chip
-                  key={`${dish.dish_name}-${index}`}
-                  label={dish.dish_name}
-                  selected={dishName === dish.dish_name}
-                  showCheck
-                  style={optionChip}
-                  onPress={() => {
-                    setDishName(dish.dish_name);
-                    setCategoryId(dish.category_id);
-                    setQuery('');
-                  }}
-                />
-              ))}
-            </View>
-          </View>
-        ) : null}
-
-        {results && results.categories.length > 0 ? (
-          <View style={{ gap: spacing.sm }}>
-            <ControlLabel>Categories</ControlLabel>
-            <View style={optionRow}>
-              {results.categories.slice(0, 8).map((category) => (
-                <Chip
-                  key={String(category.id)}
-                  label={category.name}
-                  selected={String(categoryId) === String(category.id)}
-                  showCheck
-                  style={optionChip}
-                  onPress={() => {
-                    setCuisineId(category.cuisine_id);
-                    setCategoryId(category.id);
-                    setQuery('');
-                  }}
-                />
-              ))}
-            </View>
-          </View>
-        ) : null}
-
+        {/* One field, one job: what you ate, in your own words, which is
+            what gets saved. It used to be two fields -- a lookup that only
+            filled in a suggestion and a separate name that was actually
+            saved -- asking the same question twice. Typing here both names
+            the meal and drives the suggestions below it; picking one of
+            those additionally fills the category, which free text typed
+            with no pick never touches. */}
         <Field
           label="Dish name"
-          hint="What you ate, in your own words. This is what goes in your diary."
+          hint="Start typing to see dishes others have logged, or just describe this one."
           value={dishName}
           onChangeText={setDishName}
           placeholder="Chicken karahi"
         />
 
-        {/* Chips from the desi dish table, not from anyone's own history.
-            Picking one fills the dish name and category, exactly like the
-            "find a dish" chips above, and additionally starts a portion
-            stepper in that dish's own unit. */}
+        {search.isFetching ? <Loading label="Searching" /> : null}
+
+        {noMatches ? (
+          <Text style={[type.caption, { color: colors.muted }]}>
+            Nothing matched yet. Forkast only knows the dishes people have logged so far -- keep
+            typing and pick the category it belongs to below.
+          </Text>
+        ) : null}
+
+        {/* Chips from the desi dish table, shown first: a dish this app
+            already knows the typical range and unit for is a better match
+            than a dish someone else merely happened to type the same way. */}
         {dishHints.data && dishHints.data.length > 0 ? (
           <View style={{ gap: spacing.sm }}>
             <ControlLabel>Common desi dishes</ControlLabel>
@@ -239,6 +182,52 @@ export function ManualLogForm({
                 variant="secondary"
                 onPress={() => changePortionQty(portionQty + 1)}
               />
+            </View>
+          </View>
+        ) : null}
+
+        {/* Dishes and categories from the catalog search, driven by the
+            same dish name field above. Results sit directly under it with no
+            heading surface of their own -- both the desi chips above and
+            these would be saying the obvious. */}
+        {results && results.dishes.length > 0 ? (
+          <View style={{ gap: spacing.sm }}>
+            <ControlLabel>Dishes people logged</ControlLabel>
+            <View style={optionRow}>
+              {results.dishes.slice(0, 8).map((dish, index) => (
+                <Chip
+                  key={`${dish.dish_name}-${index}`}
+                  label={dish.dish_name}
+                  selected={dishName === dish.dish_name}
+                  showCheck
+                  style={optionChip}
+                  onPress={() => {
+                    setDishName(dish.dish_name);
+                    setCategoryId(dish.category_id);
+                  }}
+                />
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {results && results.categories.length > 0 ? (
+          <View style={{ gap: spacing.sm }}>
+            <ControlLabel>Categories</ControlLabel>
+            <View style={optionRow}>
+              {results.categories.slice(0, 8).map((category) => (
+                <Chip
+                  key={String(category.id)}
+                  label={category.name}
+                  selected={String(categoryId) === String(category.id)}
+                  showCheck
+                  style={optionChip}
+                  onPress={() => {
+                    setCuisineId(category.cuisine_id);
+                    setCategoryId(category.id);
+                  }}
+                />
+              ))}
             </View>
           </View>
         ) : null}
