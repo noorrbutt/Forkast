@@ -42,8 +42,8 @@ from typing import Any, NamedTuple
 
 from app.services.ai.prompts import (
     CALORIE_SYSTEM_PROMPT,
-    PHOTO_CALORIE_SYSTEM_PROMPT,
     PLAN_SYSTEM_PROMPT,
+    photo_calorie_system_prompt,
 )
 from app.services.ai.schemas import (
     CalorieAdjustRequest,
@@ -222,6 +222,16 @@ PHOTO_CALORIE_SCHEMA: dict[str, Any] = {
                     "additionalProperties": False,
                 },
             },
+            "portion_unit": {
+                "type": ["string", "null"],
+                "description": "e.g. 'roti', 'piece', 'katori'; null when the dish does "
+                "not naturally count in units",
+            },
+            "portion_qty": {
+                "type": ["number", "null"],
+                "description": "How many of portion_unit are visible; null when "
+                "portion_unit is null",
+            },
             "reasoning": {
                 "type": "string",
                 "description": "One short sentence on what drove the estimate",
@@ -236,6 +246,8 @@ PHOTO_CALORIE_SCHEMA: dict[str, Any] = {
             "confidence",
             "portion_ambiguous",
             "portion_options",
+            "portion_unit",
+            "portion_qty",
             "reasoning",
         ],
         "additionalProperties": False,
@@ -303,10 +315,23 @@ class ModelProbeResult(NamedTuple):
 
 
 def _calorie_prompt(req: CalorieAdjustRequest) -> str:
+    grounding = ""
+    if req.dish_hint is not None:
+        hint = req.dish_hint
+        # Grounding, not a second clamp: the model is still only ever asked
+        # to answer inside base_calorie_min/base_calorie_max above, this just
+        # narrows where in that range a dish this specific usually lands.
+        grounding = (
+            f"\nA known dish match: '{hint.name}', typically "
+            f"{hint.kcal_min} to {hint.kcal_max} kcal for a typical serving "
+            f"of {hint.typical_qty} {hint.unit}(s). Use this as grounding, "
+            "still answering inside the category range above."
+        )
     return (
         f"Dish: {req.dish_name}\n"
         f"Category: {req.category_name}\n"
         f"Range for this category: {req.base_calorie_min} to {req.base_calorie_max} kcal\n"
+        f"{grounding}\n"
         "Place this dish inside that range. Ignore portion size, the caller "
         "applies it separately."
     )
@@ -573,7 +598,7 @@ class GroqAIService:
         data_uri = f"data:{content_type};base64,{base64.b64encode(image).decode('ascii')}"
 
         payload = await self._complete(
-            PHOTO_CALORIE_SYSTEM_PROMPT,
+            photo_calorie_system_prompt(),
             _photo_user_content(data_uri),
             PHOTO_CALORIE_SCHEMA,
             max_tokens=PHOTO_CALORIE_MAX_TOKENS,
@@ -622,6 +647,11 @@ class GroqAIService:
             portion_ambiguous = False
             portion_options = []
 
+        portion_unit = payload.get("portion_unit")
+        portion_qty = payload.get("portion_qty")
+        if not portion_unit or not portion_qty or portion_qty <= 0:
+            portion_unit, portion_qty = None, None
+
         reasoning = payload.get("reasoning")
         return PhotoCalorieEstimate(
             dish_guess=normalise_text(dish_guess),
@@ -632,6 +662,8 @@ class GroqAIService:
             confidence=confidence,
             portion_ambiguous=portion_ambiguous,
             portion_options=portion_options,
+            portion_unit=normalise_text(str(portion_unit)) if portion_unit else None,
+            portion_qty=float(portion_qty) if portion_qty else None,
             reasoning=normalise_text(reasoning) if reasoning else None,
         )
 

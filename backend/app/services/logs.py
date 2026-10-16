@@ -23,9 +23,10 @@ from app.models import FoodCategory, FoodLog, FoodLogPhoto, Restaurant, User
 from app.models.enums import ServingSize
 from app.schemas.logs import FoodLogCreate, FoodLogUpdate
 from app.services import circuit_breaker
+from app.services.ai import desi
 from app.services.ai.base import AIService
 from app.services.ai.groq_service import GroqResponseError
-from app.services.ai.schemas import CalorieAdjustRequest, PhotoCalorieEstimate
+from app.services.ai.schemas import CalorieAdjustRequest, DesiDishHint, PhotoCalorieEstimate
 from app.services.calories import clamp_photo_estimate, finalise_estimate
 from app.services.images import compress_for_estimation
 from app.services.jobs import REFINE_CALORIE_ESTIMATE, enqueue
@@ -77,6 +78,18 @@ async def estimate_calories(
     is only ever to place the dish inside the category range, while a large
     portion is still allowed to exceed that range once scaled.
     """
+    match = desi.lookup(dish_name)
+    dish_hint = (
+        DesiDishHint(
+            name=match.name,
+            kcal_min=match.kcal_min,
+            kcal_max=match.kcal_max,
+            unit=match.unit,
+            typical_qty=match.typical_qty,
+        )
+        if match is not None
+        else None
+    )
     try:
         adjustment = await ai.adjust_calories(
             CalorieAdjustRequest(
@@ -85,6 +98,7 @@ async def estimate_calories(
                 base_calorie_min=base_calorie_min,
                 base_calorie_max=base_calorie_max,
                 serving_size=serving_size,
+                dish_hint=dish_hint,
             )
         )
     except GroqResponseError as exc:

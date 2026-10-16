@@ -1,0 +1,94 @@
+"""The desi dish table, its lookup, and the /dishes endpoint."""
+
+from __future__ import annotations
+
+from httpx import AsyncClient
+
+from app.services.ai import desi
+
+
+def test_the_desi_table_validates() -> None:
+    desi.validate()
+
+
+def test_there_is_enough_breadth_to_be_useful() -> None:
+    assert len(desi.DESI_DISHES) >= 40
+
+
+def test_lookup_finds_an_exact_alias_case_and_punctuation_insensitive() -> None:
+    match = desi.lookup("Beef Nihari!")
+    assert match is not None and match.name == "beef nihari"
+
+
+def test_lookup_finds_a_roman_urdu_alias() -> None:
+    match = desi.lookup("biriyani")
+    # Not an alias of anything here on purpose: "biriyani" is a misspelling,
+    # which pg_trgm handles elsewhere (test_catalog.py), not this exact/token
+    # lookup. This asserts the negative so the two layers are not confused.
+    assert match is None
+
+
+def test_lookup_finds_karak_chai() -> None:
+    match = desi.lookup("karak chai")
+    assert match is not None and match.name == "chai"
+
+
+def test_lookup_token_subset_matches_a_longer_phrase() -> None:
+    match = desi.lookup("home made chicken karahi with naan")
+    assert match is not None and match.name == "chicken karahi"
+
+
+def test_lookup_returns_none_for_nonsense() -> None:
+    assert desi.lookup("zzzqqqxxx") is None
+
+
+def test_lookup_returns_none_for_blank_text() -> None:
+    assert desi.lookup("   ") is None
+
+
+def test_every_dish_range_nests_inside_its_category_range() -> None:
+    """Mirrors the assertion inside validate(), as a second, more visible test."""
+    from app.seed.data import FOOD_CATEGORIES
+
+    ranges = {c.slug: (c.base_calorie_min, c.base_calorie_max) for c in FOOD_CATEGORIES}
+    for dish in desi.DESI_DISHES:
+        cat_min, cat_max = ranges[dish.category_slug]
+        assert cat_min <= dish.kcal_min <= dish.kcal_max <= cat_max, dish.name
+
+
+def test_suggest_ranks_starts_with_before_contains() -> None:
+    results = desi.suggest("chai")
+    names = [d.name for d in results]
+    assert names[0] == "chai"
+
+
+def test_suggest_with_blank_text_returns_the_default_list() -> None:
+    results = desi.suggest("", limit=5)
+    assert len(results) == 5
+
+
+async def test_dishes_endpoint_returns_matches_with_a_real_category_id(
+    auth_client: AsyncClient,
+) -> None:
+    categories = (await auth_client.get("/api/v1/categories")).json()
+    nihari = next(c for c in categories if c["slug"] == "nihari")
+
+    hits = (await auth_client.get("/api/v1/dishes", params={"q": "nihari"})).json()
+
+    assert len(hits) > 0
+    assert all(h["category_id"] == nihari["id"] for h in hits if "nihari" in h["name"])
+
+
+async def test_dishes_endpoint_blank_query_returns_a_default_list(
+    auth_client: AsyncClient,
+) -> None:
+    hits = (await auth_client.get("/api/v1/dishes")).json()
+    assert 0 < len(hits) <= 10
+
+
+async def test_dishes_endpoint_requires_auth(client: AsyncClient) -> None:
+    assert (await client.get("/api/v1/dishes")).status_code == 401
+
+
+async def test_dishes_endpoint_limit_is_bounded(auth_client: AsyncClient) -> None:
+    assert (await auth_client.get("/api/v1/dishes", params={"limit": 11})).status_code == 422

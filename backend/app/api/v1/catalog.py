@@ -15,12 +15,14 @@ from app.schemas.catalog import (
     SMALLINT_MAX,
     CategoryOut,
     CuisineOut,
+    DishHintOut,
     DishSuggestion,
     RestaurantCreate,
     RestaurantOut,
     SearchResults,
 )
 from app.schemas.text import optional_text_field, text_field
+from app.services.ai import desi
 from app.services.rate_limit import account_identity
 
 router = APIRouter(tags=["catalog"])
@@ -180,6 +182,45 @@ async def search(
         categories=[CategoryOut.model_validate(c) for c in categories],
         dishes=[DishSuggestion(dish_name=name, category_id=cid) for name, cid in dish_rows],
     )
+
+
+@router.get("/dishes", response_model=list[DishHintOut])
+async def list_dish_hints(
+    session: SessionDep,
+    user: CurrentUser,
+    q: Annotated[optional_text_field(max_length=100), Query()] = None,
+    limit: int = Query(default=10, ge=1, le=10),
+) -> list[DishHintOut]:
+    """Suggestion chips for the manual log form, from the static desi dish
+    table (services/ai/desi.py), not from any user's own history.
+
+    A blank `q` returns the table's own first `limit` rows, which is a
+    reasonable default list rather than nothing. Authenticated like every
+    other catalog route, with no extra rate limit: a static, in-memory
+    lookup costs nothing, the same reasoning /search runs on without one.
+    """
+    matches = desi.suggest(q or "", limit=limit)
+    if not matches:
+        return []
+
+    slugs = {dish.category_slug for dish in matches}
+    rows = await session.execute(
+        select(FoodCategory.slug, FoodCategory.id).where(FoodCategory.slug.in_(slugs))
+    )
+    category_id_by_slug = dict(rows.all())
+
+    return [
+        DishHintOut(
+            name=dish.name,
+            unit=dish.unit,
+            typical_qty=dish.typical_qty,
+            kcal_min=dish.kcal_min,
+            kcal_max=dish.kcal_max,
+            category_id=category_id_by_slug[dish.category_slug],
+        )
+        for dish in matches
+        if dish.category_slug in category_id_by_slug
+    ]
 
 
 @router.get("/restaurants", response_model=list[RestaurantOut])

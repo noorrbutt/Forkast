@@ -174,6 +174,33 @@ async def test_the_prompt_carries_the_range_and_the_history() -> None:
     assert "junk" in plan_prompt
 
 
+async def test_a_dish_hint_is_added_to_the_prompt_as_grounding() -> None:
+    from app.services.ai.schemas import DesiDishHint
+
+    client = _FakeClient(json.dumps({"calories": 800, "reasoning": "x"}))
+    service = GroqAIService(client, model=MODEL)
+    request = _calorie_request()
+    request.dish_hint = DesiDishHint(
+        name="beef nihari", kcal_min=650, kcal_max=950, unit="plate", typical_qty=1
+    )
+
+    await service.adjust_calories(request)
+    prompt = client.completions.calls[0]["messages"][1]["content"]
+
+    assert "beef nihari" in prompt
+    assert "650" in prompt and "950" in prompt
+
+
+async def test_no_dish_hint_leaves_the_prompt_unchanged() -> None:
+    client = _FakeClient(json.dumps({"calories": 700, "reasoning": "x"}))
+    service = GroqAIService(client, model=MODEL)
+
+    await service.adjust_calories(_calorie_request())
+    prompt = client.completions.calls[0]["messages"][1]["content"]
+
+    assert "known dish match" not in prompt
+
+
 async def test_a_transport_failure_becomes_one_exception_type() -> None:
     """The routes should not have to know what Groq is to return a status code."""
     client = _FakeClient(error=TimeoutError("connection timed out"))

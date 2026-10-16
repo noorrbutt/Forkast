@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 from typing import Literal
 
+from app.services.ai import desi
 from app.services.ai.schemas import (
     CalorieAdjustRequest,
     CalorieAdjustResult,
@@ -82,6 +83,19 @@ class DeterministicAIService:
 
     async def adjust_calories(self, req: CalorieAdjustRequest) -> CalorieAdjustResult:
         low, high = float(req.base_calorie_min), float(req.base_calorie_max)
+
+        if req.dish_hint is not None:
+            # Grounded by the desi dish table: the midpoint of the dish's own
+            # range, not the wider category one. Deterministic and with no
+            # heavy/light wobble, so a test logging "nihari" always gets the
+            # same figure regardless of what other words are in the name.
+            hint = req.dish_hint
+            calories = (hint.kcal_min + hint.kcal_max) / 2
+            return CalorieAdjustResult(
+                calories=max(low, min(high, calories)),
+                reasoning=f"[stub] desi dish match: {hint.name}, midpoint of its own range",
+            )
+
         midpoint = (low + high) / 2
         half_span = (high - low) / 2
 
@@ -134,6 +148,12 @@ class DeterministicAIService:
                 PortionOption(label="large", calories=round(calories * 1.4)),
             ]
 
+        # Deterministic on the dish guess, not the hash: it is a fixed word
+        # from _PHOTO_DISH_GUESSES above, so this either always matches or
+        # never does for a given guess, the same determinism the rest of this
+        # stub already relies on.
+        desi_match = desi.lookup(dish_guess)
+
         return PhotoCalorieEstimate(
             dish_guess=dish_guess,
             calories=round(calories),
@@ -145,6 +165,8 @@ class DeterministicAIService:
             confidence=confidence,
             portion_ambiguous=portion_ambiguous,
             portion_options=portion_options,
+            portion_unit=desi_match.unit if desi_match else None,
+            portion_qty=desi_match.typical_qty if desi_match else None,
             reasoning="[stub] deterministic photo estimate, no vision model called",
         )
 

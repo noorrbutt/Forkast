@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useAuth } from './useAuth';
 import { useDebounced } from './useDebounced';
-import type { Category, Cuisine, RefId, SearchResults } from '../lib/types';
+import type { Category, Cuisine, DishHint, RefId, SearchResults } from '../lib/types';
 
 export function useCuisines() {
   const { signedIn } = useAuth();
@@ -46,6 +46,25 @@ export function useSearch(term: string) {
     staleTime: 60_000,
     queryFn: async () => {
       const response = await api.get<SearchResults>('/search', { params: { q: query } });
+      return response.data;
+    },
+  });
+}
+
+/** Suggestion chips from the desi dish table, debounced the same way useSearch
+ * is. A blank term still fetches: the server's own default list is a
+ * reasonable starting set of chips before anyone has typed anything. */
+export function useDishHints(term: string) {
+  const { signedIn } = useAuth();
+  const query = useDebounced(term.trim());
+  return useQuery({
+    queryKey: ['dish-hints', query],
+    enabled: signedIn,
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const response = await api.get<DishHint[]>('/dishes', {
+        params: query ? { q: query } : undefined,
+      });
       return response.data;
     },
   });

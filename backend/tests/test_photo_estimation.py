@@ -387,6 +387,62 @@ async def test_the_dish_guess_and_reasoning_go_through_the_typography_filter() -
     assert result.reasoning == "cheese, heavy, large slice"
 
 
+async def test_portion_unit_and_qty_are_parsed_when_present() -> None:
+    client = _FakeClient(_photo_reply(portion_unit="roti", portion_qty=2))
+    service = GroqAIService(client, model="openai/gpt-oss-20b")
+
+    result = await service.estimate_from_photo(PNG, "image/png")
+
+    assert result.portion_unit == "roti"
+    assert result.portion_qty == 2.0
+
+
+async def test_portion_unit_and_qty_are_absent_by_default() -> None:
+    client = _FakeClient(_photo_reply())
+    service = GroqAIService(client, model="openai/gpt-oss-20b")
+
+    result = await service.estimate_from_photo(PNG, "image/png")
+
+    assert result.portion_unit is None
+    assert result.portion_qty is None
+
+
+async def test_a_zero_portion_qty_is_treated_as_absent() -> None:
+    client = _FakeClient(_photo_reply(portion_unit="roti", portion_qty=0))
+    service = GroqAIService(client, model="openai/gpt-oss-20b")
+
+    result = await service.estimate_from_photo(PNG, "image/png")
+
+    assert result.portion_unit is None
+    assert result.portion_qty is None
+
+
+async def test_the_desi_dish_names_are_in_the_vision_prompt() -> None:
+    client = _FakeClient(_photo_reply())
+    service = GroqAIService(client, model="openai/gpt-oss-20b")
+
+    await service.estimate_from_photo(PNG, "image/png")
+
+    system_prompt = client.completions.calls[0]["messages"][0]["content"]
+    assert "nihari" in system_prompt
+    assert "biryani" in system_prompt
+
+
+async def test_the_stub_fills_portion_unit_for_a_matching_desi_dish_guess() -> None:
+    """The fake cycles through a fixed list of dish guesses (see
+    _PHOTO_DISH_GUESSES); "daal chawal" is one of them and matches the desi
+    table exactly, so the stub should carry a unit for it deterministically."""
+    ai = DeterministicAIService()
+
+    results = [await ai.estimate_from_photo(PNG + bytes([i]), "image/png") for i in range(30)]
+
+    daal_chawal = [r for r in results if r.dish_guess == "daal chawal"]
+    assert daal_chawal, "the fixture ran long enough to hit every dish guess"
+    for result in daal_chawal:
+        assert result.portion_unit == "plate"
+        assert result.portion_qty == 1
+
+
 def test_the_schema_is_strict_and_closed() -> None:
     assert PHOTO_CALORIE_SCHEMA["strict"] is True
     assert PHOTO_CALORIE_SCHEMA["schema"]["additionalProperties"] is False

@@ -12,6 +12,12 @@ import { useLogFormStyles } from './formStyles';
 import { LogItButton } from './LogItButton';
 import type { LogForm } from './useLogForm';
 
+/** A plain "s" plural is close enough for every unit the desi dish table
+ * actually uses (roti, piece, katori, plate, cup, glass, serving). */
+function pluralUnit(unit: string, qty: number): string {
+  return qty === 1 ? unit : `${unit}s`;
+}
+
 /**
  * The typed-in path: "What did you eat?" as the screen's largest text, then
  * three groups -- what you ate, where you ate it, how it was -- and the photo.
@@ -41,6 +47,11 @@ export function ManualLogForm({
     setCategoryId,
     cuisineId,
     setCuisineId,
+    dishHints,
+    dishHint,
+    portionQty,
+    chooseDishHint,
+    changePortionQty,
     cuisines,
     cuisineOptions,
     chooseCuisine,
@@ -179,6 +190,58 @@ export function ManualLogForm({
           onChangeText={setDishName}
           placeholder="Chicken karahi"
         />
+
+        {/* Chips from the desi dish table, not from anyone's own history.
+            Picking one fills the dish name and category, exactly like the
+            "find a dish" chips above, and additionally starts a portion
+            stepper in that dish's own unit. */}
+        {dishHints.data && dishHints.data.length > 0 ? (
+          <View style={{ gap: spacing.sm }}>
+            <ControlLabel>Common desi dishes</ControlLabel>
+            <View style={optionRow}>
+              {dishHints.data.slice(0, 8).map((hint) => (
+                <Chip
+                  key={hint.name}
+                  label={hint.name}
+                  selected={dishHint?.name === hint.name}
+                  showCheck
+                  style={optionChip}
+                  onPress={() => chooseDishHint(hint)}
+                />
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {/* The portion stepper: only once a desi dish chip is selected, in
+            that dish's own unit rather than small/medium/large, which the
+            serving size question below still answers on its behalf. */}
+        {dishHint && portionQty !== null ? (
+          <View style={{ gap: spacing.sm }}>
+            <ControlLabel>Portion</ControlLabel>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.md,
+              }}
+            >
+              <Button
+                label="-"
+                variant="secondary"
+                onPress={() => changePortionQty(portionQty - 1)}
+              />
+              <Text style={[type.body, { color: colors.text }]}>
+                {portionQty} {pluralUnit(dishHint.unit, portionQty)}
+              </Text>
+              <Button
+                label="+"
+                variant="secondary"
+                onPress={() => changePortionQty(portionQty + 1)}
+              />
+            </View>
+          </View>
+        ) : null}
 
         {/* Ten cuisines and thirty eight categories. As chips that is a wall
             of tiny text with no way to search it, so both are fields that

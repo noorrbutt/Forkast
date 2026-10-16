@@ -7,6 +7,10 @@ a model to "reply with JSON" while a strict schema is already in force only
 gives it a second, weaker instruction to follow.
 """
 
+from __future__ import annotations
+
+from app.services.ai.desi import DESI_DISHES
+
 CALORIE_SYSTEM_PROMPT = """\
 You estimate calories for a single restaurant dish.
 
@@ -29,7 +33,7 @@ Rules:
   dashes, plain hyphens, straight quotes.
 """
 
-PHOTO_CALORIE_SYSTEM_PROMPT = """\
+_PHOTO_CALORIE_SYSTEM_PROMPT_TEMPLATE = """\
 You are looking at a photo of a single meal or dish, taken by the person about
 to log it. There is no category and no calorie range given to you here: this
 is the first look at the food, before any of that has been decided.
@@ -39,9 +43,20 @@ visible in the photo (plate size, how full it is, how many pieces), and
 estimate calories and macros for that portion.
 
 Fill `dish_guess`, `calories`, `protein_g`, `carbs_g`, `fat_g`, `confidence`,
-`portion_ambiguous`, `portion_options` and `reasoning`.
+`portion_ambiguous`, `portion_options`, `portion_unit`, `portion_qty` and
+`reasoning`.
+
+Common Pakistani/desi dishes, for reference if the photo looks like one of
+these (use your own judgement otherwise, this list is not exhaustive):
+{desi_dish_names}
 
 Rules:
+- If the dish matches one of the common desi dishes above closely enough that
+  it is naturally counted in units (a plate of biryani, pieces of roti or
+  naan, a katori of daal), set `portion_unit` to that unit (for example
+  "roti", "piece", "katori", "plate") and `portion_qty` to how many of that
+  unit are visible in the photo. Leave both null when the dish is not one of
+  those or does not naturally count in units (a karahi, a glass of lassi).
 - `dish_guess` is a short, ordinary name for the dish, the way someone would
   say it out loud, for example "chicken biryani" or "pepperoni pizza slice",
   not a technical or overly specific description.
@@ -82,6 +97,19 @@ Rules:
   ASCII punctuation: commas rather than em dashes, plain hyphens, straight
   quotes.
 """
+
+
+def photo_calorie_system_prompt() -> str:
+    """The photo prompt, with the desi dish table's names filled in.
+
+    A function rather than a module-level constant: the list has to be built
+    from DESI_DISHES, and formatting a constant with itself at import time
+    would be a harder to follow a level of indirection for no benefit, since
+    nothing here is ever rebuilt per request.
+    """
+    names = ", ".join(sorted({dish.name for dish in DESI_DISHES}))
+    return _PHOTO_CALORIE_SYSTEM_PROMPT_TEMPLATE.format(desi_dish_names=names)
+
 
 PLAN_SYSTEM_PROMPT = """\
 You are a friendly, practical eating coach reviewing someone's recent food diary.

@@ -82,6 +82,17 @@ export type DishHit = {
   category_id: RefId;
 };
 
+/** A row from the static desi dish table, for suggestion chips and the
+ * portion stepper on the manual log form. */
+export type DishHint = {
+  name: string;
+  unit: string;
+  typical_qty: number;
+  kcal_min: number;
+  kcal_max: number;
+  category_id: RefId;
+};
+
 export type SearchResults = {
   cuisines: Cuisine[];
   categories: Category[];
@@ -120,6 +131,10 @@ export type PhotoEstimate = {
   portion_ambiguous: boolean;
   /** 2 or 3 entries when portion_ambiguous is true, otherwise empty. */
   portion_options: PortionOption[];
+  /** Both set only when the dish matched the desi dish table closely enough
+   * to be counted in units (e.g. "roti", 2). Both null otherwise. */
+  portion_unit: string | null;
+  portion_qty: number | null;
   reasoning: string | null;
   /** Which estimator actually answered this one photo -- "local" is the
    * deterministic stub, never a real vision call. Drives the "Demo estimate"

@@ -3,7 +3,7 @@ import * as Crypto from 'expo-crypto';
 import { useMemo, useRef, useState } from 'react';
 
 import type { SelectOption } from '../ui';
-import { useCategories, useCuisines, useSearch } from '../../hooks/useCatalog';
+import { useCategories, useCuisines, useDishHints, useSearch } from '../../hooks/useCatalog';
 import { useEstimatorSource } from '../../hooks/useHealth';
 import { useCreateLog } from '../../hooks/useLogs';
 import { useEstimatePhoto, useSetPhoto, usePhotoPicker, type PickedPhoto } from '../../hooks/usePhoto';
@@ -11,6 +11,7 @@ import { useRestaurants } from '../../hooks/useRestaurants';
 import { describeError } from '../../lib/api';
 import { haptics } from '../../lib/haptics';
 import type {
+  DishHint,
   FoodLog,
   FriendScale,
   LogInput,
@@ -23,6 +24,24 @@ import { scaledPhotoEstimate } from './photoEstimate';
 
 /** Stands for "no cuisine filter". Never collides with an id, which is numeric. */
 const ANY_CUISINE = 'any';
+
+/**
+ * The serving size whose multiplier (app/services/calories.py's
+ * SERVING_MULTIPLIERS: small 0.75, medium 1.0, large 1.4) is closest to
+ * `ratio`. The portion stepper counts in a dish's own unit (e.g. "2 roti"),
+ * not small/medium/large, so stepping it has to fall back to the nearest of
+ * the three sizes the server actually prices against.
+ */
+function nearestServingSize(ratio: number): ServingSize {
+  const multipliers: [ServingSize, number][] = [
+    ['small', 0.75],
+    ['medium', 1.0],
+    ['large', 1.4],
+  ];
+  return multipliers.reduce((best, candidate) =>
+    Math.abs(candidate[1] - ratio) < Math.abs(best[1] - ratio) ? candidate : best,
+  )[0];
+}
 
 /** Where the photo has got to, given it can only be sent once the log exists. */
 export type PhotoStatus = 'none' | 'uploading' | 'attached' | 'failed';
@@ -39,7 +58,7 @@ export function useLogForm() {
   const [query, setQuery] = useState('');
   const [cuisineId, setCuisineId] = useState<RefId | null>(null);
   const [categoryId, setCategoryId] = useState<RefId | null>(null);
-  const [dishName, setDishName] = useState('');
+  const [dishName, setDishNameRaw] = useState('');
   const [restaurantName, setRestaurantName] = useState('');
   const [restaurantId, setRestaurantId] = useState<Uuid | null>(null);
   const [area, setArea] = useState('');
@@ -47,6 +66,11 @@ export function useLogForm() {
   const [funScale, setFunScale] = useState<number | null>(null);
   const [friendScale, setFriendScale] = useState<FriendScale | null>(null);
   const [servingSize, setServingSize] = useState<ServingSize>('medium');
+  // The desi dish hint behind the portion stepper, if one is selected, and
+  // how many of its unit the stepper currently says. Null/null means no
+  // stepper is showing and serving size is picked the ordinary way.
+  const [dishHint, setDishHint] = useState<DishHint | null>(null);
+  const [portionQty, setPortionQty] = useState<number | null>(null);
   const [photo, setPhoto] = useState<PickedPhoto | null>(null);
   const [photoStatus, setPhotoStatus] = useState<PhotoStatus>('none');
   const [saved, setSaved] = useState<FoodLog | null>(null);
@@ -82,6 +106,9 @@ export function useLogForm() {
   // empty the list under the field that had just been filled in.
   const categories = useCategories(null);
   const search = useSearch(query);
+  // Debounced on the dish name itself, so chips update as someone types the
+  // dish directly rather than only through the separate "find a dish" field.
+  const dishHints = useDishHints(dishName);
   // A second, independent search against whatever a photo guessed, so the
   // confirm screen can offer the same quick dish/category chips the form
   // already has without the two queries fighting over one piece of state.
@@ -156,6 +183,8 @@ export function useLogForm() {
     setFunScale(null);
     setFriendScale(null);
     setServingSize('medium');
+    setDishHint(null);
+    setPortionQty(null);
     setPhoto(null);
     setPhotoStatus('none');
     setRefused(false);
@@ -220,6 +249,37 @@ export function useLogForm() {
     // Answering the category answers the cuisine too, so the field above says
     // so rather than sitting empty next to a category that contradicts it.
     setCuisineId(category.cuisine_id);
+  };
+
+  /** Edits the dish name field. A manual edit that no longer names the
+   * selected hint drops the portion stepper, since it would otherwise keep
+   * showing a unit and quantity for a dish the field no longer says. */
+  const setDishName = (value: string) => {
+    setDishNameRaw(value);
+    if (dishHint && value !== dishHint.name) {
+      setDishHint(null);
+      setPortionQty(null);
+    }
+  };
+
+  /** A dish hint chip was tapped: fills the dish name and its category, and
+   * starts the portion stepper at the dish's own typical quantity. */
+  const chooseDishHint = (hint: DishHint) => {
+    setDishNameRaw(hint.name);
+    setCategoryId(hint.category_id);
+    const category = (categories.data ?? []).find((item) => item.id === hint.category_id);
+    if (category) setCuisineId(category.cuisine_id);
+    setDishHint(hint);
+    setPortionQty(hint.typical_qty);
+    setServingSize('medium');
+  };
+
+  /** The stepper was moved: re-derives serving_size from how far the new
+   * quantity sits from the dish's own typical quantity. */
+  const changePortionQty = (qty: number) => {
+    const next = Math.max(1, qty);
+    setPortionQty(next);
+    if (dishHint) setServingSize(nearestServingSize(next / dishHint.typical_qty));
   };
 
   /**
@@ -328,6 +388,11 @@ export function useLogForm() {
     setFriendScale,
     servingSize,
     setServingSize,
+    dishHints,
+    dishHint,
+    portionQty,
+    chooseDishHint,
+    changePortionQty,
     photo,
     setPhoto,
     photoStatus,

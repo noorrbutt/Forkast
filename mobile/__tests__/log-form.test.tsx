@@ -111,6 +111,10 @@ const CATEGORIES = [
   category(33, 3, 'Katsu'),
 ];
 
+const DISH_HINTS = [
+  { name: 'beef nihari', unit: 'plate', typical_qty: 1, kcal_min: 650, kcal_max: 950, category_id: 13 },
+];
+
 const SAVED = {
   id: 'log-new',
   has_photo: false,
@@ -143,6 +147,7 @@ beforeEach(() => {
     if (url === '/cuisines') return { data: CUISINES };
     if (url === '/categories') return { data: CATEGORIES };
     if (url === '/restaurants') return { data: [] };
+    if (url === '/dishes') return { data: DISH_HINTS };
     return { data: null };
   });
   mockedApi.post.mockResolvedValue({ data: SAVED });
@@ -273,6 +278,60 @@ describe('the saved estimate', () => {
     // SAVED carries the Pizza category, which is neither junk nor one of the
     // light categories in this fixture, so it gets the plain acknowledgement.
     await waitFor(() => expect(screen.getByText('Nice, pizza is on the board.')).toBeTruthy());
+  });
+});
+
+describe('desi dish hint chips and the portion stepper', () => {
+  it('offers a chip from the desi dish table', async () => {
+    const screen = renderManualForm();
+
+    await waitFor(() => expect(screen.getByText('beef nihari')).toBeTruthy());
+    expect(screen.getByText('Common desi dishes')).toBeTruthy();
+  });
+
+  it('picking a chip fills the dish name, category, and starts the stepper', async () => {
+    const screen = renderManualForm();
+    await waitFor(() => expect(screen.getByText('beef nihari')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('beef nihari'));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Category').props.accessibilityValue).toEqual({
+        text: 'Nihari',
+      }),
+    );
+    expect(screen.getByDisplayValue('beef nihari')).toBeTruthy();
+    expect(screen.getByText('1 plate')).toBeTruthy();
+  });
+
+  it('stepping the portion up changes the serving size sent on save', async () => {
+    const screen = renderManualForm();
+    await waitFor(() => expect(screen.getByText('beef nihari')).toBeTruthy());
+    fireEvent.press(screen.getByText('beef nihari'));
+    await waitFor(() => expect(screen.getByText('1 plate')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('+'));
+    await waitFor(() => expect(screen.getByText('2 plates')).toBeTruthy());
+
+    fireEvent.press(screen.getByText('Log it'));
+
+    await waitFor(() =>
+      expect(mockedApi.post).toHaveBeenCalledWith(
+        '/logs',
+        expect.objectContaining({ dish_name: 'beef nihari', serving_size: 'large' }),
+      ),
+    );
+  });
+
+  it('editing the dish name away from the chip drops the stepper', async () => {
+    const screen = renderManualForm();
+    await waitFor(() => expect(screen.getByText('beef nihari')).toBeTruthy());
+    fireEvent.press(screen.getByText('beef nihari'));
+    await waitFor(() => expect(screen.getByText('1 plate')).toBeTruthy());
+
+    fireEvent.changeText(screen.getByDisplayValue('beef nihari'), 'beef nihari with extra naan');
+
+    expect(screen.queryByText('1 plate')).toBeNull();
   });
 });
 

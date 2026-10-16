@@ -14,12 +14,30 @@ from pydantic import BaseModel, Field
 from app.models.enums import BiggestStruggle, EatingOutFrequency, Goal, ServingSize
 
 
+class DesiDishHint(BaseModel):
+    """A match from the static desi dish table (services/ai/desi.py), handed
+    to the model as grounding. `kcal_min`/`kcal_max` describe a typical
+    serving of `typical_qty` `unit`s, same convention as the category range
+    this rides alongside -- never a second clamp, just a narrower suggestion
+    inside the one the caller already applies."""
+
+    name: str
+    kcal_min: int
+    kcal_max: int
+    unit: str
+    typical_qty: float
+
+
 class CalorieAdjustRequest(BaseModel):
     dish_name: str
     category_name: str
     base_calorie_min: int
     base_calorie_max: int
     serving_size: ServingSize
+    # Set by the caller when desi.lookup(dish_name) finds a match. None for
+    # every other dish, which is the common case and changes nothing about
+    # how this request is answered.
+    dish_hint: DesiDishHint | None = None
 
 
 class CalorieAdjustResult(BaseModel):
@@ -122,6 +140,13 @@ class PhotoCalorieEstimate(BaseModel):
     # guess either way, so a caller that ignores this list entirely still gets
     # a usable estimate.
     portion_options: list[PortionOption] = Field(default_factory=list)
+    # Set only when the dish matches the desi dish table (services/ai/desi.py)
+    # closely enough that a unit makes sense, e.g. "roti" / 2. Both null for
+    # every other photo, which is the common case -- additive and backwards
+    # compatible, an older stored estimate with neither field simply still
+    # validates.
+    portion_unit: str | None = None
+    portion_qty: float | None = None
     reasoning: str | None = None
 
 

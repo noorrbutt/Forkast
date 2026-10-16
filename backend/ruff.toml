@@ -45,6 +45,9 @@ ignore = [
 # stop the seeder, and there is no caller to hand an exception to.
 # DEMO_PASSWORD is deliberately public and documented in the README.
 "app/seed/**" = ["T20", "S101", "S105", "S311"]
+# Same reasoning as app/seed/**: validate() is a self-check over the literal
+# DESI_DISHES table in this same file, with no caller to hand an exception to.
+"app/services/ai/desi.py" = ["S101"]
 "scripts/**" = ["T20", "S101", "S603"]
 # token_type="bearer" is an OAuth field name, not a credential.
 "app/schemas/auth.py" = ["S105"]

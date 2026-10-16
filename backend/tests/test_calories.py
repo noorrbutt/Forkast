@@ -6,7 +6,7 @@ import pytest
 
 from app.models.enums import ServingSize
 from app.services.ai.fake import DeterministicAIService
-from app.services.ai.schemas import CalorieAdjustRequest
+from app.services.ai.schemas import CalorieAdjustRequest, DesiDishHint
 from app.services.calories import (
     SERVING_MULTIPLIERS,
     apply_serving_size,
@@ -125,6 +125,27 @@ async def test_the_stub_skews_rich_dishes_higher_than_light_ones() -> None:
     grilled = await ai.adjust_calories(request("grilled vegetable pasta"))
 
     assert creamy.calories > grilled.calories
+
+
+async def test_a_dish_hint_grounds_the_stub_at_its_own_midpoint() -> None:
+    """When the caller supplies a desi dish hint, the stub ignores its own
+    heavy/light heuristic and answers with that dish's own midpoint."""
+    ai = DeterministicAIService()
+    hint = DesiDishHint(name="beef nihari", kcal_min=650, kcal_max=950, unit="plate", typical_qty=1)
+
+    result = await ai.adjust_calories(
+        CalorieAdjustRequest(
+            dish_name="nihari with extra naan",
+            category_name="Nihari",
+            base_calorie_min=600,
+            base_calorie_max=980,
+            serving_size=ServingSize.medium,
+            dish_hint=hint,
+        )
+    )
+
+    assert result.calories == 800  # (650 + 950) / 2
+    assert "beef nihari" in (result.reasoning or "")
 
 
 async def test_the_deterministic_stub_and_the_groq_client_are_interchangeable() -> None:

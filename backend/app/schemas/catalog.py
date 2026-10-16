@@ -43,6 +43,18 @@ class DishSuggestion(BaseModel):
     category_id: int
 
 
+class DishHintOut(BaseModel):
+    """A row from the static desi dish table (services/ai/desi.py), for the
+    manual log form's suggestion chips and portion stepper."""
+
+    name: str
+    unit: str
+    typical_qty: float
+    kcal_min: int
+    kcal_max: int
+    category_id: int
+
+
 class SearchResults(BaseModel):
     cuisines: list[CuisineOut] = Field(default_factory=list)
     categories: list[CategoryOut] = Field(default_factory=list)
