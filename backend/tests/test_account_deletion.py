@@ -128,9 +128,9 @@ async def test_export_filename_uses_the_users_local_date(
     response = await client.get(EXPORT, headers=headers)
 
     assert response.status_code == 200
-    assert f'forkast-export-{elsewhere.isoformat()}.json"' in response.headers[
-        "content-disposition"
-    ]
+    assert (
+        f'forkast-export-{elsewhere.isoformat()}.json"' in response.headers["content-disposition"]
+    )
 
 
 async def test_export_csv_neutralises_formula_looking_dish_names(client: AsyncClient) -> None:

@@ -330,9 +330,7 @@ class Settings(BaseSettings):
         has_brevo_key = bool(self.brevo_api_key and self.brevo_api_key.get_secret_value().strip())
         has_brevo_sender = bool(self.email_from_address.strip())
         if has_brevo_key != has_brevo_sender:
-            raise ValueError(
-                "BREVO_API_KEY and EMAIL_FROM_ADDRESS must be configured together."
-            )
+            raise ValueError("BREVO_API_KEY and EMAIL_FROM_ADDRESS must be configured together.")
 
         # A deep link mailed out as forkast://... is dead on arrival: no mail
         # client linkifies a bare custom scheme from an email body, let alone
