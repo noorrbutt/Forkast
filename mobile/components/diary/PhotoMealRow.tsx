@@ -4,7 +4,7 @@ import { Image, Pressable, Text, View } from 'react-native';
 import { EstimateBadge } from '../ui';
 import { usePhotoSource } from '../../hooks/usePhoto';
 import { displayDish, formatNumber } from '../../lib/format';
-import { useTheme } from '../../theme';
+import { useLayout, useTheme } from '../../theme';
 import { elevation, photoScrim } from '../../theme/tokens';
 import { MealActions } from './MealActions';
 import { RefinedTag, useJustRefined } from './MealBadges';
@@ -23,6 +23,16 @@ const ABSOLUTE_FILL = {
 };
 
 const PHOTO_HEIGHT = 240;
+/** Below this window width, the photo trims down so more of the diary fits
+ * on one screen -- see the component's own note on why a fixed height
+ * rather than an aspect ratio in the first place. 380 sits below the 390pt
+ * width of an iPhone 14/15/16 (this app's own default test width, and the
+ * most common phone size the diary is actually read on), and above the
+ * 320-375pt an SE or an 8 reports, which is the actual "narrow" case this
+ * exists for -- a 390pt phone should not trim down just because it is not
+ * the single widest device out there. */
+const NARROW_PHOTO_WIDTH = 380;
+const NARROW_PHOTO_HEIGHT = 180;
 
 /**
  * A meal WITH a photo. Full width, taller, the picture doing the work a
@@ -39,6 +49,8 @@ const PHOTO_HEIGHT = 240;
  */
 export function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDelete, onLongPress, sending, confirmed, error }: MealRowProps) {
   const { colors, isDark, radius, spacing, type } = useTheme();
+  const { width } = useLayout();
+  const photoHeight = width < NARROW_PHOTO_WIDTH ? NARROW_PHOTO_HEIGHT : PHOTO_HEIGHT;
   const photo = usePhotoSource(log.id);
   const justRefined = useJustRefined(log);
   const meta = mealMeta(log);
@@ -85,12 +97,13 @@ export function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDelet
             >
               {/* A fixed height rather than a 4:3 ratio capped by maxHeight.
                   The photo is here to be recognised, not to be the biggest
-                  thing on the screen, so it stops at 240. But a ratio plus a
-                  height cap made layout honour the ratio by shrinking the
-                  WIDTH to 320 once the cap bound, which on any phone wider
-                  than that left a dark strip of card down the right edge.
-                  240 is what every phone already got. */}
-              <View style={{ width: '100%', height: PHOTO_HEIGHT }}>
+                  thing on the screen, so it stops at 240 (180 on a narrow
+                  phone, see NARROW_PHOTO_WIDTH). But a ratio plus a height
+                  cap made layout honour the ratio by shrinking the WIDTH to
+                  320 once the cap bound, which on any phone wider than that
+                  left a dark strip of card down the right edge. A fixed
+                  height is what every phone already got. */}
+              <View testID="photo-card-frame" style={{ width: '100%', height: photoHeight }}>
                 {photo ? (
                   <Image
                     source={photo}
