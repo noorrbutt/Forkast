@@ -84,6 +84,8 @@ type StreakPayload = {
   current_streak: number;
   longest_streak: number;
   last_junk_date: string | null;
+  last_junk_dish?: string | null;
+  available_freezes?: number;
   message: string;
   freeze_just_used_on?: string | null;
 };
@@ -378,5 +380,60 @@ describe('a freeze that just covered a slip', () => {
 
     await waitFor(() => view.getByText('7'));
     expect(view.queryByText('Your streak freeze just saved you')).toBeNull();
+  });
+});
+
+describe('a freeze that covered today specifically', () => {
+  // Built from the real clock rather than a fixed string: the condition this
+  // is testing is "equals the user's local today", and a hardcoded date
+  // would stop matching the moment this test file outlives that day.
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  it('says so under the streak count, not only in the one-time dialog', async () => {
+    const view = await show({
+      ...RUNNING,
+      last_junk_date: todayKey,
+      last_junk_dish: 'loaded fries',
+      freeze_just_used_on: todayKey,
+    });
+
+    await waitFor(() => view.getByText("A freeze covered today's junk"));
+  });
+
+  it('appends the same note to the most recent junk meal row', async () => {
+    const view = await show({
+      ...RUNNING,
+      last_junk_date: todayKey,
+      freeze_just_used_on: todayKey,
+    });
+
+    await waitFor(() => view.getByText('covered by a freeze'));
+  });
+
+  it('stays quiet once the covered day is no longer today', async () => {
+    // The one-time dialog test above uses a past date on purpose, to prove
+    // the dialog still opens for a freeze spent earlier; the persistent
+    // caption must NOT also fire for that same stale date, or the count and
+    // the date row would claim "today" forever after any freeze ever used.
+    const view = await show({ ...RUNNING, freeze_just_used_on: '2026-10-09' });
+
+    await waitFor(() => view.getByText('7'));
+    expect(view.queryByText("A freeze covered today's junk")).toBeNull();
+    expect(view.queryByText('covered by a freeze')).toBeNull();
+  });
+});
+
+describe('the banked freeze row', () => {
+  it('reads as a stock on hand, not a status', async () => {
+    const view = await show({ ...RUNNING, available_freezes: 1 });
+
+    await waitFor(() => view.getByText('Freeze banked'));
+  });
+
+  it('pluralises past one', async () => {
+    const view = await show({ ...RUNNING, available_freezes: 3 });
+
+    await waitFor(() => view.getByText('Freezes banked'));
   });
 });

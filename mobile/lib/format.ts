@@ -100,6 +100,21 @@ export function formatDate(value: string | null | undefined): string {
   return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+/**
+ * Today's calendar day in the device's own local zone, as the plain
+ * `YYYY-MM-DD` the API sends for a date-only field -- the inverse of
+ * parseApiDate above. `date.toISOString()` is the wrong tool here for the
+ * same reason that function exists: it reports the UTC day, which is already
+ * tomorrow for part of the day anywhere east of Greenwich and still
+ * yesterday for part of it anywhere west.
+ */
+export function localDateKey(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export const SERVING_LABELS: Record<ServingSize, string> = {
   small: 'Small',
   medium: 'Medium',

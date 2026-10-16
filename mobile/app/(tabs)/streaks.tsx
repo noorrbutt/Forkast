@@ -6,7 +6,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-na
 import { Button, Card, Dialog, ErrorState, Hero, HeroWash, Screen, Skeleton, SkeletonCard, SkeletonText } from '../../components/ui';
 import { useStreaks } from '../../hooks/useInsights';
 import { describeError } from '../../lib/api';
-import { displayDish, formatDate } from '../../lib/format';
+import { displayDish, formatDate, localDateKey } from '../../lib/format';
 import { haptics } from '../../lib/haptics';
 import {
   hasSeenFreezeSave,
@@ -194,6 +194,14 @@ export default function StreaksScreen() {
   // Three zeros and no slip on record means nothing has ever been logged, which
   // is a different thing from a run that has just been broken.
   const started = Boolean(data && (current > 0 || longest > 0 || data.last_junk_date));
+  // Whether today's own junk was the one a freeze just covered -- not merely
+  // that a freeze has ever been spent, which freeze_just_used_on alone would
+  // say nothing about once that date is in the past. Without this, a run
+  // that survived a slip days ago could still read as contradicting the most
+  // recent junk meal row below on the one day it is actually relevant.
+  const freezeCoveredToday = Boolean(
+    data?.freeze_just_used_on && data.freeze_just_used_on === localDateKey(),
+  );
 
   // The column below already puts lg between its children, so xxl on each side
   // of the hero lands its surrounding space on xxxl, which nothing else on the
@@ -291,6 +299,16 @@ export default function StreaksScreen() {
                 <Text style={[type.body, { color: colors.muted, textAlign: 'center' }]}>
                   {current === 1 ? 'day without junk' : 'days without junk'}
                 </Text>
+                {/* Persistent, not a toast: the one-time dialog above already
+                    marked the moment, but the count alone reads as a clean
+                    run, and the most recent junk meal row below names today's
+                    date -- without this line the two looked like they
+                    disagreed about whether today happened at all. */}
+                {freezeCoveredToday ? (
+                  <Text style={[type.caption, { color: colors.muted, textAlign: 'center' }]}>
+                    A freeze covered today&apos;s junk
+                  </Text>
+                ) : null}
               </View>
             </HeroWash>
 
@@ -313,7 +331,9 @@ export default function StreaksScreen() {
                   <>
                     <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.lg }}>
                       <Text style={[type.body, { color: colors.muted, flex: 1 }]}>
-                        {data.available_freezes === 1 ? 'Streak freeze' : 'Streak freezes'}
+                        {/* A stock on hand, not a status about right now -- the
+                            value this screen already leads with. */}
+                        {data.available_freezes === 1 ? 'Freeze banked' : 'Freezes banked'}
                       </Text>
                       <Text style={[type.displaySm, { color: colors.text }]}>
                         {data.available_freezes}
@@ -340,9 +360,20 @@ export default function StreaksScreen() {
                       </Text>
                     ) : null}
                   </View>
-                  <Text style={[type.subtitle, { color: colors.text }]}>
-                    {data.last_junk_date ? formatDate(data.last_junk_date) : 'None yet'}
-                  </Text>
+                  <View style={{ alignItems: 'flex-end', gap: spacing.xs }}>
+                    <Text style={[type.subtitle, { color: colors.text }]}>
+                      {data.last_junk_date ? formatDate(data.last_junk_date) : 'None yet'}
+                    </Text>
+                    {/* Same condition as the hero caption above: this is the
+                        date a freeze just covered, so it must say so too, or
+                        the date on its own reads as an ordinary, uncovered
+                        slip. */}
+                    {freezeCoveredToday ? (
+                      <Text style={[type.caption, { color: colors.muted }]}>
+                        covered by a freeze
+                      </Text>
+                    ) : null}
+                  </View>
                 </View>
               </View>
             </Card>
