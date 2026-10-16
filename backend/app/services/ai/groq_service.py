@@ -79,7 +79,11 @@ BASE_SEED = 1337
 # name that makes the model think harder than usual.
 PLAN_MAX_TOKENS = 8192
 CALORIE_MAX_TOKENS = 1024
-PHOTO_CALORIE_MAX_TOKENS = 1024
+# Kept under 1000, not just under the measured 117-token steady state: Groq's
+# on_demand tier caps VISION_MODEL's own output-tokens-per-minute limit at
+# 1000, and 1024 was rejected outright as "Request too large" before the
+# model ever ran, on every single photo estimate, not just under load.
+PHOTO_CALORIE_MAX_TOKENS = 960
 
 # Photo estimation always uses this model regardless of GROQ_MODEL: the text
 # calorie and plan seams are free to run on whichever text model is
