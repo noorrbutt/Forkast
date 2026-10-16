@@ -4,7 +4,7 @@ import { API_BASE_URL, api, getAccessToken } from '../lib/api';
 import { useAuthedImage } from '../lib/authedImage';
 import { pickImage, useImagePicker, type PickedImage } from '../lib/pickImage';
 import { appendFile } from '../lib/upload';
-import type { FoodLog, PhotoEstimate, Uuid } from '../lib/types';
+import type { FoodLog, OrderEstimate, PhotoEstimate, Uuid } from '../lib/types';
 
 /**
  * Bumped every time any meal photo changes.
@@ -169,6 +169,31 @@ export function useEstimatePhoto() {
         // Left to the runtime, same reasoning as useSetPhoto: axios has to set
         // the multipart boundary itself, and naming the content type here
         // strips it.
+        headers: { 'Content-Type': undefined },
+        transformRequest: (value) => value,
+      });
+      return response.data;
+    },
+  });
+}
+
+/**
+ * Read a delivery-order screenshot into editable line items, without saving
+ * anything -- same shape as useEstimatePhoto, a different endpoint. The
+ * review sheet turns each confirmed item into its own ordinary POST /logs
+ * call (useCreateLog), so nothing from the image is ever written here.
+ */
+export function useEstimateOrder() {
+  return useMutation({
+    mutationFn: async (picked: PickedPhoto) => {
+      const form = new FormData();
+      await appendFile(form, 'file', {
+        uri: picked.uri,
+        name: `order.${picked.mimeType.split('/')[1] ?? 'jpg'}`,
+        mimeType: picked.mimeType,
+      });
+
+      const response = await api.post<OrderEstimate>('/logs/estimate-order', form, {
         headers: { 'Content-Type': undefined },
         transformRequest: (value) => value,
       });

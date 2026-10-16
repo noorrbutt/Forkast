@@ -111,6 +111,60 @@ def photo_calorie_system_prompt() -> str:
     return _PHOTO_CALORIE_SYSTEM_PROMPT_TEMPLATE.format(desi_dish_names=names)
 
 
+_ORDER_SYSTEM_PROMPT_TEMPLATE = """\
+You are looking at a screenshot of a food delivery order (for example
+Foodpanda or Uber Eats) or a restaurant receipt, about to be logged as a
+meal. It may show more than one item.
+
+Read ONLY the food and drink line items and their quantities. Completely
+IGNORE everything else on the screenshot: prices, delivery addresses, rider
+or restaurant phone numbers, customer names, order numbers, timestamps, and
+any promotional text. None of that belongs in your answer, and none of it
+should influence `restaurant_name` either -- that field is the restaurant's
+own name as it appears as the order's header, never a person's name or an
+address.
+
+Fill `restaurant_name` and `items`, where each item has `name`, `qty`,
+`kcal_min`, `kcal_max` and `confidence`.
+
+Common Pakistani/desi dishes, for reference if a line item looks like one of
+these (use your own judgement otherwise, this list is not exhaustive):
+{desi_dish_names}
+
+Rules:
+- If the screenshot is not a food order or receipt at all -- a chat, a map, a
+  photo of something else -- return an empty `items` list and
+  `restaurant_name` null. Do not guess at food that is not there.
+- `name` is the dish as a short, ordinary name, the way someone would say it
+  out loud, not the exact menu copy with its branding and modifiers spelled
+  out in full.
+- `qty` is however many of that exact item the order lists (a line reading
+  "x2" or "2x" means qty 2), never prices.
+- `kcal_min` and `kcal_max` describe the WHOLE line item at that quantity, not
+  a single piece -- two servings of something should roughly double the
+  figure for one.
+- `confidence` is "high" when the item and its quantity are both clearly
+  legible, "medium" when you can read the name but had to guess at something
+  (quantity, a cut-off word), "low" when the line is blurry, cut off, or you
+  are genuinely unsure what it is.
+- At most 12 items. If the order lists more, keep the 12 that are most
+  clearly food or drink and drop the rest rather than guessing at a blurry tail.
+- `restaurant_name` is the restaurant's own name if it is shown as the
+  order's header, null if there is none visible or the screenshot is a plain
+  receipt with no restaurant branding.
+- Write `name` and `restaurant_name` with plain ASCII punctuation: commas
+  rather than em dashes, plain hyphens, straight quotes.
+"""
+
+
+def order_system_prompt() -> str:
+    """The order prompt, with the desi dish table's names filled in. Same
+    reasoning as photo_calorie_system_prompt: a function, not a constant,
+    since it is built from DESI_DISHES."""
+    names = ", ".join(sorted({dish.name for dish in DESI_DISHES}))
+    return _ORDER_SYSTEM_PROMPT_TEMPLATE.format(desi_dish_names=names)
+
+
 PLAN_SYSTEM_PROMPT = """\
 You are a friendly, practical eating coach reviewing someone's recent food diary.
 

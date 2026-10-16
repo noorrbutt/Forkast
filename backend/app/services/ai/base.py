@@ -13,6 +13,7 @@ from typing import Protocol, runtime_checkable
 from app.services.ai.schemas import (
     CalorieAdjustRequest,
     CalorieAdjustResult,
+    OrderEstimate,
     PhotoCalorieEstimate,
     PlanRequest,
     PlanResult,
@@ -32,3 +33,8 @@ class AIService(Protocol):
     async def estimate_from_photo(
         self, image: bytes, content_type: str
     ) -> PhotoCalorieEstimate: ...
+
+    # Same image/content_type shape as estimate_from_photo, a delivery-order
+    # screenshot rather than a single dish. See OrderEstimate's own docstring
+    # for why this never writes anything on its own.
+    async def estimate_order(self, image: bytes, content_type: str) -> OrderEstimate: ...

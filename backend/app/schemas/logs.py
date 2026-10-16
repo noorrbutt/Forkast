@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -188,3 +189,30 @@ class PhotoEstimateOut(PhotoCalorieEstimate):
     """
 
     estimate_source: EstimateSource
+
+
+class OrderItemOut(BaseModel):
+    """One line item from a delivery-order screenshot, grounded against the
+    desi dish table (services/ai/desi.py) and the real category ranges where
+    it matched -- see services/logs.py's estimate_order for how."""
+
+    name: str
+    qty: int
+    kcal_min: int
+    kcal_max: int
+    # The real food_categories.id this item was matched to, or null when the
+    # desi table had nothing close enough. The review sheet still shows the
+    # item either way; an unmatched one just saves under whatever category
+    # the person picks for it, the same as any other manual log.
+    category_id: int | None = None
+    confidence: Literal["high", "medium", "low"]
+
+
+class OrderEstimateOut(BaseModel):
+    """A preview, the same way PhotoEstimateOut is: nothing here is written
+    to food_logs on its own. Each confirmed item becomes its own POST /logs
+    call from the review sheet, with its own client_id."""
+
+    restaurant_name: str | None = None
+    items: list[OrderItemOut] = Field(default_factory=list, max_length=12)
+    estimate_source: EstimateSource = "local"

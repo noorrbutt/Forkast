@@ -126,6 +126,9 @@ async def test_a_dead_ai_provider_is_a_502_not_a_500(auth_client: AsyncClient) -
         async def estimate_from_photo(self, image, content_type):
             raise GroqResponseError("marker: upstream response text must not leak")
 
+        async def estimate_order(self, image, content_type):
+            raise GroqResponseError("marker: upstream response text must not leak")
+
     assert isinstance(_AlwaysFailingAI(), AIService)
 
     from app.services.ai.deps import get_ai_service

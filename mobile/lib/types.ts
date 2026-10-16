@@ -143,6 +143,27 @@ export type PhotoEstimate = {
   estimate_source: EstimateSource;
 };
 
+/** One food/drink line item read off a delivery-order screenshot, already
+ * grounded against the desi dish table where it matched one. */
+export type OrderItem = {
+  name: string;
+  qty: number;
+  kcal_min: number;
+  kcal_max: number;
+  /** Null when nothing in the desi table matched closely enough; the review
+   * sheet still offers the item, just without a guessed category. */
+  category_id: RefId | null;
+  confidence: 'high' | 'medium' | 'low';
+};
+
+/** A preview, the same way PhotoEstimate is: nothing here is saved until the
+ * review sheet turns a selected item into its own ordinary POST /logs call. */
+export type OrderEstimate = {
+  restaurant_name: string | null;
+  items: OrderItem[];
+  estimate_source: EstimateSource;
+};
+
 export type Restaurant = {
   id: Uuid;
   name: string;

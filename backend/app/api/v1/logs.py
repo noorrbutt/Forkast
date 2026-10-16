@@ -29,7 +29,14 @@ from app.config import get_settings
 from app.db import get_session_factory
 from app.models import MAX_PHOTO_BYTES, FoodLog
 from app.schemas.insights import TrendOut
-from app.schemas.logs import FoodLogCreate, FoodLogOut, FoodLogPage, FoodLogUpdate, PhotoEstimateOut
+from app.schemas.logs import (
+    FoodLogCreate,
+    FoodLogOut,
+    FoodLogPage,
+    FoodLogUpdate,
+    OrderEstimateOut,
+    PhotoEstimateOut,
+)
 from app.services import jobs
 from app.services import logs as logs_service
 from app.services.ai.base import AIService
@@ -158,6 +165,43 @@ async def estimate_photo(
     content_type = check_upload(data, max_bytes=MAX_PHOTO_BYTES, noun="Photos")
     estimate = await logs_service.estimate_photo(ai, data, content_type, live=live)
     return PhotoEstimateOut(**estimate.model_dump(), estimate_source=estimate_source)
+
+
+@logs_router.post("/estimate-order", response_model=OrderEstimateOut)
+async def estimate_order(
+    session: SessionDep,
+    user: CurrentUser,
+    ai: AIDep,
+    estimate_source: EstimateSourceDep,
+    factory: SessionFactoryDep,
+    limiter: RateLimiterDep,
+    file: Annotated[UploadFile, File()],
+) -> OrderEstimateOut:
+    """Read a delivery-order screenshot or receipt into editable line items,
+    without saving anything.
+
+    Same "preview, not a save" shape as estimate-photo just above, and the
+    same reason it is declared ahead of GET/PATCH/DELETE /logs/{log_id}:
+    those capture a single path segment as log_id, and FastAPI matches
+    routes in declaration order.
+
+    Nothing from the image -- the bytes or any text the model read off it --
+    is ever written anywhere: there is no table this could land in short of
+    deliberately adding one, and the request itself is never logged (see
+    middleware.RequestLoggingMiddleware, which logs method/path/status/
+    duration only). Confirming an item is a separate, ordinary POST /logs
+    call made by the review sheet, the same route and the same privacy as
+    any other logged meal.
+    """
+    live = estimate_source == "ai"
+    await logs_service.guard_order_estimate(limiter, user, live=live)
+
+    data = await file.read(MAX_PHOTO_BYTES + 1)
+    content_type = check_upload(data, max_bytes=MAX_PHOTO_BYTES, noun="Order screenshots")
+    estimate = await logs_service.estimate_order(
+        ai, session, factory, data, content_type, live=live
+    )
+    return estimate.model_copy(update={"estimate_source": estimate_source})
 
 
 @logs_router.get("", response_model=FoodLogPage)

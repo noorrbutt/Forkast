@@ -43,11 +43,14 @@ from typing import Any, NamedTuple
 from app.services.ai.prompts import (
     CALORIE_SYSTEM_PROMPT,
     PLAN_SYSTEM_PROMPT,
+    order_system_prompt,
     photo_calorie_system_prompt,
 )
 from app.services.ai.schemas import (
     CalorieAdjustRequest,
     CalorieAdjustResult,
+    OrderEstimate,
+    OrderLineItem,
     PhotoCalorieEstimate,
     PhotoMacros,
     PlanRequest,
@@ -84,6 +87,11 @@ CALORIE_MAX_TOKENS = 1024
 # 1000, and 1024 was rejected outright as "Request too large" before the
 # model ever ran, on every single photo estimate, not just under load.
 PHOTO_CALORIE_MAX_TOKENS = 960
+# An order screenshot can carry up to 12 items, each with its own name,
+# quantity and range, so this needs noticeably more room than a single dish's
+# PHOTO_CALORIE_MAX_TOKENS -- sized the same way that one was, with headroom
+# over a dozen short items' worth of JSON rather than measured live yet.
+ORDER_MAX_TOKENS = 2048
 
 # Photo estimation always uses this model regardless of GROQ_MODEL: the text
 # calorie and plan seams are free to run on whichever text model is
@@ -254,6 +262,46 @@ PHOTO_CALORIE_SCHEMA: dict[str, Any] = {
     },
 }
 
+ORDER_SCHEMA: dict[str, Any] = {
+    "name": "order_estimate",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "restaurant_name": {
+                "type": ["string", "null"],
+                "description": "The restaurant's own name as shown on the order, "
+                "null if none is visible",
+            },
+            "items": {
+                "type": "array",
+                "description": "Up to 12 food/drink line items; empty if this is not "
+                "a food order or receipt at all",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "qty": {"type": "integer"},
+                        "kcal_min": {
+                            "type": "integer",
+                            "description": "For the WHOLE item at this quantity",
+                        },
+                        "kcal_max": {
+                            "type": "integer",
+                            "description": "For the WHOLE item at this quantity",
+                        },
+                        "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+                    },
+                    "required": ["name", "qty", "kcal_min", "kcal_max", "confidence"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["restaurant_name", "items"],
+        "additionalProperties": False,
+    },
+}
+
 
 # Typography the model reaches for and this product does not want. Left alone,
 # these land in stored plan text and in the app's own copy. An em dash is the
@@ -412,6 +460,17 @@ def _photo_user_content(data_uri: str) -> list[dict[str, Any]]:
         {
             "type": "text",
             "text": "Identify this dish and estimate its calories and macros.",
+        },
+        {"type": "image_url", "image_url": {"url": data_uri}},
+    ]
+
+
+def _order_user_content(data_uri: str) -> list[dict[str, Any]]:
+    """Same two-block shape as _photo_user_content, different instruction."""
+    return [
+        {
+            "type": "text",
+            "text": "Read the food and drink line items on this order or receipt.",
         },
         {"type": "image_url", "image_url": {"url": data_uri}},
     ]
@@ -665,6 +724,63 @@ class GroqAIService:
             portion_unit=normalise_text(str(portion_unit)) if portion_unit else None,
             portion_qty=float(portion_qty) if portion_qty else None,
             reasoning=normalise_text(reasoning) if reasoning else None,
+        )
+
+    async def estimate_order(self, image: bytes, content_type: str) -> OrderEstimate:
+        data_uri = f"data:{content_type};base64,{base64.b64encode(image).decode('ascii')}"
+
+        payload = await self._complete(
+            order_system_prompt(),
+            _order_user_content(data_uri),
+            ORDER_SCHEMA,
+            max_tokens=ORDER_MAX_TOKENS,
+            model=VISION_MODEL,
+        )
+
+        try:
+            raw_items = payload["items"]
+            restaurant_name = payload.get("restaurant_name")
+        except (KeyError, TypeError) as exc:
+            raise GroqResponseError(f"Groq order reply had an unusable shape: {payload!r}") from exc
+        if not isinstance(raw_items, list):
+            raise GroqResponseError(f"Groq order reply had an unusable shape: {payload!r}")
+
+        items: list[OrderLineItem] = []
+        for raw in raw_items:
+            # At most 12, the same cap the prompt was given; a model that
+            # ignores it should not hand the review sheet more rows than it
+            # was ever designed to show. Malformed rows are dropped rather
+            # than failing the whole order -- one bad line should not cost
+            # someone the eleven good ones next to it.
+            if len(items) >= 12:
+                break
+            try:
+                name = normalise_text(str(raw["name"]))
+                qty = int(raw["qty"])
+                kcal_min = float(raw["kcal_min"])
+                kcal_max = float(raw["kcal_max"])
+                confidence = raw["confidence"]
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not name or qty <= 0:
+                continue
+            if confidence not in ("high", "medium", "low"):
+                confidence = "low"
+            if kcal_max < kcal_min:
+                kcal_min, kcal_max = kcal_max, kcal_min
+            items.append(
+                OrderLineItem(
+                    name=name,
+                    qty=min(qty, 50),
+                    kcal_min=max(0.0, kcal_min),
+                    kcal_max=max(0.0, kcal_max),
+                    confidence=confidence,
+                )
+            )
+
+        return OrderEstimate(
+            restaurant_name=normalise_text(str(restaurant_name)) if restaurant_name else None,
+            items=items,
         )
 
     async def generate_plan(self, req: PlanRequest) -> PlanResult:

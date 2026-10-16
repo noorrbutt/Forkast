@@ -21,13 +21,13 @@ from app.api.v1.catalog import upsert_restaurant
 from app.config import get_settings
 from app.models import FoodCategory, FoodLog, FoodLogPhoto, Restaurant, User
 from app.models.enums import ServingSize
-from app.schemas.logs import FoodLogCreate, FoodLogUpdate
+from app.schemas.logs import FoodLogCreate, FoodLogUpdate, OrderEstimateOut, OrderItemOut
 from app.services import circuit_breaker
 from app.services.ai import desi
 from app.services.ai.base import AIService
 from app.services.ai.groq_service import GroqResponseError
 from app.services.ai.schemas import CalorieAdjustRequest, DesiDishHint, PhotoCalorieEstimate
-from app.services.calories import clamp_photo_estimate, finalise_estimate
+from app.services.calories import clamp_photo_estimate, clamp_to_range, finalise_estimate
 from app.services.images import compress_for_estimation
 from app.services.jobs import REFINE_CALORIE_ESTIMATE, enqueue
 from app.services.rate_limit import RateLimiter, account_identity
@@ -623,6 +623,141 @@ async def estimate_photo(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="The photo estimator is unavailable.",
         ) from exc
+
+
+async def guard_order_estimate(limiter: RateLimiter, user: User, *, live: bool) -> None:
+    """Same shape as guard_photo_estimate, its own caps: a delivery-order
+    screenshot is rarer per person than a single dish photo, so it is not
+    worth sharing photo_estimate_rate_limit/_daily_limit with that far more
+    common path. Shares the same kill switch -- photo_estimate_enabled --
+    since both are the same class of outage: the vision model is down or
+    being throttled on purpose, and a second switch would just be two knobs
+    that have to be turned together.
+    """
+    if not live:
+        return
+    settings = get_settings()
+    if not settings.photo_estimate_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Order scanning is temporarily unavailable. Try typing these in.",
+        )
+    await limiter.hit(
+        "order-estimate",
+        account_identity(user.id),
+        limit=settings.order_estimate_rate_limit,
+        window_seconds=settings.order_estimate_rate_window_seconds,
+    )
+    await _spend_daily(limiter, "order-estimate-day", user, settings.order_estimate_daily_limit)
+
+
+# The bound an order item's own calorie range is clamped into when nothing in
+# the desi dish table matches its name. Deliberately generic and wide --
+# there is no category to clamp against yet, only a sanity check against a
+# number so small or large it has to be a model failure rather than a real
+# dish, the same reasoning app/services/calories.py's photo floor/ceiling
+# uses, just scoped to one line item rather than a whole plate.
+_ORDER_ITEM_FLOOR = 40
+_ORDER_ITEM_CEILING = 2500
+
+
+async def _ground_order_item(
+    session: AsyncSession, item, cache: dict[str, FoodCategory | None]
+) -> OrderItemOut:
+    """Match one raw model item against the desi dish table, and clamp its
+    calorie range into that dish's real category range when it does.
+
+    An unmatched item is not discarded -- the review sheet still shows it,
+    with category_id null, so whoever is reviewing can still log it, just
+    without Forkast having guessed which category it belongs to.
+    """
+    match = desi.lookup(item.name)
+    category: FoodCategory | None = None
+    if match is not None:
+        if match.category_slug not in cache:
+            cache[match.category_slug] = await session.scalar(
+                select(FoodCategory).where(FoodCategory.slug == match.category_slug)
+            )
+        category = cache[match.category_slug]
+
+    if category is None:
+        kcal_min = round(clamp_to_range(item.kcal_min, _ORDER_ITEM_FLOOR, _ORDER_ITEM_CEILING))
+        kcal_max = round(clamp_to_range(item.kcal_max, _ORDER_ITEM_FLOOR, _ORDER_ITEM_CEILING))
+        category_id = None
+    else:
+        kcal_min = round(
+            clamp_to_range(item.kcal_min, category.base_calorie_min, category.base_calorie_max)
+        )
+        kcal_max = round(
+            clamp_to_range(item.kcal_max, category.base_calorie_min, category.base_calorie_max)
+        )
+        category_id = category.id
+
+    return OrderItemOut(
+        name=item.name,
+        qty=item.qty,
+        kcal_min=kcal_min,
+        kcal_max=max(kcal_min, kcal_max),
+        category_id=category_id,
+        confidence=item.confidence,
+    )
+
+
+async def estimate_order(
+    ai: AIService,
+    session: AsyncSession,
+    factory: async_sessionmaker[AsyncSession],
+    data: bytes,
+    content_type: str,
+    *,
+    live: bool,
+) -> OrderEstimateOut:
+    """Read a delivery-order screenshot that has already passed check_upload.
+
+    Wrapped in the same circuit breaker refine_estimate uses around Groq,
+    unlike the plain photo estimate above: that route accepts the cost of a
+    live call failing on its own, but this one reads up to 12 items off one
+    screenshot, which is a far more expensive single request to let hit a
+    provider that is already down. When the breaker is open, this fails
+    before ever touching the network.
+    """
+    if live:
+        try:
+            data = compress_for_estimation(data)
+            content_type = "image/jpeg"
+        except Exception as exc:
+            logger.warning("Could not downscale an uploaded order screenshot", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="That screenshot could not be read. Try another one.",
+            ) from exc
+
+        if not await circuit_breaker.allow(factory):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Order scanning is temporarily unavailable. Try typing these in.",
+            )
+
+    try:
+        raw = await ai.estimate_order(data, content_type)
+    except GroqResponseError as exc:
+        if live:
+            await circuit_breaker.record_failure(factory)
+        logger.warning("Order estimation failed", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The order scanner is unavailable.",
+        ) from exc
+    if live:
+        await circuit_breaker.record_success(factory)
+
+    category_cache: dict[str, FoodCategory | None] = {}
+    # Capped again here, defensively: GroqAIService already caps at 12 (see
+    # its own docstring), but this is the one place every AIService
+    # implementation's output passes through before reaching the client, so
+    # the limit holds regardless of what a given implementation returns.
+    items = [await _ground_order_item(session, item, category_cache) for item in raw.items[:12]]
+    return OrderEstimateOut(restaurant_name=raw.restaurant_name, items=items)
 
 
 async def set_photo(session: AsyncSession, log: FoodLog, data: bytes, content_type: str) -> None:

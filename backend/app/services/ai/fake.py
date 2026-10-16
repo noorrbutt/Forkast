@@ -13,6 +13,8 @@ from app.services.ai import desi
 from app.services.ai.schemas import (
     CalorieAdjustRequest,
     CalorieAdjustResult,
+    OrderEstimate,
+    OrderLineItem,
     PhotoCalorieEstimate,
     PhotoMacros,
     PlanDay,
@@ -168,6 +170,26 @@ class DeterministicAIService:
             portion_unit=desi_match.unit if desi_match else None,
             portion_qty=desi_match.typical_qty if desi_match else None,
             reasoning="[stub] deterministic photo estimate, no vision model called",
+        )
+
+    async def estimate_order(self, image: bytes, content_type: str) -> OrderEstimate:
+        """Fixed, not hashed: unlike estimate_from_photo, the review sheet
+        this backs needs a stable, inspectable shape to build and test
+        against, and there is no equivalent to "the photo varies" worth
+        covering here -- one order screenshot is already several items.
+
+        One item matches the desi dish table (so the grounding/clamping path
+        in services/logs.py has something real to exercise) and one does
+        not (so the unmatched, category_id-null path does too).
+        """
+        return OrderEstimate(
+            restaurant_name="Student Biryani",
+            items=[
+                OrderLineItem(
+                    name="chicken biryani", qty=1, kcal_min=650, kcal_max=850, confidence="high"
+                ),
+                OrderLineItem(name="coke", qty=2, kcal_min=140, kcal_max=180, confidence="medium"),
+            ],
         )
 
     async def generate_plan(self, req: PlanRequest) -> PlanResult:

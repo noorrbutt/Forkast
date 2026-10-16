@@ -225,11 +225,11 @@ are in `/docs` when `ENVIRONMENT=dev`.
 |---|---|
 | Auth | `POST /auth/register`, `/login`, `/google`, `/refresh`, `/logout`, `/verify-email`, `/resend-verification`, `/forgot-password`, `/reset-password` |
 | Account | `GET/PATCH/DELETE /auth/me`, `PUT /auth/me/password`, `GET /auth/me/export`, `/auth/me/avatar`, `GET /auth/sessions`, `DELETE /auth/sessions/{id}`, `POST /auth/sessions/revoke-others` |
-| Food logs | `POST/GET /logs`, `GET/PATCH/DELETE /logs/{id}`, `POST /logs/estimate-photo`, `PUT/GET/DELETE /logs/{id}/photo` |
+| Food logs | `POST/GET /logs`, `GET/PATCH/DELETE /logs/{id}`, `POST /logs/estimate-photo`, `POST /logs/estimate-order`, `PUT/GET/DELETE /logs/{id}/photo` |
 | Insights | `GET /dashboard`, `/streaks`, `/insights/reminder-signal`, `/insights/weekly-digest` |
 | Plans | `POST/GET /plans`, `GET/DELETE /plans/{id}` |
 | Burn | `PUT/GET /burn`, `GET /burn/today`, `DELETE /burn/{day}` |
-| Catalog | `GET /cuisines`, `/categories`, `/search`, `/restaurants`, `POST /restaurants` |
+| Catalog | `GET /cuisines`, `/categories`, `/search`, `/dishes`, `/restaurants`, `POST /restaurants` |
 | Meta | `GET /health` (liveness), `/ready` (database up, AI status), `/queue` (job backlog, dead letters, breaker state) |
 
 Authenticated routes take `Authorization: Bearer <access token>`. Every query is

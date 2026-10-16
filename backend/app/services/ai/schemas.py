@@ -150,6 +150,37 @@ class PhotoCalorieEstimate(BaseModel):
     reasoning: str | None = None
 
 
+class OrderLineItem(BaseModel):
+    """One food or drink line item read off a delivery-order screenshot.
+
+    `kcal_min`/`kcal_max` are the model's own guess for the WHOLE item at
+    `qty`, not per unit -- the caller (services/logs.py) grounds this against
+    the desi dish table when it recognises the name and clamps into that
+    dish's real category range; an unmatched item keeps the model's own
+    guess, bounded only by a generic sanity floor/ceiling.
+    """
+
+    name: str
+    qty: int = Field(ge=1, le=50)
+    kcal_min: float
+    kcal_max: float
+    confidence: Literal["high", "medium", "low"]
+
+
+class OrderEstimate(BaseModel):
+    """What a delivery-order screenshot alone says, before any grounding.
+
+    Never written to food_logs and never persisted: this is the AI seam's
+    raw read of the image, turned into actual log rows only once the review
+    sheet confirms it (see services/logs.py's estimate_order for the
+    grounding step, and app/api/v1/logs.py for why the image itself is never
+    stored).
+    """
+
+    restaurant_name: str | None = None
+    items: list[OrderLineItem] = Field(default_factory=list)
+
+
 class PlanRequest(BaseModel):
     goal: Goal
     timezone: str

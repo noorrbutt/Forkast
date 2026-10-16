@@ -113,6 +113,16 @@ class Settings(BaseSettings):
     # database write, while estimating from one is a vision model call and the
     # only route besides /plans that costs real money once Groq is behind it.
     photo_estimate_daily_limit: int = Field(default=60, alias="PHOTO_ESTIMATE_DAILY_LIMIT")
+    # A delivery-order screenshot costs the same vision call as a meal photo
+    # but is rarer -- someone orders in a handful of times a day at most, not
+    # every meal -- so its own, tighter caps rather than sharing
+    # photo_estimate_rate_limit/_daily_limit with the far more common single
+    # dish photo.
+    order_estimate_rate_limit: int = Field(default=10, alias="ORDER_ESTIMATE_RATE_LIMIT")
+    order_estimate_rate_window_seconds: int = Field(
+        default=3600, alias="ORDER_ESTIMATE_RATE_WINDOW_SECONDS"
+    )
+    order_estimate_daily_limit: int = Field(default=30, alias="ORDER_ESTIMATE_DAILY_LIMIT")
     restaurant_daily_limit: int = Field(default=20, alias="RESTAURANT_DAILY_LIMIT")
 
     default_timezone: str = Field(default="Asia/Karachi", alias="DEFAULT_TIMEZONE")
