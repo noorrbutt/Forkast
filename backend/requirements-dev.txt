@@ -2,8 +2,8 @@
 # which installs only requirements.txt.
 -r requirements.txt
 
-coverage==7.16.1
-iniconfig==2.3.0
+coverage==7.16.2
+iniconfig==2.3.1
 pluggy==1.6.0
 Pygments==2.21.0
 pytest==9.1.1
