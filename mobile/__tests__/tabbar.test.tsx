@@ -200,6 +200,17 @@ describe('the raised centre button', () => {
   });
 });
 
+describe('legibility against scrolled content', () => {
+  it('blurs strongly enough that text underneath does not read through it', () => {
+    const { screen } = mountBar(0);
+
+    const blur = screen.UNSAFE_getByType(require('expo-blur').BlurView);
+    // Raised from 60: at that strength, scrolled list text underneath the
+    // bar was still legible straight through it on a real device.
+    expect(blur.props.intensity).toBeGreaterThanOrEqual(80);
+  });
+});
+
 describe('what each tab is called', () => {
   /**
    * One name per destination.

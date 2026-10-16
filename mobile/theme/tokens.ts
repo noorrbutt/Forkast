@@ -125,7 +125,12 @@ export const palettes: Record<ThemeName, Palette> = {
     // pair composited to 1.004:1 against the page in BOTH themes, so the
     // frosted header and the floating tab bar, which are on every screen in
     // the app, had no visible edge and read as holes.
-    blurFallback: 'rgba(43, 41, 39, 0.85)',
+    // Raised from 0.85: at that alpha, scrolled list text behind the tab bar
+    // (intensity 60 on Android/Expo Go, where BlurView degrades to a plain
+    // translucent view and this fallback colour is effectively the whole
+    // surface) still read through it on a real device. 0.94 keeps the LAYER
+    // contrast floor comfortably clear while reading as solid.
+    blurFallback: 'rgba(43, 41, 39, 0.94)',
     blurTint: 'dark',
     scrim: 'rgba(0, 0, 0, 0.66)',
   },
@@ -149,7 +154,8 @@ export const palettes: Record<ThemeName, Palette> = {
     dangerSoft: 'rgba(165, 68, 39, 0.12)',
     meterTrack: '#C7BBA8',
     markOnWash: '#BDB3A5',
-    blurFallback: 'rgba(253, 251, 250, 0.85)',
+    // See the dark palette's own note on this same raise, 0.85 -> 0.94.
+    blurFallback: 'rgba(253, 251, 250, 0.94)',
     blurTint: 'light',
     scrim: 'rgba(20, 20, 15, 0.42)',
   },

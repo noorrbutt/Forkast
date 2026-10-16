@@ -135,7 +135,11 @@ export function FloatingTabBar({ state, descriptors, navigation, insets }: Botto
       }}
     >
       <Frosted
-        intensity={60}
+        // Raised from 60: scrolled list text underneath still read straight
+        // through the bar at that strength. Paired with blurFallback's own
+        // raise (tokens.ts), which is what actually carries Android/Expo Go,
+        // where BlurView has no effect at all.
+        intensity={80}
         style={{
           borderRadius: radius.pill,
           borderWidth: 1,
