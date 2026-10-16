@@ -2,22 +2,33 @@
 
     python -m scripts.seed_recent_demo_meals
     DATABASE_URL=<neon url> python -m scripts.seed_recent_demo_meals
+    DEMO_PHOTO_DIR=/path/to/photos python -m scripts.seed_recent_demo_meals --keep-photoless --with-burn
 
 The bulk historical seed (app/seed/run.py) exists to give the dashboard and
 streaks real depth over 90 days, and only photographs ~45% of what it
 creates on purpose -- that is the right mix for testing history.tsx's photo
 card layout against a photoless one, but it is not what belongs on screen in
-front of someone who has never seen the app before. This script does two
-things, against whatever DATABASE_URL points at:
+front of someone who has never seen the app before. This script does, against
+whatever DATABASE_URL points at:
 
 1. Deletes every one of the demo account's existing food logs that has no
    photo (the bulk seed's photoless ~55%, and anything else photoless that
    accumulated). Logs that already have a photo -- including the bulk
-   seed's own synthetic ones -- are left alone.
+   seed's own synthetic ones -- are left alone. Pass --keep-photoless to
+   skip this step, which is what lets this script's own dozen curated meals
+   sit on top of the bulk seed's full 90-day history instead of replacing
+   most of it, for a dense Trends chart.
 2. Adds CURATED_MEALS below: a dozen real, recognisable dishes spread over
    the last ten days, mixing junk and clean, most carrying a real photo
-   (read from PHOTO_DIR, matched by filename below) and a few left
-   deliberately photoless where no picture was provided.
+   (read from DEMO_PHOTO_DIR, matched by filename below) and a few left
+   deliberately photoless where no picture was provided. DEMO_PHOTO_DIR is
+   personal to whoever runs this -- unset, or pointing at a directory that
+   does not exist, every curated meal is still added, just without a photo,
+   and the script says so once rather than failing.
+3. With --with-burn, upserts a burn log for each of the last 14 days
+   (idempotent: a PUT-shaped upsert on the same (user_id, day) a rerun would
+   also write, never a second row), so the dashboard's Burned bars have
+   something to show without anyone touching the burn screen by hand.
 
 Idempotent: re-running it first removes anything a previous run of this
 exact script added (identified by dish name, matched against this file's own
@@ -30,16 +41,19 @@ publicly-known credential, only editing an existing account's history.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import datetime as dt
+import os
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import SessionLocal
-from app.models import FoodCategory, FoodLog, FoodLogPhoto, User
+from app.models import BurnLog, FoodCategory, FoodLog, FoodLogPhoto, User
 from app.models.enums import FriendScale, ServingSize
 from app.seed.run import DEMO_EMAIL
 from app.services.ai.fake import DeterministicAIService
@@ -47,9 +61,28 @@ from app.services.ai.schemas import CalorieAdjustRequest
 from app.services.calories import finalise_estimate
 from app.services.images import sniff
 
-# Where the real photos live. Not checked into git -- see this folder's own
-# README, same convention scripts/fixtures already uses for live_ai_check.py.
-PHOTO_DIR = Path(r"C:\Users\noorr\Downloads\sample food")
+
+def _resolve_photo_dir(env_value: str | None) -> Path | None:
+    """`DEMO_PHOTO_DIR`, as an existing directory, or None for anything
+    else -- unset, blank, or pointing at a path that is not actually there.
+    A function rather than a bare module-level computation so a test can
+    drive it with values of its own instead of mutating the real `os.environ`.
+    """
+    if not env_value:
+        return None
+    path = Path(env_value)
+    return path if path.is_dir() else None
+
+
+# Where the real photos live, personal to whoever runs this -- never a
+# hardcoded path belonging to one machine. Unset (the common case for anyone
+# else running this) or pointing nowhere real, every curated meal below is
+# still added, just without a photo attached.
+PHOTO_DIR = _resolve_photo_dir(os.environ.get("DEMO_PHOTO_DIR"))
+PHOTO_DIR_USABLE = PHOTO_DIR is not None
+
+# How many of the most recent days --with-burn fills a burn log for.
+BURN_HISTORY_DAYS = 14
 
 
 class CuratedMeal:
@@ -304,8 +337,9 @@ async def _add_curated_meals(
         session.add(log)
         added += 1
 
-        if meal.photo_filename is None:
+        if meal.photo_filename is None or not PHOTO_DIR_USABLE:
             continue
+        assert PHOTO_DIR is not None  # PHOTO_DIR_USABLE already confirmed this
 
         photo_path = PHOTO_DIR / meal.photo_filename
         if not photo_path.exists():
@@ -332,7 +366,57 @@ async def _add_curated_meals(
     return added, photographed, missing_photos
 
 
+async def _add_burn_logs(session: AsyncSession, user: User) -> int:
+    """Upsert a burn log for each of the last BURN_HISTORY_DAYS days.
+
+    One statement per day, each an insert-or-update on the (user_id, day)
+    unique index -- the same shape PUT /burn itself upserts with -- so
+    running this script twice in a row never produces two rows for the same
+    day, only the same row written again.
+    """
+    tz = ZoneInfo(user.timezone)
+    today = dt.datetime.now(tz).date()
+
+    for i in range(BURN_HISTORY_DAYS):
+        day = today - dt.timedelta(days=i)
+        # Deterministic rather than random, so a rerun is still idempotent
+        # in the sense that matters here: the same day always gets the same
+        # figure, not a new roll every time. Walks between a quiet day and a
+        # proper workout rather than sitting on one flat number, which is
+        # what actually makes a bar chart worth looking at.
+        calories = 150 + (i * 37) % 250
+        stmt = (
+            insert(BurnLog)
+            .values(user_id=user.id, day=day, calories=calories)
+            .on_conflict_do_update(
+                index_elements=["user_id", "day"],
+                set_={"calories": calories, "updated_at": dt.datetime.now(dt.UTC)},
+            )
+        )
+        await session.execute(stmt)
+
+    return BURN_HISTORY_DAYS
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--keep-photoless",
+        action="store_true",
+        help="Skip deleting the demo account's existing photoless logs, so this script's "
+        "curated meals sit on top of the bulk 90-day seed instead of thinning it out.",
+    )
+    parser.add_argument(
+        "--with-burn",
+        action="store_true",
+        help=f"Also upsert a burn log for each of the last {BURN_HISTORY_DAYS} days.",
+    )
+    return parser.parse_args()
+
+
 async def main() -> None:
+    args = _parse_args()
+
     async with SessionLocal() as session:
         user = await session.scalar(select(User).where(func.lower(User.email) == DEMO_EMAIL))
         if user is None:
@@ -341,20 +425,35 @@ async def main() -> None:
                 "(against a non-production database) to create one first."
             )
 
-        removed = await _remove_photoless_logs(session, user)
+        if args.keep_photoless:
+            removed = 0
+        else:
+            removed = await _remove_photoless_logs(session, user)
         await _remove_previous_curated_meals(session, user)
 
         categories = {c.slug: c for c in await session.scalars(select(FoodCategory))}
         added, photographed, missing_photos = await _add_curated_meals(session, user, categories)
 
+        burn_days_set = await _add_burn_logs(session, user) if args.with_burn else 0
+
         await session.commit()
 
-        print(f"Removed {removed} existing photoless log(s).")
+        if args.keep_photoless:
+            print("Kept existing photoless logs (--keep-photoless).")
+        else:
+            print(f"Removed {removed} existing photoless log(s).")
+        if not PHOTO_DIR_USABLE:
+            print(
+                "DEMO_PHOTO_DIR is not set to a real directory, so curated meals were added "
+                "without photos."
+            )
         print(f"Added {added} curated meal(s), {photographed} with a real photo.")
         if missing_photos:
             print("No photo found for (added without one):")
             for name in missing_photos:
                 print(f"  - {name}")
+        if args.with_burn:
+            print(f"Upserted burn logs for the last {burn_days_set} day(s).")
 
 
 if __name__ == "__main__":
