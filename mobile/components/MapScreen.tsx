@@ -1,7 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
 
-import { MAPS_UNAVAILABLE, MapView, Marker, PROVIDER_DEFAULT } from './MapCanvas';
+import {
+  MAPS_UNAVAILABLE,
+  MapView,
+  Marker,
+  PROVIDER_DEFAULT,
+  type MapViewInstance,
+} from './MapCanvas';
+import { clusterPoints, regionForCluster } from './map/cluster';
 
 import { useLogs } from '../hooks/useLogs';
 import { useVisitedRestaurants } from '../hooks/useRestaurants';
@@ -166,6 +173,33 @@ function regionFor(pins: Pin[]) {
 }
 
 /**
+ * The count a cluster of overlapping pins draws instead of a plain pin.
+ * `Marker`'s children replace its default pin entirely on both platforms
+ * react-native-maps supports, so this is the whole marker, not an overlay
+ * on top of one.
+ */
+function ClusterBadge({ count }: { count: number }) {
+  const { colors, radius, type } = useTheme();
+  return (
+    <View
+      style={{
+        minWidth: 28,
+        height: 28,
+        paddingHorizontal: 6,
+        borderRadius: radius.pill,
+        backgroundColor: colors.accentFill,
+        borderWidth: 2,
+        borderColor: colors.bg,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Text style={[type.caption, { color: colors.accentInk, fontWeight: '700' }]}>{count}</Text>
+    </View>
+  );
+}
+
+/**
  * The single seam for the map. Everything the rest of the app knows about the
  * map lives behind this component.
  */
@@ -174,6 +208,15 @@ export function MapScreen() {
   const [noticeDismissed, setNoticeDismissed] = useState(false);
   const restaurants = useVisitedRestaurants();
   const logs = useLogs(100, 0);
+  const mapRef = useRef<MapViewInstance | null>(null);
+  // The camera's own region, tracked from onRegionChangeComplete so clusters
+  // re-bucket as someone zooms or pans, not just once at initialRegion.
+  const [region, setRegion] = useState(FALLBACK_REGION);
+  // A single pin just tapped: the area list below narrows to it instead of
+  // scrolling, since this screen has no stable ref to the ancestor
+  // ScrollView to scroll within, only the list it renders. Null shows every
+  // area, same as before this existed.
+  const [focusedArea, setFocusedArea] = useState<string | null>(null);
 
   const groups = useMemo(
     () => groupByArea(restaurants.data ?? [], logs.data?.items ?? []),
@@ -183,7 +226,17 @@ export function MapScreen() {
     () => toPins(restaurants.data ?? [], logs.data?.items ?? []),
     [restaurants.data, logs.data],
   );
+  // Before the map's own onRegionChangeComplete has ever fired (freshly
+  // mounted, or the pins just finished loading), `region` is still the
+  // fallback rather than wherever regionFor(pins) actually frames them, so
+  // clustering against it would bucket a city-wide spread as if it were
+  // zoomed into Karachi generally. Reference equality against the same
+  // module constant is what tells "never touched yet" apart from "the
+  // camera is genuinely centred near there right now".
+  const clusterRegion = region === FALLBACK_REGION && pins.length > 0 ? regionFor(pins) : region;
+  const clusters = useMemo(() => clusterPoints(pins, clusterRegion), [pins, clusterRegion]);
   const showMap = !MAPS_UNAVAILABLE && pins.length > 0;
+  const visibleGroups = focusedArea === null ? groups : groups.filter((g) => g.area === focusedArea);
 
   const loading = restaurants.isLoading || logs.isLoading;
   // Either query failing leaves the map wrong, not merely thinner. Requiring
@@ -237,6 +290,7 @@ export function MapScreen() {
           }}
         >
           <MapView
+            ref={mapRef}
             style={{ flex: 1 }}
             // PROVIDER_DEFAULT means Apple Maps on iOS and Google Maps on
             // Android. Forcing Google on iOS would need a key for no benefit.
@@ -250,18 +304,38 @@ export function MapScreen() {
             mapType={Platform.OS === 'ios' ? 'mutedStandard' : 'standard'}
             customMapStyle={QUIET_MAP_STYLE}
             initialRegion={regionFor(pins)}
+            onRegionChangeComplete={setRegion}
           >
-            {pins.map((pin) => (
-              <Marker
-                key={pin.id}
-                coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
-                title={pin.name}
-                description={
-                  pin.count === 1 ? '1 meal logged here' : `${pin.count} meals logged here`
-                }
-                pinColor={colors.accent}
-              />
-            ))}
+            {clusters.map((cluster) => {
+              if (cluster.count > 1) {
+                return (
+                  <Marker
+                    key={cluster.id}
+                    coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
+                    title={`${cluster.count} places here`}
+                    onPress={() => {
+                      mapRef.current?.animateToRegion(regionForCluster(cluster), 300);
+                    }}
+                  >
+                    <ClusterBadge count={cluster.count} />
+                  </Marker>
+                );
+              }
+
+              const pin = cluster.members[0];
+              return (
+                <Marker
+                  key={pin.id}
+                  coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
+                  title={pin.name}
+                  description={
+                    pin.count === 1 ? '1 meal logged here' : `${pin.count} meals logged here`
+                  }
+                  pinColor={colors.accent}
+                  onPress={() => setFocusedArea(pin.area)}
+                />
+              );
+            })}
           </MapView>
         </View>
       ) : null}
@@ -304,12 +378,28 @@ export function MapScreen() {
       {!MAPS_UNAVAILABLE || Platform.OS === 'web' ? (
         <Text style={[type.caption, { color: colors.muted }]}>
           {!MAPS_UNAVAILABLE
-            ? // The counts are in the list below, not on the pins: a pin shows
-              // its count only when tapped, and pins that share a spot are not
-              // merged. This used to read as if the map itself was clustered.
-              'The list below groups your places by area, with visit counts. Places without coordinates do not get a pin yet.'
+            ? 'Overlapping places merge into one badge until you zoom in. Tap a single pin to see it below. Places without coordinates do not get a pin yet.'
             : 'Grouped by area. The map itself is native only, so it does not draw in a browser.'}
         </Text>
+      ) : null}
+
+      {focusedArea !== null ? (
+        <Pressable
+          onPress={() => setFocusedArea(null)}
+          accessibilityRole="button"
+          accessibilityLabel={`Show every area, not only ${focusedArea}`}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.sm,
+            opacity: pressed ? 0.7 : 1,
+          })}
+        >
+          <Icon name="close" size={14} color={colors.accent} />
+          <Text style={[type.caption, { color: colors.accent, fontWeight: '600' }]}>
+            Showing {focusedArea} only -- show all areas
+          </Text>
+        </Pressable>
       ) : null}
 
       {/* One group per area, exactly as the diary does one per day.
@@ -320,7 +410,7 @@ export function MapScreen() {
           already solves, solved a second way, which is the rule against two
           screens answering one problem differently. The area total moves into
           the group's own heading, where the diary puts a day's. */}
-      {groups.map((group) => (
+      {visibleGroups.map((group) => (
         <ListGroup
           key={group.area}
           title={`${group.area} · ${formatNumber(group.total)} ${

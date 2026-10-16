@@ -20,3 +20,10 @@ export const Marker = null;
 export const PROVIDER_DEFAULT = undefined;
 
 export const MAPS_UNAVAILABLE = true;
+
+/** Never a real instance on web: MapView above is never rendered, since
+ * MAPS_UNAVAILABLE short circuits first. A plain object type rather than
+ * `never` keeps `useRef<MapViewInstance | null>(null)` callers type-checking
+ * on this platform the same way they do on native, with no caller-side
+ * branching on which platform they are compiled for. */
+export type MapViewInstance = { animateToRegion: (region: unknown, duration?: number) => void };

@@ -13,6 +13,13 @@ import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
  */
 export { MapView, Marker, PROVIDER_DEFAULT };
 
+// Type only: erased at compile time, so no caller that imports just this
+// type ever actually pulls in react-native-maps' runtime module. A caller
+// that needs a ref to the live MapView (to call animateToRegion, say) gets
+// the instance type from here rather than importing 'react-native-maps'
+// itself, which is what native-safety.test.ts's own guard exists to catch.
+export type { default as MapViewInstance } from 'react-native-maps';
+
 /**
  * True only where react-native-maps cannot actually draw anything.
  *
