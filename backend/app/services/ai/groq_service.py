@@ -88,10 +88,21 @@ CALORIE_MAX_TOKENS = 1024
 # model ever ran, on every single photo estimate, not just under load.
 PHOTO_CALORIE_MAX_TOKENS = 960
 # An order screenshot can carry up to 12 items, each with its own name,
-# quantity and range, so this needs noticeably more room than a single dish's
-# PHOTO_CALORIE_MAX_TOKENS -- sized the same way that one was, with headroom
-# over a dozen short items' worth of JSON rather than measured live yet.
-ORDER_MAX_TOKENS = 2048
+# quantity and range, so in isolation this would want noticeably more room
+# than a single dish's PHOTO_CALORIE_MAX_TOKENS. It cannot actually have it:
+# this runs on the same VISION_MODEL, under the same account-wide on_demand
+# output-tokens-per-minute cap of 1000 PHOTO_CALORIE_MAX_TOKENS's own comment
+# describes, and Groq refuses the request outright, before the model ever
+# runs, the moment the ceiling it is asked for implies more than that. 2048
+# was measured live on 2026-10-19: Groq computed an expected output of 1479
+# tokens from it and rejected the call with 429 "Request too large" on every
+# single order estimate. 960 is PHOTO_CALORIE_MAX_TOKENS's own value, already
+# confirmed to clear the same cap on this same model -- a genuinely dense
+# twelve-item order may still truncate into invalid JSON under it, which
+# surfaces as an ordinary retried-then-502 GroqResponseError rather than a
+# silent wrong answer, but there is no larger budget this account can ask
+# Groq for today.
+ORDER_MAX_TOKENS = 960
 
 # Photo estimation always uses this model regardless of GROQ_MODEL: the text
 # calorie and plan seams are free to run on whichever text model is
