@@ -181,6 +181,13 @@ beforeEach(() => {
     if (url === '/categories') return { data: CATEGORIES };
     if (url === '/restaurants') return { data: [] };
     if (url === '/dishes') return { data: DISH_HINTS };
+    // The real backend never answers with a bare null -- /search always
+    // resolves to this shape, empty or not -- and typing into the merged
+    // dish field (ManualLogForm) drives this query directly now, unlike
+    // before the two fields were merged. A test double that fell through
+    // to `{ data: null }` here used to go unnoticed because nothing read
+    // it; it is read on every render of that field now.
+    if (url === '/search') return { data: { cuisines: [], categories: [], dishes: [] } };
     return { data: null };
   });
   mockedApi.post.mockResolvedValue({ data: SAVED });

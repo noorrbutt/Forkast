@@ -78,15 +78,19 @@ export function ManualLogForm({
   } = form;
 
   // Results only count once the dish name is long enough to have produced
-  // them, so this is undefined rather than empty while someone is still
-  // typing the first letter. Held in one const so the blocks below narrow
-  // off it.
+  // them, so this is undefined (not merely falsy) while someone is still
+  // typing the first letter -- and, defensively, while a query has resolved
+  // with no data of its own to report, which `search.data` can genuinely be
+  // null for. Held in one const so the blocks below narrow off it; every
+  // read below goes through `results?.` or `results &&` rather than
+  // assuming it is either present or exactly undefined, the same guard
+  // ConfirmEstimate's own guessResults already uses for the identical shape.
   const results = dishName.trim().length >= 2 ? search.data : undefined;
   const hasDesiHints = Boolean(dishHints.data && dishHints.data.length > 0);
   const noMatches =
-    results !== undefined &&
-    results.dishes.length === 0 &&
-    results.categories.length === 0 &&
+    Boolean(results) &&
+    results?.dishes.length === 0 &&
+    results?.categories.length === 0 &&
     !hasDesiHints;
 
   return (
