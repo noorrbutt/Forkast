@@ -22,10 +22,26 @@ def test_lookup_finds_an_exact_alias_case_and_punctuation_insensitive() -> None:
 
 def test_lookup_finds_a_roman_urdu_alias() -> None:
     match = desi.lookup("biriyani")
-    # Not an alias of anything here on purpose: "biriyani" is a misspelling,
-    # which pg_trgm handles elsewhere (test_catalog.py), not this exact/token
-    # lookup. This asserts the negative so the two layers are not confused.
-    assert match is None
+    assert match is not None and match.name == "biryani"
+
+
+def test_lookup_finds_other_common_misspellings() -> None:
+    for text, expected in [
+        ("briyani", "biryani"),
+        ("birayani", "biryani"),
+        ("nihaari", "nihari"),
+        ("parantha", "paratha"),
+        ("qorma", "karahi"),
+        ("kheema", "keema"),
+    ]:
+        match = desi.lookup(text)
+        assert match is not None and match.name == expected, text
+
+
+def test_bare_dish_names_match_their_own_generic_entry() -> None:
+    for text in ("biryani", "karahi", "paratha", "nihari"):
+        match = desi.lookup(text)
+        assert match is not None and match.name == text, text
 
 
 def test_lookup_finds_karak_chai() -> None:
@@ -65,6 +81,12 @@ def test_suggest_ranks_starts_with_before_contains() -> None:
 def test_suggest_with_blank_text_returns_the_default_list() -> None:
     results = desi.suggest("", limit=5)
     assert len(results) == 5
+
+
+def test_suggest_finds_common_misspellings() -> None:
+    for text, expected in [("nihaari", "nihari"), ("biriyani", "biryani")]:
+        names = [d.name for d in desi.suggest(text)]
+        assert expected in names, text
 
 
 async def test_dishes_endpoint_returns_matches_with_a_real_category_id(

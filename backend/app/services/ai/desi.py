@@ -40,6 +40,17 @@ class DesiDish:
 # the category floor or ceiling because the dish genuinely runs light or rich
 # within its category (see the summary of this change for the specific rows).
 DESI_DISHES: tuple[DesiDish, ...] = (
+    # Bare generic entries, one per dish family: someone who types just
+    # "biryani" or "nihari" with no qualifier is not wrong, and before these
+    # existed lookup() returned None for exactly that -- the single most
+    # common thing anyone types -- while still matching every qualified
+    # variant below. Each one defaults to the commonest, most unremarkable
+    # version of the dish, with a range wide enough to span its own named
+    # variants' own ranges and still sit inside the category range.
+    DesiDish("biryani", ("biriyani", "briyani", "birayani"), "biryani", 600, 900, "plate", 1),
+    DesiDish("karahi", ("qorma",), "karahi", 550, 900, "serving", 1),
+    DesiDish("paratha", ("parantha",), "paratha", 280, 480, "piece", 1),
+    DesiDish("nihari", ("nihaari",), "nihari", 600, 980, "plate", 1),
     DesiDish("chicken biryani", ("murgh biryani",), "biryani", 650, 850, "plate", 1),
     DesiDish("beef biryani", ("gosht biryani",), "biryani", 700, 900, "plate", 1),
     DesiDish("sindhi biryani", (), "biryani", 700, 900, "plate", 1),
@@ -49,7 +60,7 @@ DESI_DISHES: tuple[DesiDish, ...] = (
     DesiDish("mutton karahi", ("gosht karahi",), "karahi", 650, 900, "serving", 1),
     DesiDish("white karahi", ("malai karahi",), "karahi", 700, 900, "serving", 1),
     DesiDish("qeema karahi", ("kheema karahi",), "karahi", 600, 850, "serving", 1),
-    DesiDish("keema", ("qeema bhuna", "mince keema"), "karahi", 550, 800, "serving", 1),
+    DesiDish("keema", ("qeema bhuna", "mince keema", "kheema"), "karahi", 550, 800, "serving", 1),
     DesiDish("achaari chicken", ("achari gosht",), "karahi", 600, 850, "serving", 1),
     DesiDish("beef nihari", ("gosht nihari",), "nihari", 650, 950, "plate", 1),
     DesiDish("nalli nihari", (), "nihari", 700, 980, "plate", 1),
