@@ -13,7 +13,13 @@
 
 import * as Notifications from 'expo-notifications';
 
-import { cancelAllReminders, requestReminderPermission, syncReminders } from '../lib/notifications';
+import {
+  cancelAllReminders,
+  cancelRamadanReminders,
+  requestReminderPermission,
+  scheduleRamadanReminders,
+  syncReminders,
+} from '../lib/notifications';
 
 const mocked = Notifications as jest.Mocked<typeof Notifications>;
 
@@ -132,6 +138,77 @@ describe('scheduling', () => {
   });
 });
 
+/** A window N days from now, far enough apart that none of its times have passed. */
+function windowOnDay(day: number) {
+  const base = Date.now() + day * 24 * HOUR_MS;
+  return { fajr: new Date(base + 5 * HOUR_MS), maghrib: new Date(base + 18 * HOUR_MS) };
+}
+
+describe('Ramadan reminders', () => {
+  it('schedules a sehri and an iftar reminder for each of 7 days', async () => {
+    const windows = Array.from({ length: 7 }, (_, day) => windowOnDay(day));
+    await scheduleRamadanReminders(windows);
+
+    for (let day = 0; day < 7; day += 1) {
+      expect(scheduledWithId(`forkast.ramadan.sehri.${day}`)).toBeTruthy();
+      expect(scheduledWithId(`forkast.ramadan.iftar.${day}`)).toBeTruthy();
+    }
+  });
+
+  it('sehri fires 60 minutes before fajr, iftar 10 minutes before maghrib', async () => {
+    const window = windowOnDay(0);
+    await scheduleRamadanReminders([window]);
+
+    const sehri = scheduledWithId('forkast.ramadan.sehri.0')?.trigger as { seconds: number } | null;
+    const iftar = scheduledWithId('forkast.ramadan.iftar.0')?.trigger as { seconds: number } | null;
+    expect(sehri?.seconds).toBeCloseTo((window.fajr.getTime() - 60 * 60 * 1000 - Date.now()) / 1000, 0);
+    expect(iftar?.seconds).toBeCloseTo((window.maghrib.getTime() - 10 * 60 * 1000 - Date.now()) / 1000, 0);
+  });
+
+  it('skips a day whose sehri or iftar moment has already passed', async () => {
+    const now = Date.now();
+    const passedSehri = { fajr: new Date(now + 30 * 60 * 1000), maghrib: new Date(now + 12 * HOUR_MS) };
+
+    await scheduleRamadanReminders([passedSehri]);
+
+    expect(scheduledWithId('forkast.ramadan.sehri.0')).toBeUndefined();
+    expect(scheduledWithId('forkast.ramadan.iftar.0')).toBeTruthy();
+  });
+
+  it('only ever keeps 7 days scheduled, even if handed more', async () => {
+    const windows = Array.from({ length: 10 }, (_, day) => windowOnDay(day));
+    await scheduleRamadanReminders(windows);
+
+    expect(scheduledWithId('forkast.ramadan.sehri.6')).toBeTruthy();
+    expect(scheduledWithId('forkast.ramadan.sehri.7')).toBeUndefined();
+  });
+
+  it('cancels every Ramadan reminder it could have scheduled', async () => {
+    const windows = Array.from({ length: 7 }, (_, day) => windowOnDay(day));
+    await scheduleRamadanReminders(windows);
+    jest.clearAllMocks();
+
+    await cancelRamadanReminders();
+
+    const cancelled = mocked.cancelScheduledNotificationAsync.mock.calls.map(([id]) => id);
+    for (let day = 0; day < 7; day += 1) {
+      expect(cancelled).toContain(`forkast.ramadan.sehri.${day}`);
+      expect(cancelled).toContain(`forkast.ramadan.iftar.${day}`);
+    }
+  });
+
+  it('a reschedule cancels the previous set before scheduling the new one', async () => {
+    await scheduleRamadanReminders([windowOnDay(0)]);
+    await scheduleRamadanReminders([windowOnDay(0)]);
+
+    // Two schedule calls for day 0's sehri, not an accumulating stack of them.
+    const sehriCalls = mocked.scheduleNotificationAsync.mock.calls.filter(
+      ([request]) => request.identifier === 'forkast.ramadan.sehri.0',
+    );
+    expect(sehriCalls).toHaveLength(2);
+  });
+});
+
 describe('when the platform misbehaves', () => {
   it('does not throw if scheduling fails', async () => {
     mocked.scheduleNotificationAsync.mockRejectedValueOnce(new Error('no notification support'));
@@ -145,6 +222,13 @@ describe('when the platform misbehaves', () => {
     mocked.cancelScheduledNotificationAsync.mockRejectedValue(new Error('unknown identifier'));
 
     await expect(cancelAllReminders()).resolves.toBeUndefined();
+    await expect(cancelRamadanReminders()).resolves.toBeUndefined();
+  });
+
+  it('a failed Ramadan schedule call never throws out of the screen', async () => {
+    mocked.scheduleNotificationAsync.mockRejectedValueOnce(new Error('no notification support'));
+
+    await expect(scheduleRamadanReminders([windowOnDay(0)])).resolves.toBeUndefined();
   });
 
   it('reports declined rather than throwing when permission is refused', async () => {
