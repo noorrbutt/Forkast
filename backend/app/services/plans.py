@@ -113,7 +113,11 @@ async def create_plan(
     try:
         result = await ai.generate_plan(
             PlanRequest(
-                goal=goal, timezone=user.timezone, recent_logs=summaries, context=context, style=style
+                goal=goal,
+                timezone=user.timezone,
+                recent_logs=summaries,
+                context=context,
+                style=style,
             )
         )
     except GroqResponseError as exc:
