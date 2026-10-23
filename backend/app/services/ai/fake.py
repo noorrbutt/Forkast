@@ -216,30 +216,57 @@ class DeterministicAIService:
             nudges.append(f"{junk_count} of your last {total} logs were junk-flagged. {verdict}")
         nudges.append("Logging right after you eat keeps the estimates honest.")
 
-        days = [
-            PlanDay(
-                day=day,
-                meals=[
-                    PlanMeal(
-                        slot="Breakfast",
-                        dish="Eggs with one paratha swapped for toast",
-                        approx_calories=420,
-                    ),
-                    PlanMeal(
-                        slot="Lunch",
-                        dish="Grilled chicken with rice and salad",
-                        approx_calories=650,
-                    ),
-                    PlanMeal(
-                        slot="Dinner",
-                        dish="Daal chawal with a side of yoghurt",
-                        note="Keep it simple, skip the extra sauce",
-                        approx_calories=550,
-                    ),
-                ],
-            )
-            for day in ("Monday", "Tuesday", "Wednesday")
-        ]
+        if req.style == "ramadan":
+            days = [
+                PlanDay(
+                    day=day,
+                    meals=[
+                        PlanMeal(
+                            slot="Sehri",
+                            dish="Yoghurt with oats and a banana",
+                            note="Light, nothing heavy this early",
+                            approx_calories=380,
+                        ),
+                        PlanMeal(
+                            slot="Iftar",
+                            dish="Dates and water, then daal chawal with a side of yoghurt",
+                            note="Dates and water first, then the rest",
+                            approx_calories=680,
+                        ),
+                        PlanMeal(
+                            slot="Late",
+                            dish="Grilled chicken with a small portion of rice",
+                            approx_calories=420,
+                        ),
+                    ],
+                )
+                for day in ("Monday", "Tuesday", "Wednesday")
+            ]
+        else:
+            days = [
+                PlanDay(
+                    day=day,
+                    meals=[
+                        PlanMeal(
+                            slot="Breakfast",
+                            dish="Eggs with one paratha swapped for toast",
+                            approx_calories=420,
+                        ),
+                        PlanMeal(
+                            slot="Lunch",
+                            dish="Grilled chicken with rice and salad",
+                            approx_calories=650,
+                        ),
+                        PlanMeal(
+                            slot="Dinner",
+                            dish="Daal chawal with a side of yoghurt",
+                            note="Keep it simple, skip the extra sauce",
+                            approx_calories=550,
+                        ),
+                    ],
+                )
+                for day in ("Monday", "Tuesday", "Wednesday")
+            ]
 
         return PlanResult(
             summary=(

@@ -515,12 +515,24 @@ def _plan_prompt(req: PlanRequest) -> str:
                 "restaurant-friendly swaps rather than home cooking.\n\n"
             )
 
+    ramadan = (
+        "\n\nThis plan is for Ramadan. Each day has three meals, named Sehri, "
+        "Iftar and Late instead of breakfast, lunch and dinner: Sehri (before "
+        "dawn) should be light to moderate, nothing heavy this early. Iftar "
+        "should open with dates and water before the rest of the meal. Late "
+        "(after Iftar) should be a small meal. Calories per meal still have to "
+        "add up to something sane for the goal, exactly as for a standard plan."
+        if req.style == "ramadan"
+        else ""
+    )
+
     return (
         f"Goal: {req.goal.value}\n"
         f"Their timezone: {req.timezone}\n\n"
         f"{facts}"
         f"{history}\n\n"
         "Write a three day plan that fits the way they already eat."
+        f"{ramadan}"
     )
 
 

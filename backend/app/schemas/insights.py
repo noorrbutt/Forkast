@@ -199,6 +199,10 @@ class WeeklyDigestOut(BaseModel):
 
 class PlanCreate(BaseModel):
     goal: Goal | None = None
+    # "ramadan" asks for sehri/iftar/late slots instead of breakfast/lunch/
+    # dinner. Defaults to "standard" so an old client that has never sent
+    # this field is unaffected.
+    style: Literal["standard", "ramadan"] = "standard"
 
 
 class PlanOut(BaseModel):
