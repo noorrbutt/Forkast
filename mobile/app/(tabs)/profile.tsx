@@ -770,7 +770,6 @@ function RamadanOffsetRow({
   onChange: (value: number) => void;
   last?: boolean;
 }) {
-  const { spacing } = useTheme();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(String(offsetMin));
 
@@ -872,7 +871,7 @@ function RamadanSection() {
       </ListGroup>
       <Text style={[type.caption, { color: colors.muted, paddingHorizontal: spacing.lg }]}>
         Times are calculated; follow your local timetable. Ramadan mode settings (on/off, city, minute
-        offset) are stored on your device and are not sent to Forkast's servers.
+        offset) are stored on your device and are not sent to Forkast&apos;s servers.
       </Text>
     </View>
   );
