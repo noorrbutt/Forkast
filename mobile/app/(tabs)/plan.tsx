@@ -2,12 +2,24 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Button, Card, Chip, ErrorState, EstimateBadge, Hero, Screen, SkeletonCard } from '../../components/ui';
+import { SLOT_LABELS, type Slot } from '../../components/home/todayMeals';
 import { useMe } from '../../hooks/useAuth';
 import { useGeneratePlan, usePlans } from '../../hooks/usePlans';
 import { describeError } from '../../lib/api';
 import { GOAL_BLURBS, GOAL_LABELS, formatDate, formatNumber, titleCase } from '../../lib/format';
 import { GOALS, type Goal, type Plan } from '../../lib/types';
 import { useTheme } from '../../theme';
+
+/**
+ * A plan meal's slot, as a word. `meal.slot` is free text from the backend
+ * (standard "breakfast"/"lunch"/"dinner" or, for a Ramadan-style plan,
+ * "sehri"/"iftar"/"late"); SLOT_LABELS is used where it recognises the slot
+ * so the wording matches Home exactly, and titleCase covers anything older
+ * or unanticipated rather than rendering it blank.
+ */
+function planSlotLabel(slot: string): string {
+  return SLOT_LABELS[slot as Slot] ?? titleCase(slot);
+}
 
 /**
  * The goal, as a control rather than as a section of its own.
@@ -229,7 +241,7 @@ export default function PlanRoute() {
                         >
                           <View style={{ flex: 1, gap: spacing.xs }}>
                             <Text style={[type.caption, { color: colors.muted }]}>
-                              {titleCase(meal.slot)}
+                              {planSlotLabel(meal.slot)}
                             </Text>
                             <Text style={[type.body, { color: colors.text }]}>{meal.dish}</Text>
                             {meal.note ? (
