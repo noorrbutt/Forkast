@@ -162,6 +162,10 @@ export type OrderEstimate = {
   restaurant_name: string | null;
   items: OrderItem[];
   estimate_source: EstimateSource;
+  /** True when the vision reply was cut off before the model finished and
+   * `items` is a salvaged prefix, not its complete answer -- there may be
+   * more on the order than what is shown. */
+  truncated: boolean;
 };
 
 export type Restaurant = {

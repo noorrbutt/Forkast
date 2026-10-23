@@ -32,6 +32,7 @@ export function OrderReviewForm({ form }: { form: LogForm }) {
     orderRows,
     orderNotice,
     orderLoggedCount,
+    orderTruncated,
     toggleOrderRow,
     setOrderRowName,
     setOrderRowQty,
@@ -86,6 +87,15 @@ export function OrderReviewForm({ form }: { form: LogForm }) {
       </View>
 
       {orderNotice ? <FormError>{orderNotice}</FormError> : null}
+
+      {/* Not an error -- the read itself succeeded, just not all the way
+          to the end of a dense order. Said once, here, rather than on
+          every row, since it is a fact about the read as a whole. */}
+      {orderTruncated ? (
+        <Text style={[type.caption, { color: colors.muted }]}>
+          Read the first {orderRows.length} items. Add the rest by hand.
+        </Text>
+      ) : null}
 
       {orderRows.length === 0 ? (
         <Text style={[type.body, { color: colors.muted }]}>

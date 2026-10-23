@@ -99,6 +99,7 @@ const ORDER_ESTIMATE = {
     { name: 'coke', qty: 2, kcal_min: 140, kcal_max: 180, category_id: null, confidence: 'medium' },
   ],
   estimate_source: 'local',
+  truncated: false,
 };
 
 /** What a library pick hands back; content does not matter, only that it
@@ -187,6 +188,29 @@ describe('reading a delivery-order screenshot', () => {
 
     expect(screen.getByText(/nothing on that screenshot looked like a food order/i)).toBeTruthy();
     expect(screen.getByText('Log 0 items')).toBeTruthy();
+  });
+});
+
+describe('a reply the token budget cut off mid-item', () => {
+  it('says only the first N items were read, not that something went wrong', async () => {
+    mockedApi.post.mockImplementation(async (url: string) => {
+      if (url === '/logs/estimate-order') {
+        return { data: { ...ORDER_ESTIMATE, truncated: true } };
+      }
+      return { data: null };
+    });
+
+    const screen = await importOrder();
+
+    expect(screen.getByText('Read the first 2 items. Add the rest by hand.')).toBeTruthy();
+    // Not an error banner: the read itself succeeded.
+    expect(screen.queryByText(/unavailable/i)).toBeNull();
+  });
+
+  it('says nothing extra when the reply was not truncated', async () => {
+    const screen = await importOrder();
+
+    expect(screen.queryByText(/Add the rest by hand/)).toBeNull();
   });
 });
 

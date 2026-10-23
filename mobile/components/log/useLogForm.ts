@@ -124,6 +124,10 @@ export function useLogForm() {
   const [orderRows, setOrderRows] = useState<OrderRow[]>([]);
   const [orderNotice, setOrderNotice] = useState<string | null>(null);
   const [orderLoggedCount, setOrderLoggedCount] = useState<number | null>(null);
+  // True when the vision reply was cut off before the model finished, so
+  // orderRows is a salvaged prefix rather than the model's complete read of
+  // the order -- there may be more on it than what is shown.
+  const [orderTruncated, setOrderTruncated] = useState(false);
   // Which of estimate.portion_options was tapped, null until one is. Only
   // ever meaningful while estimate.portion_ambiguous is true; the calorie and
   // macro preview falls back to estimate's own single guess otherwise, so
@@ -251,6 +255,7 @@ export function useLogForm() {
     setOrderRows([]);
     setOrderNotice(null);
     setOrderLoggedCount(null);
+    setOrderTruncated(false);
     createLog.reset();
     uploadPhoto.reset();
     estimatePhoto.reset();
@@ -377,6 +382,7 @@ export function useLogForm() {
           })),
         );
         setOrderLoggedCount(null);
+        setOrderTruncated(result.truncated);
         setMode('order');
       },
       onError: (error) => {
@@ -657,6 +663,7 @@ export function useLogForm() {
     orderRows,
     orderNotice,
     orderLoggedCount,
+    orderTruncated,
     importOrder,
     toggleOrderRow,
     setOrderRowName,
