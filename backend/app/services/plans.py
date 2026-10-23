@@ -87,6 +87,7 @@ async def create_plan(
     user: User,
     goal: str | None,
     estimate_source: EstimateSource,
+    style: str = "standard",
 ) -> AIPlan:
     goal = goal or user.goal
     summaries = await _recent_log_summaries(session, user)
@@ -111,7 +112,9 @@ async def create_plan(
 
     try:
         result = await ai.generate_plan(
-            PlanRequest(goal=goal, timezone=user.timezone, recent_logs=summaries, context=context)
+            PlanRequest(
+                goal=goal, timezone=user.timezone, recent_logs=summaries, context=context, style=style
+            )
         )
     except GroqResponseError as exc:
         logger.warning("Plan generation failed", exc_info=True)
@@ -121,6 +124,7 @@ async def create_plan(
         ) from exc
 
     generated_plan = result.model_dump(mode="json", exclude={"model"})
+    generated_plan["style"] = style
     for day in generated_plan["days"]:
         for meal in day["meals"]:
             meal["estimate_source"] = estimate_source

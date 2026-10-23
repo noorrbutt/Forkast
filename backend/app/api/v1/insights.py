@@ -305,7 +305,9 @@ async def create_plan(
         limit=settings.plan_rate_limit,
         window_seconds=settings.plan_rate_window_seconds,
     )
-    plan = await plans_service.create_plan(session, ai, user, payload.goal, estimate_source)
+    plan = await plans_service.create_plan(
+        session, ai, user, payload.goal, estimate_source, payload.style
+    )
     return _plan_out(plan, estimate_source)
 
 
