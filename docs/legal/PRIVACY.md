@@ -100,6 +100,9 @@ Forkast does **not** collect: your device's location, an advertising
 identifier, your contacts, your photo library beyond the single picture you
 choose, your health app data, crash reports, or usage analytics of any kind.
 
+Ramadan mode settings (on/off, city, minute offset) are stored on your device
+and are not sent to Forkast's servers.
+
 ## What Forkast does not do
 
 - **No advertising.** There is no ad network in the app.

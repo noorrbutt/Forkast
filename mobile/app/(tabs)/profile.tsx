@@ -10,6 +10,7 @@ import { Chip, Dialog, ErrorState, Field, FormError, ListGroup, ListRow, Loading
 import { useAuth, useMe } from '../../hooks/useAuth';
 import { hasAvatar } from '../../hooks/useAvatar';
 import { useUpdateProfile } from '../../hooks/useProfile';
+import { useRamadan } from '../../hooks/useRamadan';
 import { useReminders } from '../../hooks/useReminders';
 import { REMINDERS_AVAILABLE } from '../../lib/notifications';
 import { describeError } from '../../lib/api';
@@ -708,6 +709,175 @@ function RemindersSection() {
   );
 }
 
+/**
+ * The city picker, as a chip dialog -- the same control GoalRow uses, for the
+ * same reason: about a dozen named options is a choice among moods, not a
+ * lookup that needs search or scrolling.
+ */
+function RamadanCityRow({
+  cityId,
+  cities,
+  onPick,
+  last,
+}: {
+  cityId: string;
+  cities: readonly { id: string; label: string }[];
+  onPick: (id: string) => void;
+  last?: boolean;
+}) {
+  const { spacing } = useTheme();
+  const [open, setOpen] = useState(false);
+  const label = cities.find((city) => city.id === cityId)?.label ?? 'Karachi';
+
+  return (
+    <>
+      <ListRow label="City" value={label} onPress={() => setOpen(true)} last={last} />
+      <Dialog
+        visible={open}
+        onDismiss={() => setOpen(false)}
+        title="City"
+        message="Sehri and iftar times are calculated for this city."
+        actions={[{ label: 'Done', variant: 'primary', onPress: () => setOpen(false) }]}
+      >
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+          {cities.map((city) => (
+            <Chip
+              key={city.id}
+              label={city.label}
+              selected={city.id === cityId}
+              onPress={() => onPick(city.id)}
+            />
+          ))}
+        </View>
+      </Dialog>
+    </>
+  );
+}
+
+const OFFSET_PATTERN = /^-?\d{0,3}$/;
+
+/**
+ * The minute correction, for whoever's local timetable runs a few minutes
+ * ahead of or behind a pure calculation. Saved as typed, with no server round
+ * trip to wait on -- this is a device setting, not an account one.
+ */
+function RamadanOffsetRow({
+  offsetMin,
+  onChange,
+  last,
+}: {
+  offsetMin: number;
+  onChange: (value: number) => void;
+  last?: boolean;
+}) {
+  const { spacing } = useTheme();
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(String(offsetMin));
+
+  const trimmed = draft.trim();
+  const parsed = Number(trimmed);
+  const valid = trimmed.length > 0 && trimmed !== '-' && Number.isInteger(parsed);
+
+  const onSave = () => {
+    if (!valid) return;
+    onChange(parsed);
+    setOpen(false);
+  };
+
+  return (
+    <>
+      <ListRow
+        label="Minute offset"
+        value={`${offsetMin > 0 ? '+' : ''}${offsetMin} min`}
+        hint="Shifts both sehri and iftar by this many minutes."
+        onPress={() => {
+          setDraft(String(offsetMin));
+          setOpen(true);
+        }}
+        last={last}
+      />
+      <Dialog
+        visible={open}
+        onDismiss={() => setOpen(false)}
+        title="Minute offset"
+        message="Positive runs later than the calculation, negative earlier."
+        actions={[
+          { label: 'Save', variant: 'primary', onPress: onSave, disabled: !valid },
+          { label: 'Cancel', variant: 'secondary', onPress: () => setOpen(false) },
+        ]}
+      >
+        <Field
+          label="Minutes"
+          value={draft}
+          onChangeText={(next) => {
+            if (OFFSET_PATTERN.test(next)) setDraft(next);
+          }}
+          placeholder="0"
+          keyboardType="numbers-and-punctuation"
+          returnKeyType="done"
+          onSubmitEditing={onSave}
+          maxLength={4}
+        />
+      </Dialog>
+    </>
+  );
+}
+
+/**
+ * Ramadan mode: opt-in, device-local, and off by default.
+ *
+ * Nothing here reaches the API. The toggle, city and offset live only on this
+ * device (see hooks/useRamadan.ts) because this is religious observance data,
+ * which the app must not hold in its own database. Copy stays neutral
+ * throughout -- the app has no way to know whether the person reading this
+ * fasts, so it offers rather than assumes.
+ */
+function RamadanSection() {
+  const { colors, spacing, type } = useTheme();
+  const ramadan = useRamadan();
+
+  if (!ramadan.loaded) return null;
+  const on = ramadan.enabled;
+
+  return (
+    <View style={{ gap: spacing.sm }}>
+      <ListGroup title="Ramadan">
+        <ListRow
+          label="Ramadan mode"
+          value={on ? 'On' : 'Off'}
+          hint={
+            on
+              ? "Today's meal slots are sehri and iftar, with a countdown on Home."
+              : 'Swaps Today’s meal slots for sehri and iftar, with a countdown on Home.'
+          }
+          onPress={() => ramadan.setEnabled(!on)}
+          trailing={
+            <View pointerEvents="none">
+              <Switch
+                value={on}
+                trackColor={{ true: colors.accentSoft, false: colors.surfaceAlt }}
+                thumbColor={on ? colors.accent : colors.muted}
+                ios_backgroundColor={colors.surfaceAlt}
+              />
+            </View>
+          }
+          last={!on}
+        />
+        {on ? (
+          <>
+            <RamadanCityRow cityId={ramadan.city.id} cities={ramadan.cities} onPick={ramadan.setCityId} />
+            <RamadanOffsetRow offsetMin={ramadan.offsetMin} onChange={ramadan.setOffsetMin} last />
+          </>
+        ) : null}
+      </ListGroup>
+      <Text style={[type.caption, { color: colors.muted, paddingHorizontal: spacing.lg }]}>
+        Times are calculated; follow your local timetable. Ramadan mode settings (on/off, city, minute
+        offset) are stored on your device and are not sent to Forkast's servers.
+      </Text>
+    </View>
+  );
+}
+
 export default function ProfileScreen() {
   const { colors, layout, spacing, type } = useTheme();
   const { signOut } = useAuth();
@@ -756,6 +926,7 @@ export default function ProfileScreen() {
             </ListGroup>
 
             <RemindersSection />
+            <RamadanSection />
             <SessionManagement />
 
             {/* Signing out sits in a group with everything else rather than
