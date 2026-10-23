@@ -5,6 +5,7 @@ import { Button, Card, Chip, ErrorState, EstimateBadge, Hero, Screen, SkeletonCa
 import { SLOT_LABELS, type Slot } from '../../components/home/todayMeals';
 import { useMe } from '../../hooks/useAuth';
 import { useGeneratePlan, usePlans } from '../../hooks/usePlans';
+import { useRamadan } from '../../hooks/useRamadan';
 import { describeError } from '../../lib/api';
 import { GOAL_BLURBS, GOAL_LABELS, formatDate, formatNumber, titleCase } from '../../lib/format';
 import { GOALS, type Goal, type Plan } from '../../lib/types';
@@ -89,6 +90,7 @@ export default function PlanRoute() {
   const me = useMe();
   const plans = usePlans();
   const generate = useGeneratePlan();
+  const ramadan = useRamadan();
 
   const [picked, setPicked] = useState<Goal | null>(null);
   const goal: Goal = picked ?? me.data?.goal ?? 'maintain';
@@ -176,7 +178,7 @@ export default function PlanRoute() {
               size="lg"
               full
               loading={generate.isPending}
-              onPress={() => generate.mutate(goal)}
+              onPress={() => generate.mutate({ goal, style: ramadan.enabled ? 'ramadan' : 'standard' })}
             />
 
             {generate.isError ? (
@@ -308,7 +310,7 @@ export default function PlanRoute() {
                 variant="secondary"
                 align="start"
                 loading={generate.isPending}
-                onPress={() => generate.mutate(goal)}
+                onPress={() => generate.mutate({ goal, style: ramadan.enabled ? 'ramadan' : 'standard' })}
               />
               {generate.isError ? (
                 <Text style={[type.caption, { color: colors.danger }]}>

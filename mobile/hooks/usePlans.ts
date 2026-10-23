@@ -19,8 +19,12 @@ export function usePlans() {
 export function useGeneratePlan() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (goal: Goal) => {
-      const response = await api.post<Plan>('/plans', { goal }, { timeout: 45000 });
+    mutationFn: async ({ goal, style }: { goal: Goal; style?: 'standard' | 'ramadan' }) => {
+      const response = await api.post<Plan>(
+        '/plans',
+        style ? { goal, style } : { goal },
+        { timeout: 45000 },
+      );
       return response.data;
     },
     onSuccess: () => {
