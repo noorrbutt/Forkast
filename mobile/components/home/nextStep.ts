@@ -1,6 +1,6 @@
 import { formatNumber, titleCase } from '../../lib/format';
 import type { FoodLog, Plan, PlanMeal, Today } from '../../lib/types';
-import { SLOT_LABELS, slotOf, type Slot } from './todayMeals';
+import { SLOT_LABELS, slotOf, type FastingWindow, type Slot } from './todayMeals';
 
 /**
  * Home's third answer, "what should I do next", as exactly one suggestion.
@@ -49,20 +49,28 @@ export function chooseNextStep({
   open,
   plan,
   now,
+  fastingWindow = null,
 }: {
   today: Today | null;
   meals: readonly FoodLog[];
   open: readonly Slot[];
   plan: Plan | null;
   now: Date;
+  /** Ramadan mode's fasting window for today, or null in standard mode. */
+  fastingWindow?: FastingWindow | null;
 }): NextStep {
   if (today && today.remaining !== null && today.target !== null && today.target > 0) {
     const over = today.net - today.target;
     if (over > 0) return { kind: 'over', by: over };
   }
 
-  const current = slotOf(now);
-  if (meals.length === 0 && now.getHours() >= AFTERNOON_HOUR && current !== null) {
+  // While fasting, "nothing logged since lunch" is not a lapse to be nudged
+  // about -- it is the point of the day -- so the nudge is suppressed for the
+  // whole stretch between fajr and maghrib rather than only while a slot is
+  // actually open.
+  const fasting = fastingWindow !== null && now >= fastingWindow.fajr && now < fastingWindow.maghrib;
+  const current = slotOf(now, fastingWindow);
+  if (meals.length === 0 && now.getHours() >= AFTERNOON_HOUR && current !== null && !fasting) {
     return { kind: 'log', slot: current };
   }
 

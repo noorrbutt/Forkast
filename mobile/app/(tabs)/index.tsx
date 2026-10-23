@@ -3,10 +3,12 @@ import { useMemo, useState } from 'react';
 import { RefreshControl, View } from 'react-native';
 
 import { BurnDialog } from '../../components/BurnDialog';
+import { FastingCard } from '../../components/home/FastingCard';
 import { HomeHero } from '../../components/home/HomeHero';
 import { HomeSkeleton } from '../../components/home/HomeSkeleton';
 import { NextCard } from '../../components/home/NextCard';
 import { chooseNextStep } from '../../components/home/nextStep';
+import { RamadanSuggestionBanner } from '../../components/home/RamadanSuggestionBanner';
 import { TodayStrip } from '../../components/home/TodayStrip';
 import { openSlots, todaysMeals, type Slot } from '../../components/home/todayMeals';
 import { VerifyEmailBanner } from '../../components/home/VerifyEmailBanner';
@@ -15,7 +17,9 @@ import { ErrorState, Screen } from '../../components/ui';
 import { useDashboard } from '../../hooks/useInsights';
 import { useLogs } from '../../hooks/useLogs';
 import { usePlans } from '../../hooks/usePlans';
+import { useRamadan } from '../../hooks/useRamadan';
 import { describeError } from '../../lib/api';
+import { fastingWindow } from '../../lib/ramadan';
 import type { Uuid } from '../../lib/types';
 import { useLayout, useTheme } from '../../theme';
 
@@ -39,11 +43,13 @@ export default function DashboardScreen() {
   const logs = useLogs();
   // The newest plan, for the next card. Same query the plan screen reads.
   const plans = usePlans();
+  const ramadan = useRamadan();
 
   const data = dashboard.data;
   const now = new Date();
+  const window = ramadan.enabled ? fastingWindow(now, ramadan.city, ramadan.offsetMin) : null;
   const meals = useMemo(() => todaysMeals(logs.data?.items ?? [], new Date()), [logs.data]);
-  const open = openSlots(meals, now);
+  const open = openSlots(meals, now, window);
 
   const logSlot = (slot: Slot | null) =>
     router.navigate({ pathname: '/log', params: { slot: slot ?? '' } });
@@ -70,6 +76,10 @@ export default function DashboardScreen() {
         }}
       >
         <VerifyEmailBanner />
+
+        {ramadan.suggestVisible ? (
+          <RamadanSuggestionBanner onDismiss={ramadan.dismissSuggestion} onOpenProfile={() => router.navigate('/profile')} />
+        ) : null}
 
         {dashboard.isLoading ? <HomeSkeleton /> : null}
 
@@ -103,6 +113,8 @@ export default function DashboardScreen() {
           ) : null}
 
           <View style={[{ gap: spacing.xxl }, isExpanded ? { flex: 1 } : null]}>
+            {window ? <FastingCard window={window} city={ramadan.city} /> : null}
+
             <TodayStrip
               meals={meals}
               open={open}
@@ -119,6 +131,7 @@ export default function DashboardScreen() {
                 open,
                 plan: plans.data?.[0] ?? null,
                 now,
+                fastingWindow: window,
               })}
               onLogSlot={logSlot}
               onOpenPlan={() => router.push('/plan')}
