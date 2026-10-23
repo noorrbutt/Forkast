@@ -161,6 +161,90 @@ export async function cancelAllReminders(): Promise<void> {
   await cancel(DIGEST_ID);
 }
 
+/** How many days of Ramadan reminders are kept scheduled at once. */
+const RAMADAN_DAYS_AHEAD = 7;
+
+function ramadanId(kind: 'sehri' | 'iftar', dayOffset: number): string {
+  return `forkast.ramadan.${kind}.${dayOffset}`;
+}
+
+/**
+ * Cancels every Ramadan reminder this module could have scheduled.
+ *
+ * Fixed identifiers per day offset, the same reasoning as cancelAllReminders:
+ * there are at most RAMADAN_DAYS_AHEAD of each kind, so cancelling by a known
+ * set of ids is simpler and cheaper than asking the OS what is scheduled.
+ */
+export async function cancelRamadanReminders(): Promise<void> {
+  for (let day = 0; day < RAMADAN_DAYS_AHEAD; day += 1) {
+    await cancel(ramadanId('sehri', day));
+    await cancel(ramadanId('iftar', day));
+  }
+}
+
+/**
+ * Replaces the standard reminders with a sehri and an iftar nudge for each of
+ * the next few days.
+ *
+ * Fajr and maghrib move by a few minutes a day and neither is on a fixed
+ * clock time, so there is no single DAILY trigger that can express them the
+ * way the ordinary streak reminder uses one. Instead this schedules one
+ * TIME_INTERVAL trigger per day, far enough ahead to survive the app not
+ * being opened every single day, and is meant to be called again on every
+ * launch and foreground so the window keeps rolling forward and a stale time
+ * is never left armed past the day it was computed for.
+ *
+ * A reminder whose moment has already passed today is skipped rather than
+ * fired immediately -- unlike the inactivity reminder, which is deliberately
+ * "overdue fires now", a sehri reminder for a sehri that has already ended
+ * is simply wrong, not merely late.
+ */
+export async function scheduleRamadanReminders(
+  windows: readonly { fajr: Date; maghrib: Date }[],
+): Promise<void> {
+  try {
+    const Notifications = load();
+    if (!Notifications) return;
+    installHandler();
+    await cancelRamadanReminders();
+
+    const channelId = Platform.OS === 'android' ? 'reminders' : undefined;
+    const now = Date.now();
+
+    for (let day = 0; day < windows.length && day < RAMADAN_DAYS_AHEAD; day += 1) {
+      const window = windows[day];
+      const sehriAt = window.fajr.getTime() - 60 * 60 * 1000;
+      const iftarAt = window.maghrib.getTime() - 10 * 60 * 1000;
+
+      if (sehriAt > now) {
+        await Notifications.scheduleNotificationAsync({
+          identifier: ramadanId('sehri', day),
+          content: { title: 'Sehri', body: 'An hour left before fajr.' },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: Math.round((sehriAt - now) / 1000),
+            channelId,
+          },
+        });
+      }
+
+      if (iftarAt > now) {
+        await Notifications.scheduleNotificationAsync({
+          identifier: ramadanId('iftar', day),
+          content: { title: 'Iftar soon', body: 'Maghrib is ten minutes away.' },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: Math.round((iftarAt - now) / 1000),
+            channelId,
+          },
+        });
+      }
+    }
+  } catch {
+    // No reminders is an acceptable outcome. A crashed screen is not.
+  }
+}
+
 type ReminderState = {
   /** ISO timestamp of the most recent log, or null if there are none. */
   lastLoggedAt: string | null;
