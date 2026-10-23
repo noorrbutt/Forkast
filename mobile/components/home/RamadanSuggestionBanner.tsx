@@ -37,7 +37,7 @@ export function RamadanSuggestionBanner({
         accessibilityLabel="Turn on Ramadan mode"
       >
         <Text style={[type.caption, { color: colors.text }]}>
-          It's around Ramadan. Turn on Ramadan mode for sehri and iftar times instead of the usual meal slots.
+          It&apos;s around Ramadan. Turn on Ramadan mode for sehri and iftar times instead of the usual meal slots.
         </Text>
       </Pressable>
       <Pressable

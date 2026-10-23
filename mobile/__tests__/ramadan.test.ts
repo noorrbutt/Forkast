@@ -18,7 +18,12 @@ const KARACHI = cityById('karachi');
  * itself computes, kept to catch a regression in the calculation rather than
  * to assert real-world accuracy.
  */
-const FIXTURES: Array<{ date: [number, number, number]; fajr: string; maghrib: string; kind: 'verified' | 'snapshot' }> = [
+const FIXTURES: {
+  date: [number, number, number];
+  fajr: string;
+  maghrib: string;
+  kind: 'verified' | 'snapshot';
+}[] = [
   { date: [2026, 2, 19], fajr: '05:47', maghrib: '18:29', kind: 'verified' },
   { date: [2026, 3, 18], fajr: '05:23', maghrib: '18:42', kind: 'verified' },
   { date: [2027, 2, 8], fajr: '05:53', maghrib: '18:22', kind: 'snapshot' },
