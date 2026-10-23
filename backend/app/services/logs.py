@@ -26,7 +26,12 @@ from app.services import circuit_breaker
 from app.services.ai import desi
 from app.services.ai.base import AIService
 from app.services.ai.groq_service import GroqResponseError
-from app.services.ai.schemas import CalorieAdjustRequest, DesiDishHint, PhotoCalorieEstimate
+from app.services.ai.schemas import (
+    ORDER_ITEM_LIMIT,
+    CalorieAdjustRequest,
+    DesiDishHint,
+    PhotoCalorieEstimate,
+)
 from app.services.calories import clamp_photo_estimate, clamp_to_range, finalise_estimate
 from app.services.images import compress_for_estimation
 from app.services.jobs import REFINE_CALORIE_ESTIMATE, enqueue
@@ -716,10 +721,10 @@ async def estimate_order(
 
     Wrapped in the same circuit breaker refine_estimate uses around Groq,
     unlike the plain photo estimate above: that route accepts the cost of a
-    live call failing on its own, but this one reads up to 12 items off one
-    screenshot, which is a far more expensive single request to let hit a
-    provider that is already down. When the breaker is open, this fails
-    before ever touching the network.
+    live call failing on its own, but this one reads up to ORDER_ITEM_LIMIT
+    items off one screenshot, which is a far more expensive single request
+    to let hit a provider that is already down. When the breaker is open,
+    this fails before ever touching the network.
     """
     if live:
         try:
@@ -752,12 +757,18 @@ async def estimate_order(
         await circuit_breaker.record_success(factory)
 
     category_cache: dict[str, FoodCategory | None] = {}
-    # Capped again here, defensively: GroqAIService already caps at 12 (see
-    # its own docstring), but this is the one place every AIService
-    # implementation's output passes through before reaching the client, so
-    # the limit holds regardless of what a given implementation returns.
-    items = [await _ground_order_item(session, item, category_cache) for item in raw.items[:12]]
-    return OrderEstimateOut(restaurant_name=raw.restaurant_name, items=items)
+    # Capped again here, defensively: GroqAIService already caps at
+    # ORDER_ITEM_LIMIT (see its own docstring), but this is the one place
+    # every AIService implementation's output passes through before
+    # reaching the client, so the limit holds regardless of what a given
+    # implementation returns.
+    items = [
+        await _ground_order_item(session, item, category_cache)
+        for item in raw.items[:ORDER_ITEM_LIMIT]
+    ]
+    return OrderEstimateOut(
+        restaurant_name=raw.restaurant_name, items=items, truncated=raw.truncated
+    )
 
 
 async def set_photo(session: AsyncSession, log: FoodLog, data: bytes, content_type: str) -> None:

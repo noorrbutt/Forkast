@@ -15,6 +15,7 @@ import datetime as dt
 
 import pytest
 from httpx import AsyncClient
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +24,7 @@ from app.main import app
 from app.models import CircuitBreaker
 from app.services import circuit_breaker
 from app.services.ai.deps import get_ai_service, get_estimate_source
-from app.services.ai.schemas import OrderEstimate, OrderLineItem
+from app.services.ai.schemas import ORDER_ITEM_LIMIT, OrderEstimate, OrderLineItem
 
 ESTIMATE = "/api/v1/logs/estimate-order"
 
@@ -125,28 +126,43 @@ async def test_a_screenshot_that_is_not_an_order_returns_empty_items(
         "restaurant_name": None,
         "items": [],
         "estimate_source": "local",
+        "truncated": False,
     }
 
 
 # --- items cap and clamping ---
 
 
-async def test_items_beyond_twelve_are_not_returned(auth_client: AsyncClient) -> None:
-    many = OrderEstimate(
+def test_order_estimate_rejects_more_items_than_the_limit() -> None:
+    """The cap lives on the schema itself now, not only in a loop somewhere
+    downstream -- no AIService implementation, real or a test double, can
+    construct an OrderEstimate that violates it in the first place."""
+    with pytest.raises(ValidationError):
+        OrderEstimate(
+            restaurant_name=None,
+            items=[
+                OrderLineItem(name=f"item {i}", qty=1, kcal_min=100, kcal_max=200, confidence="low")
+                for i in range(ORDER_ITEM_LIMIT + 1)
+            ],
+        )
+
+
+async def test_exactly_the_item_limit_is_returned_in_full(auth_client: AsyncClient) -> None:
+    full = OrderEstimate(
         restaurant_name=None,
         items=[
             OrderLineItem(name=f"item {i}", qty=1, kcal_min=100, kcal_max=200, confidence="low")
-            for i in range(20)
+            for i in range(ORDER_ITEM_LIMIT)
         ],
     )
-    app.dependency_overrides[get_ai_service] = lambda: _StubAI(many)
+    app.dependency_overrides[get_ai_service] = lambda: _StubAI(full)
     try:
         response = await auth_client.post(ESTIMATE, files=_upload(PNG))
     finally:
         app.dependency_overrides.pop(get_ai_service, None)
 
     assert response.status_code == 200, response.text
-    assert len(response.json()["items"]) <= 12
+    assert len(response.json()["items"]) == ORDER_ITEM_LIMIT
 
 
 async def test_an_item_matching_a_tight_category_is_clamped_into_it(

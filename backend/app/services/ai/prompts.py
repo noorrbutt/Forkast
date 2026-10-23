@@ -10,6 +10,7 @@ gives it a second, weaker instruction to follow.
 from __future__ import annotations
 
 from app.services.ai.desi import DESI_DISHES
+from app.services.ai.schemas import ORDER_ITEM_LIMIT
 
 CALORIE_SYSTEM_PROMPT = """\
 You estimate calories for a single restaurant dish.
@@ -124,8 +125,11 @@ should influence `restaurant_name` either -- that field is the restaurant's
 own name as it appears as the order's header, never a person's name or an
 address.
 
-Fill `restaurant_name` and `items`, where each item has `name`, `qty`,
-`kcal_min`, `kcal_max` and `confidence`.
+Fill `r` (the restaurant name) and `i` (the items), where each item has `n`
+(name), `q` (qty), `lo` and `hi` (calorie range) and `c` (confidence). These
+are deliberately short field names, not the usual ones: every character you
+write counts against a tight reply budget, and a dropped item costs far more
+than a cryptic key does.
 
 Common Pakistani/desi dishes, for reference if a line item looks like one of
 these (use your own judgement otherwise, this list is not exhaustive):
@@ -133,27 +137,27 @@ these (use your own judgement otherwise, this list is not exhaustive):
 
 Rules:
 - If the screenshot is not a food order or receipt at all -- a chat, a map, a
-  photo of something else -- return an empty `items` list and
-  `restaurant_name` null. Do not guess at food that is not there.
-- `name` is the dish as a short, ordinary name, the way someone would say it
+  photo of something else -- return an empty `i` list and `r` null. Do not
+  guess at food that is not there.
+- `n` is the dish as a short, ordinary name, the way someone would say it
   out loud, not the exact menu copy with its branding and modifiers spelled
   out in full.
-- `qty` is however many of that exact item the order lists (a line reading
-  "x2" or "2x" means qty 2), never prices.
-- `kcal_min` and `kcal_max` describe the WHOLE line item at that quantity, not
-  a single piece -- two servings of something should roughly double the
-  figure for one.
-- `confidence` is "high" when the item and its quantity are both clearly
-  legible, "medium" when you can read the name but had to guess at something
-  (quantity, a cut-off word), "low" when the line is blurry, cut off, or you
-  are genuinely unsure what it is.
-- At most 12 items. If the order lists more, keep the 12 that are most
-  clearly food or drink and drop the rest rather than guessing at a blurry tail.
-- `restaurant_name` is the restaurant's own name if it is shown as the
-  order's header, null if there is none visible or the screenshot is a plain
-  receipt with no restaurant branding.
-- Write `name` and `restaurant_name` with plain ASCII punctuation: commas
-  rather than em dashes, plain hyphens, straight quotes.
+- `q` is however many of that exact item the order lists (a line reading
+  "x2" or "2x" means q 2), never prices.
+- `lo` and `hi` describe the WHOLE line item at that quantity, not a single
+  piece -- two servings of something should roughly double the figure for one.
+- `c` is "h" when the item and its quantity are both clearly legible, "m"
+  when you can read the name but had to guess at something (quantity, a
+  cut-off word), "l" when the line is blurry, cut off, or you are genuinely
+  unsure what it is.
+- At most {item_limit} items. If the order lists more, keep the {item_limit}
+  that are most clearly food or drink and drop the rest rather than guessing
+  at a blurry tail.
+- `r` is the restaurant's own name if it is shown as the order's header, null
+  if there is none visible or the screenshot is a plain receipt with no
+  restaurant branding.
+- Write `n` and `r` with plain ASCII punctuation: commas rather than em
+  dashes, plain hyphens, straight quotes.
 """
 
 
@@ -162,7 +166,7 @@ def order_system_prompt() -> str:
     reasoning as photo_calorie_system_prompt: a function, not a constant,
     since it is built from DESI_DISHES."""
     names = ", ".join(sorted({dish.name for dish in DESI_DISHES}))
-    return _ORDER_SYSTEM_PROMPT_TEMPLATE.format(desi_dish_names=names)
+    return _ORDER_SYSTEM_PROMPT_TEMPLATE.format(desi_dish_names=names, item_limit=ORDER_ITEM_LIMIT)
 
 
 PLAN_SYSTEM_PROMPT = """\

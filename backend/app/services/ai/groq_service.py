@@ -38,6 +38,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 from typing import Any, NamedTuple
 
 from app.services.ai.prompts import (
@@ -47,6 +48,7 @@ from app.services.ai.prompts import (
     photo_calorie_system_prompt,
 )
 from app.services.ai.schemas import (
+    ORDER_ITEM_LIMIT,
     CalorieAdjustRequest,
     CalorieAdjustResult,
     OrderEstimate,
@@ -87,21 +89,22 @@ CALORIE_MAX_TOKENS = 1024
 # 1000, and 1024 was rejected outright as "Request too large" before the
 # model ever ran, on every single photo estimate, not just under load.
 PHOTO_CALORIE_MAX_TOKENS = 960
-# An order screenshot can carry up to 12 items, each with its own name,
-# quantity and range, so in isolation this would want noticeably more room
-# than a single dish's PHOTO_CALORIE_MAX_TOKENS. It cannot actually have it:
-# this runs on the same VISION_MODEL, under the same account-wide on_demand
-# output-tokens-per-minute cap of 1000 PHOTO_CALORIE_MAX_TOKENS's own comment
-# describes, and Groq refuses the request outright, before the model ever
-# runs, the moment the ceiling it is asked for implies more than that. 2048
-# was measured live on 2026-10-19: Groq computed an expected output of 1479
-# tokens from it and rejected the call with 429 "Request too large" on every
-# single order estimate. 960 is PHOTO_CALORIE_MAX_TOKENS's own value, already
-# confirmed to clear the same cap on this same model -- a genuinely dense
-# twelve-item order may still truncate into invalid JSON under it, which
-# surfaces as an ordinary retried-then-502 GroqResponseError rather than a
-# silent wrong answer, but there is no larger budget this account can ask
-# Groq for today.
+# An order screenshot can carry up to ORDER_ITEM_LIMIT items, each with its
+# own name, quantity and range, so in isolation this would want noticeably
+# more room than a single dish's PHOTO_CALORIE_MAX_TOKENS. It cannot actually
+# have it: this runs on the same VISION_MODEL, under the same account-wide
+# on_demand output-tokens-per-minute cap of 1000 PHOTO_CALORIE_MAX_TOKENS's
+# own comment describes, and Groq refuses the request outright, before the
+# model ever runs, the moment the ceiling it is asked for implies more than
+# that. 2048 was measured live on 2026-10-19: Groq computed an expected
+# output of 1479 tokens from it and rejected the call with 429 "Request too
+# large" on every single order estimate. 960 is PHOTO_CALORIE_MAX_TOKENS's
+# own value, already confirmed to clear the same cap on this same model --
+# ORDER_ITEM_LIMIT was dropped from 12 to 8 and ORDER_SCHEMA's own field
+# names shortened for the same reason, but a genuinely dense order can still
+# exceed even that, cutting the reply off mid-item. See estimate_order's own
+# salvage step for what happens then: the completed items survive, rather
+# than the whole read failing over one that did not finish.
 ORDER_MAX_TOKENS = 960
 
 # Photo estimation always uses this model regardless of GROQ_MODEL: the text
@@ -140,6 +143,58 @@ def _is_retryable(exc: Exception) -> bool:
     if "rate limit" in text.lower() or "429" in text:
         return False
     return any(marker in text for marker in _RETRYABLE_MARKERS)
+
+
+def _salvage_order_json(content: str) -> dict[str, Any] | None:
+    """Recover whatever complete items survive a reply cut off mid-item.
+
+    ORDER_MAX_TOKENS is capped well below what a dense order can need (see
+    its own comment), so a long order's JSON can be truncated by the token
+    budget before the closing brackets ever arrive. Retrying would not help:
+    the same prompt against the same budget truncates at the same point for
+    the same structural reason, not a transient one, which is exactly what
+    `estimate_order` relies on this never being worth a retry for.
+
+    Walks `content`'s "i" array decoding one item object at a time with
+    `json.JSONDecoder.raw_decode`, keeping every one that parses completely
+    and stopping at the first that does not -- the incomplete or missing
+    tail the cut actually landed on. Returns None when nothing survived at
+    all (no "i" array found, or it was empty before the cut), since no
+    caller can do anything useful with zero items; that case is left for the
+    ordinary error path to retry or fail exactly as an unsalvageable reply
+    always has.
+    """
+    items_match = re.search(r'"i"\s*:\s*\[', content)
+    if items_match is None:
+        return None
+
+    decoder = json.JSONDecoder()
+    pos = items_match.end()
+    end = len(content)
+    items: list[Any] = []
+    while True:
+        while pos < end and content[pos] in " \t\r\n,":
+            pos += 1
+        if pos >= end or content[pos] == "]":
+            break
+        try:
+            obj, pos = decoder.raw_decode(content, pos)
+        except json.JSONDecodeError:
+            break
+        items.append(obj)
+
+    if not items:
+        return None
+
+    restaurant_name: str | None = None
+    name_match = re.search(r'"r"\s*:\s*("(?:[^"\\]|\\.)*"|null)', content)
+    if name_match is not None:
+        try:
+            restaurant_name = json.loads(name_match.group(1))
+        except json.JSONDecodeError:
+            restaurant_name = None
+
+    return {"r": restaurant_name, "i": items}
 
 
 CALORIE_SCHEMA: dict[str, Any] = {
@@ -273,42 +328,53 @@ PHOTO_CALORIE_SCHEMA: dict[str, Any] = {
     },
 }
 
+# Field names are single/double letters rather than the usual readable
+# ones (r/i/n/q/lo/hi/c instead of restaurant_name/items/name/qty/kcal_min/
+# kcal_max/confidence), and confidence is single-letter-encoded (h/m/l) --
+# see ORDER_MAX_TOKENS's own comment for why: strict structured output means
+# the model emits these keys character for character in its reply, so a
+# shorter contract is real output-token budget bought back for more items,
+# not a style choice. Nothing past this module ever sees these short names:
+# _build_order_estimate translates back to the ordinary ones immediately.
 ORDER_SCHEMA: dict[str, Any] = {
     "name": "order_estimate",
     "strict": True,
     "schema": {
         "type": "object",
         "properties": {
-            "restaurant_name": {
+            "r": {
                 "type": ["string", "null"],
-                "description": "The restaurant's own name as shown on the order, "
-                "null if none is visible",
+                "description": "Restaurant name as shown on the order, null if none is visible",
             },
-            "items": {
+            "i": {
                 "type": "array",
-                "description": "Up to 12 food/drink line items; empty if this is not "
-                "a food order or receipt at all",
+                "description": f"Up to {ORDER_ITEM_LIMIT} food/drink line items; empty if this "
+                "is not a food order or receipt at all",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "name": {"type": "string"},
-                        "qty": {"type": "integer"},
-                        "kcal_min": {
+                        "n": {"type": "string", "description": "Dish name"},
+                        "q": {"type": "integer", "description": "Quantity"},
+                        "lo": {
                             "type": "integer",
-                            "description": "For the WHOLE item at this quantity",
+                            "description": "Low end of kcal for the WHOLE item at this quantity",
                         },
-                        "kcal_max": {
+                        "hi": {
                             "type": "integer",
-                            "description": "For the WHOLE item at this quantity",
+                            "description": "High end of kcal for the WHOLE item at this quantity",
                         },
-                        "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+                        "c": {
+                            "type": "string",
+                            "enum": ["h", "m", "l"],
+                            "description": "Confidence: high, medium, or low",
+                        },
                     },
-                    "required": ["name", "qty", "kcal_min", "kcal_max", "confidence"],
+                    "required": ["n", "q", "lo", "hi", "c"],
                     "additionalProperties": False,
                 },
             },
         },
-        "required": ["restaurant_name", "items"],
+        "required": ["r", "i"],
         "additionalProperties": False,
     },
 }
@@ -525,7 +591,7 @@ class GroqAIService:
         names = {item.id for item in listed.data}
         return ModelProbeResult(text_ok=self._model in names, vision_ok=VISION_MODEL in names)
 
-    async def _attempt(
+    async def _attempt_raw(
         self,
         system: str,
         user: str | list[dict[str, Any]],
@@ -533,13 +599,17 @@ class GroqAIService:
         max_tokens: int,
         seed: int,
         model: str | None = None,
-    ) -> Any:
-        """One call. Raises GroqResponseError, transient or not, on any failure.
+    ) -> str:
+        """One call, returning the raw content string rather than parsing it.
 
-        `user` is a plain string for the text seams and a content list (text
-        block plus image_url block) for the photo one -- the chat completions
-        API accepts both shapes for a message's content, so this stays one
-        method rather than a near-duplicate for images.
+        `_attempt` below is the ordinary entry point and parses this itself;
+        this exists separately so the order path can get at the unparsed
+        text when parsing fails, to salvage a reply ORDER_MAX_TOKENS cut off
+        mid-item rather than discarding it outright. `user` is a plain
+        string for the text seams and a content list (text block plus
+        image_url block) for the photo and order ones -- the chat
+        completions API accepts both shapes for a message's content, so
+        this stays one method rather than a near-duplicate for images.
         """
         try:
             response = await self._client.chat.completions.create(
@@ -568,7 +638,19 @@ class GroqAIService:
 
         if not content:
             raise GroqResponseError("Groq returned an empty completion")
+        return content
 
+    async def _attempt(
+        self,
+        system: str,
+        user: str | list[dict[str, Any]],
+        schema: dict[str, Any],
+        max_tokens: int,
+        seed: int,
+        model: str | None = None,
+    ) -> Any:
+        """One call. Raises GroqResponseError, transient or not, on any failure."""
+        content = await self._attempt_raw(system, user, schema, max_tokens, seed, model=model)
         try:
             return json.loads(content)
         except json.JSONDecodeError as exc:
@@ -737,46 +819,42 @@ class GroqAIService:
             reasoning=normalise_text(reasoning) if reasoning else None,
         )
 
-    async def estimate_order(self, image: bytes, content_type: str) -> OrderEstimate:
-        data_uri = f"data:{content_type};base64,{base64.b64encode(image).decode('ascii')}"
-
-        payload = await self._complete(
-            order_system_prompt(),
-            _order_user_content(data_uri),
-            ORDER_SCHEMA,
-            max_tokens=ORDER_MAX_TOKENS,
-            model=VISION_MODEL,
-        )
-
+    def _build_order_estimate(self, payload: dict[str, Any], *, truncated: bool) -> OrderEstimate:
+        """`payload` keyed by ORDER_SCHEMA's short field names, whether it
+        arrived by a clean json.loads or by _salvage_order_json -- the two
+        produce the identical shape, so this is the one place that ever
+        translates "i"/"n"/"q"/"lo"/"hi"/"c" back into the ordinary names
+        the rest of the app uses.
+        """
         try:
-            raw_items = payload["items"]
-            restaurant_name = payload.get("restaurant_name")
+            raw_items = payload["i"]
+            restaurant_name = payload.get("r")
         except (KeyError, TypeError) as exc:
             raise GroqResponseError(f"Groq order reply had an unusable shape: {payload!r}") from exc
         if not isinstance(raw_items, list):
             raise GroqResponseError(f"Groq order reply had an unusable shape: {payload!r}")
 
+        confidence_by_code = {"h": "high", "m": "medium", "l": "low"}
         items: list[OrderLineItem] = []
         for raw in raw_items:
-            # At most 12, the same cap the prompt was given; a model that
-            # ignores it should not hand the review sheet more rows than it
-            # was ever designed to show. Malformed rows are dropped rather
-            # than failing the whole order -- one bad line should not cost
-            # someone the eleven good ones next to it.
-            if len(items) >= 12:
+            # Capped again here, defensively: a model that ignores the
+            # prompt's own limit should not hand the review sheet more rows
+            # than it was ever designed to show. Malformed rows are dropped
+            # rather than failing the whole order -- one bad line should not
+            # cost someone the rest of a good read.
+            if len(items) >= ORDER_ITEM_LIMIT:
                 break
             try:
-                name = normalise_text(str(raw["name"]))
-                qty = int(raw["qty"])
-                kcal_min = float(raw["kcal_min"])
-                kcal_max = float(raw["kcal_max"])
-                confidence = raw["confidence"]
+                name = normalise_text(str(raw["n"]))
+                qty = int(raw["q"])
+                kcal_min = float(raw["lo"])
+                kcal_max = float(raw["hi"])
+                confidence_code = raw["c"]
             except (KeyError, TypeError, ValueError):
                 continue
             if not name or qty <= 0:
                 continue
-            if confidence not in ("high", "medium", "low"):
-                confidence = "low"
+            confidence = confidence_by_code.get(confidence_code, "low")
             if kcal_max < kcal_min:
                 kcal_min, kcal_max = kcal_max, kcal_min
             items.append(
@@ -792,7 +870,81 @@ class GroqAIService:
         return OrderEstimate(
             restaurant_name=normalise_text(str(restaurant_name)) if restaurant_name else None,
             items=items,
+            truncated=truncated,
         )
+
+    async def estimate_order(self, image: bytes, content_type: str) -> OrderEstimate:
+        """Unlike every other seam here, this does not simply delegate to
+        `_complete`'s own retry loop: a reply cut off mid-item by
+        ORDER_MAX_TOKENS is salvaged instead of retried (see
+        _salvage_order_json's own docstring for why a retry would not help),
+        and only falls through to the ordinary retry-then-fail path when
+        nothing at all could be salvaged from it.
+        """
+        data_uri = f"data:{content_type};base64,{base64.b64encode(image).decode('ascii')}"
+        system = order_system_prompt()
+        user = _order_user_content(data_uri)
+
+        last: GroqResponseError | None = None
+        for attempt in range(MAX_ATTEMPTS):
+            try:
+                content = await self._attempt_raw(
+                    system,
+                    user,
+                    ORDER_SCHEMA,
+                    ORDER_MAX_TOKENS,
+                    BASE_SEED + attempt,
+                    model=VISION_MODEL,
+                )
+            except GroqResponseError as exc:
+                last = exc
+                if attempt + 1 >= MAX_ATTEMPTS or not _is_retryable(exc):
+                    break
+                logger.info(
+                    "Groq order attempt %d of %d failed, retrying: %s",
+                    attempt + 1,
+                    MAX_ATTEMPTS,
+                    exc,
+                )
+                continue
+
+            try:
+                payload = json.loads(content)
+                truncated = False
+            except json.JSONDecodeError:
+                salvaged = _salvage_order_json(content)
+                if salvaged is None:
+                    last = GroqResponseError("Groq returned content that was not JSON")
+                    logger.warning(
+                        "Groq returned unparseable order JSON with nothing salvageable: %r",
+                        content[:200],
+                    )
+                    if attempt + 1 >= MAX_ATTEMPTS:
+                        break
+                    logger.info(
+                        "Groq order attempt %d of %d failed, retrying: %s",
+                        attempt + 1,
+                        MAX_ATTEMPTS,
+                        last,
+                    )
+                    continue
+                logger.info(
+                    "Salvaged %d item(s) from an order reply cut off mid-item", len(salvaged["i"])
+                )
+                payload, truncated = salvaged, True
+
+            # A clean parse or a successful salvage both answer the call
+            # right away -- see the method's own docstring on why a salvaged
+            # reply is never retried for a second, equally truncated one.
+            return self._build_order_estimate(payload, truncated=truncated)
+
+        if last is None:
+            # The loop cannot exit without setting it, so this is unreachable;
+            # see _complete's identical note for why this raises rather than
+            # asserting.
+            raise GroqResponseError("Groq made no attempt at all")
+        logger.warning("Groq order estimate gave up after %d attempts: %s", MAX_ATTEMPTS, last)
+        raise last
 
     async def generate_plan(self, req: PlanRequest) -> PlanResult:
         payload = await self._complete(

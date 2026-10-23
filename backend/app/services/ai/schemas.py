@@ -150,6 +150,18 @@ class PhotoCalorieEstimate(BaseModel):
     reasoning: str | None = None
 
 
+# The most items a single order estimate ever carries, end to end -- the
+# vision prompt is told this, GroqAIService's own parsing enforces it,
+# OrderEstimateOut's own field repeats it, and services/logs.py slices to it
+# again defensively. One shared constant rather than four copies of the
+# number 8, which is what let three of those drift to 12 while a fourth was
+# edited alone. Lower than you would pick with no other constraint: Groq's
+# on_demand tier caps this seam's own output-tokens-per-minute at 1000 (see
+# groq_service.ORDER_MAX_TOKENS), and 12 items' worth of JSON routinely
+# exceeded the budget that leaves, cutting the reply off mid-item.
+ORDER_ITEM_LIMIT = 8
+
+
 class OrderLineItem(BaseModel):
     """One food or drink line item read off a delivery-order screenshot.
 
@@ -178,7 +190,14 @@ class OrderEstimate(BaseModel):
     """
 
     restaurant_name: str | None = None
-    items: list[OrderLineItem] = Field(default_factory=list)
+    items: list[OrderLineItem] = Field(default_factory=list, max_length=ORDER_ITEM_LIMIT)
+    # True when the reply was cut off by ORDER_MAX_TOKENS before the model
+    # finished, and `items` is a salvaged prefix rather than the model's
+    # complete answer -- see groq_service's own salvage note. Always False
+    # from the fake stub and from a reply that parsed cleanly; a caller that
+    # ignores this field still gets a perfectly usable, just possibly
+    # shorter, list of items.
+    truncated: bool = False
 
 
 class PlanRequest(BaseModel):

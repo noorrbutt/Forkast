@@ -12,7 +12,7 @@ from app.models.enums import FriendScale, ServingSize
 from app.schemas.catalog import SMALLINT_MAX, CategoryOut, RestaurantOut
 from app.schemas.text import optional_text_field, text_field
 from app.services.ai.deps import EstimateSource
-from app.services.ai.schemas import PhotoCalorieEstimate
+from app.services.ai.schemas import ORDER_ITEM_LIMIT, PhotoCalorieEstimate
 
 
 class FoodLogCreate(BaseModel):
@@ -214,5 +214,11 @@ class OrderEstimateOut(BaseModel):
     call from the review sheet, with its own client_id."""
 
     restaurant_name: str | None = None
-    items: list[OrderItemOut] = Field(default_factory=list, max_length=12)
+    items: list[OrderItemOut] = Field(default_factory=list, max_length=ORDER_ITEM_LIMIT)
     estimate_source: EstimateSource = "local"
+    # True when the vision reply was cut off before the model finished and
+    # `items` is a salvaged prefix rather than its complete answer -- see
+    # groq_service's own salvage note. The review sheet uses this to tell
+    # someone there may be more on the order than what is shown, rather than
+    # silently handing back a short list that looks like the whole thing.
+    truncated: bool = False
