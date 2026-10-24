@@ -101,7 +101,10 @@ identifier, your contacts, your photo library beyond the single picture you
 choose, your health app data, crash reports, or usage analytics of any kind.
 
 Ramadan mode settings (on/off, city, minute offset) are stored on your device
-and are not sent to Forkast's servers.
+and are not sent to Forkast's servers. Asking for an iftar/sehri-style meal
+plan is the one exception: that request, and the style you asked for, is
+sent to our servers and saved with the plan, the same as any other meal
+plan you generate.
 
 ## What Forkast does not do
 

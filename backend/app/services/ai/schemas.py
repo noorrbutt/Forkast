@@ -205,10 +205,10 @@ class PlanRequest(BaseModel):
     timezone: str
     recent_logs: list[PlanLogSummary] = Field(default_factory=list)
     context: PlanContext | None = None
-    # "ramadan" asks for sehri/iftar/late slots instead of breakfast/lunch/
-    # dinner. Defaults to "standard" so an old client that has never heard of
-    # this field gets exactly what it got before.
-    style: Literal["standard", "ramadan"] = "standard"
+    # "iftar_sehri" asks for sehri/iftar/late slots instead of breakfast/
+    # lunch/dinner. Defaults to "standard" so an old client that has never
+    # heard of this field gets exactly what it got before.
+    style: Literal["standard", "iftar_sehri"] = "standard"
 
 
 class PlanMeal(BaseModel):

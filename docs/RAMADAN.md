@@ -72,7 +72,7 @@ is to never let it leave the phone.
 
 **What does reach the server, and why it still respects the same line:**
 
-- When Ramadan mode is on, generating a plan sends `style: "ramadan"`
+- When Ramadan mode is on, generating a plan sends `style: "iftar_sehri"`
   instead of `style: "standard"` on `POST /plans` (see
   `mobile/hooks/usePlans.ts`). This asks for a plan shaped around sehri,
   iftar and a late meal instead of breakfast/lunch/dinner. It reveals that
@@ -80,6 +80,12 @@ is to never let it leave the phone.
   "cut" or "bulk" goal already does for weight-loss intent elsewhere in the
   app. It does not reveal the computed times, the city, or the offset, and
   an old client that never sends `style` behaves exactly as it always has.
+  The style is saved with the plan (`generated_plan.style`, defaulting to
+  "standard" for a plan saved before this field existed) rather than kept
+  only in memory, which is what lets the plan's own history render with
+  the right labels later even if Ramadan mode has since been turned off --
+  see PRIVACY.md's own note on this as the one exception to "stays on the
+  device."
 - The `/dishes` request used for the log form's chip suggestions is
   **identical** whether Ramadan mode is on or off -- no new parameter, no
   hint about the current slot. The chips it returns are re-ordered entirely

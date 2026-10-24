@@ -871,7 +871,9 @@ function RamadanSection() {
       </ListGroup>
       <Text style={[type.caption, { color: colors.muted, paddingHorizontal: spacing.lg }]}>
         Times are calculated; follow your local timetable. Ramadan mode settings (on/off, city, minute
-        offset) are stored on your device and are not sent to Forkast&apos;s servers.
+        offset) are stored on your device and are not sent to Forkast&apos;s servers. Asking for an
+        iftar/sehri-style meal plan is the one exception: that request, and the style you asked for, is
+        sent to our servers and saved with the plan, the same as any other meal plan you generate.
       </Text>
     </View>
   );

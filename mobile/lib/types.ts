@@ -427,6 +427,8 @@ export type GeneratedPlan = {
   summary: string;
   days: PlanDay[];
   nudges: string[];
+  /** Absent on a plan saved before this field existed; read as "standard". */
+  style?: 'standard' | 'iftar_sehri';
 };
 
 export type Plan = {

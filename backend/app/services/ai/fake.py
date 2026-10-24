@@ -216,7 +216,7 @@ class DeterministicAIService:
             nudges.append(f"{junk_count} of your last {total} logs were junk-flagged. {verdict}")
         nudges.append("Logging right after you eat keeps the estimates honest.")
 
-        if req.style == "ramadan":
+        if req.style == "iftar_sehri":
             days = [
                 PlanDay(
                     day=day,

@@ -53,17 +53,17 @@ test('sends style when given, standard', async () => {
   );
 });
 
-test('sends style ramadan when Ramadan mode is on', async () => {
+test('sends style iftar_sehri when Ramadan mode is on', async () => {
   const { result } = renderHook(() => useGeneratePlan(), { wrapper });
 
   await act(async () => {
-    await result.current.mutateAsync({ goal: 'bulk', style: 'ramadan' });
+    await result.current.mutateAsync({ goal: 'bulk', style: 'iftar_sehri' });
   });
 
   await waitFor(() =>
     expect(mockedPost).toHaveBeenCalledWith(
       '/plans',
-      { goal: 'bulk', style: 'ramadan' },
+      { goal: 'bulk', style: 'iftar_sehri' },
       { timeout: 45000 },
     ),
   );

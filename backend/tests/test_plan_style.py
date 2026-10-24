@@ -2,7 +2,7 @@
 
 An old client never sends `style` at all, so the default has to be exactly
 what every existing plan already looks like: "standard", breakfast/lunch/
-dinner, the same prompt wording as before. "ramadan" is new ground: sehri,
+dinner, the same prompt wording as before. "iftar_sehri" is new ground: sehri,
 iftar and a late meal, with its own instruction appended to the prompt the
 model sees. Both styles still clamp calories by category the same way, since
 nothing about that logic depends on style.
@@ -50,12 +50,12 @@ async def test_an_old_client_sending_no_style_gets_standard(
     assert capture.seen.style == "standard"
 
 
-async def test_style_ramadan_reaches_the_planner(
+async def test_style_iftar_sehri_reaches_the_planner(
     auth_client: AsyncClient, capture: _CapturingAI
 ) -> None:
-    response = await auth_client.post("/api/v1/plans", json={"goal": "cut", "style": "ramadan"})
+    response = await auth_client.post("/api/v1/plans", json={"goal": "cut", "style": "iftar_sehri"})
     assert response.status_code == 201, response.text
-    assert capture.seen.style == "ramadan"
+    assert capture.seen.style == "iftar_sehri"
 
 
 async def test_an_unknown_style_is_rejected_rather_than_silently_accepted(
@@ -76,14 +76,14 @@ def test_the_standard_prompt_is_unchanged_by_the_new_field() -> None:
     assert "This plan is for Ramadan" not in prompt
 
 
-def test_the_ramadan_prompt_names_sehri_iftar_and_late() -> None:
+def test_the_iftar_sehri_prompt_names_sehri_iftar_and_late() -> None:
     prompt = _plan_prompt(
         PlanRequest(
             goal=Goal.maintain,
             timezone="Asia/Karachi",
             recent_logs=[],
             context=None,
-            style="ramadan",
+            style="iftar_sehri",
         )
     )
     assert "This plan is for Ramadan" in prompt
@@ -101,14 +101,14 @@ async def test_fake_provider_standard_style_uses_the_old_three_slots() -> None:
     assert slots == {"Breakfast", "Lunch", "Dinner"}
 
 
-async def test_fake_provider_ramadan_style_uses_sehri_iftar_late() -> None:
+async def test_fake_provider_iftar_sehri_style_uses_sehri_iftar_late() -> None:
     result = await DeterministicAIService().generate_plan(
         PlanRequest(
             goal=Goal.maintain,
             timezone="Asia/Karachi",
             recent_logs=[],
             context=None,
-            style="ramadan",
+            style="iftar_sehri",
         )
     )
     slots = {meal.slot for day in result.days for meal in day.meals}

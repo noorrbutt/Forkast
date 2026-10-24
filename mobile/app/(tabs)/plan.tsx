@@ -13,13 +13,25 @@ import { useTheme } from '../../theme';
 
 /**
  * A plan meal's slot, as a word. `meal.slot` is free text from the backend
- * (standard "breakfast"/"lunch"/"dinner" or, for a Ramadan-style plan,
- * "sehri"/"iftar"/"late"); SLOT_LABELS is used where it recognises the slot
- * so the wording matches Home exactly, and titleCase covers anything older
- * or unanticipated rather than rendering it blank.
+ * (standard "breakfast"/"lunch"/"dinner" or, for an iftar_sehri-style plan,
+ * "sehri"/"iftar"/"late"), lowercased before the lookup since the model's
+ * own casing ("Breakfast", "Sehri") never matches SLOT_LABELS' lowercase
+ * keys directly. SLOT_LABELS is used where it recognises the result, so the
+ * wording matches Home exactly (in particular "late" reads as "Late night",
+ * not the bare "Late" a plain titleCase would leave it as); titleCase
+ * covers anything genuinely unanticipated rather than rendering it blank.
+ *
+ * `style` is the plan's own `generated_plan.style` (default "standard" for
+ * a plan saved before that field existed), not whatever Ramadan mode
+ * happens to be set to right now -- a plan's labels must not change
+ * retroactively just because the toggle in Profile was flipped since it was
+ * generated. It is read here for that reason alone: an unrecognised slot
+ * falls back to the same plain titleCase regardless of style, since there
+ * is nothing style-specific to do with a word neither table knows.
  */
-function planSlotLabel(slot: string): string {
-  return SLOT_LABELS[slot as Slot] ?? titleCase(slot);
+export function planSlotLabel(slot: string, _style: 'standard' | 'iftar_sehri'): string {
+  const known = SLOT_LABELS[slot.toLowerCase() as Slot];
+  return known ?? titleCase(slot);
 }
 
 /**
@@ -98,6 +110,7 @@ export default function PlanRoute() {
   // The freshly generated plan wins, otherwise fall back to the newest stored one.
   const plan: Plan | null = generate.data ?? plans.data?.[0] ?? null;
   const generated = plan?.generated_plan ?? null;
+  const planStyle = generated?.style ?? 'standard';
   const days = generated?.days ?? [];
   const nudges = generated?.nudges ?? [];
 
@@ -178,7 +191,7 @@ export default function PlanRoute() {
               size="lg"
               full
               loading={generate.isPending}
-              onPress={() => generate.mutate({ goal, style: ramadan.enabled ? 'ramadan' : 'standard' })}
+              onPress={() => generate.mutate({ goal, style: ramadan.enabled ? 'iftar_sehri' : 'standard' })}
             />
 
             {generate.isError ? (
@@ -243,7 +256,7 @@ export default function PlanRoute() {
                         >
                           <View style={{ flex: 1, gap: spacing.xs }}>
                             <Text style={[type.caption, { color: colors.muted }]}>
-                              {planSlotLabel(meal.slot)}
+                              {planSlotLabel(meal.slot, planStyle)}
                             </Text>
                             <Text style={[type.body, { color: colors.text }]}>{meal.dish}</Text>
                             {meal.note ? (
@@ -310,7 +323,7 @@ export default function PlanRoute() {
                 variant="secondary"
                 align="start"
                 loading={generate.isPending}
-                onPress={() => generate.mutate({ goal, style: ramadan.enabled ? 'ramadan' : 'standard' })}
+                onPress={() => generate.mutate({ goal, style: ramadan.enabled ? 'iftar_sehri' : 'standard' })}
               />
               {generate.isError ? (
                 <Text style={[type.caption, { color: colors.danger }]}>

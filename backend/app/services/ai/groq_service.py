@@ -522,7 +522,7 @@ def _plan_prompt(req: PlanRequest) -> str:
         "should open with dates and water before the rest of the meal. Late "
         "(after Iftar) should be a small meal. Calories per meal still have to "
         "add up to something sane for the goal, exactly as for a standard plan."
-        if req.style == "ramadan"
+        if req.style == "iftar_sehri"
         else ""
     )
 

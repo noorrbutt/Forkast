@@ -19,7 +19,7 @@ export function usePlans() {
 export function useGeneratePlan() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ goal, style }: { goal: Goal; style?: 'standard' | 'ramadan' }) => {
+    mutationFn: async ({ goal, style }: { goal: Goal; style?: 'standard' | 'iftar_sehri' }) => {
       const response = await api.post<Plan>(
         '/plans',
         style ? { goal, style } : { goal },

@@ -102,13 +102,13 @@ it('reveals city and offset rows once switched on, defaulting to Karachi', async
   expect(getByText('0 min')).toBeTruthy();
 });
 
-it('names the device-local privacy note', async () => {
+it('names the device-local privacy note, and its one exception', async () => {
   const { getByText } = render(<ProfileScreen />, { wrapper });
 
   await waitFor(() =>
     expect(
       getByText(
-        "Times are calculated; follow your local timetable. Ramadan mode settings (on/off, city, minute offset) are stored on your device and are not sent to Forkast's servers.",
+        "Times are calculated; follow your local timetable. Ramadan mode settings (on/off, city, minute offset) are stored on your device and are not sent to Forkast's servers. Asking for an iftar/sehri-style meal plan is the one exception: that request, and the style you asked for, is sent to our servers and saved with the plan, the same as any other meal plan you generate.",
       ),
     ).toBeTruthy(),
   );
