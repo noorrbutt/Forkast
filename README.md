@@ -55,9 +55,10 @@ figure you will not.
 - **Offline tolerant.** Logs made without a connection are queued and sent when
   the network returns.
 - **Runs on web too.** The same screens ship as a react-native-web demo build.
-- **Ramadan mode.** Opt-in sehri/iftar slots, a live fasting countdown, and a
-  Ramadan-style meal plan, computed entirely on the device. See
-  [docs/RAMADAN.md](docs/RAMADAN.md).
+- **Ramadan mode.** Opt-in sehri/iftar slots and a live fasting countdown,
+  computed on the device and never sent anywhere. Asking for a Ramadan-style
+  meal plan is the one exception: that request reaches the server, same as
+  any other plan. See [docs/RAMADAN.md](docs/RAMADAN.md).
 
 ## Architecture
 

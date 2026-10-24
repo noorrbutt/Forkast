@@ -76,6 +76,13 @@ const PRIVACY: LegalDocument = {
       ],
     },
     {
+      heading: 'Ramadan mode',
+      body: [
+        'On/off, your chosen city and your minute offset stay on your device. They are never sent to Forkast’s servers.',
+        'Asking for an iftar/sehri-style meal plan is the one exception: that request, and the style you asked for, is sent to our servers and saved with the plan, the same as any other meal plan you generate.',
+      ],
+    },
+    {
       heading: 'Who else sees it',
       body: [
         'Google, only if you choose to sign in with Google: your Google identifier, email address and name.',
