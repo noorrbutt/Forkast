@@ -55,6 +55,9 @@ figure you will not.
 - **Offline tolerant.** Logs made without a connection are queued and sent when
   the network returns.
 - **Runs on web too.** The same screens ship as a react-native-web demo build.
+- **Ramadan mode.** Opt-in sehri/iftar slots, a live fasting countdown, and a
+  Ramadan-style meal plan, computed entirely on the device. See
+  [docs/RAMADAN.md](docs/RAMADAN.md).
 
 ## Architecture
 
@@ -237,7 +240,7 @@ scoped to the calling user.
 
 ## Testing
 
-There are roughly 1,000 tests: about 500 on the backend and 480 on the app.
+There are roughly 1,440 tests: about 650 on the backend and 790 on the app.
 
 ```bash
 cd backend
@@ -480,6 +483,7 @@ sign in, a `pip install` wheel failure, and a few more. See
 | [SECURITY.md](SECURITY.md) | What the auth layer does, scope, and how to report a vulnerability |
 | [DESIGN_STYLE_GUIDE.md](docs/DESIGN_STYLE_GUIDE.md) | The rules every screen is composed against |
 | [docs/A11Y.md](docs/A11Y.md) | Accessibility audit and manual device checks |
+| [docs/RAMADAN.md](docs/RAMADAN.md) | Ramadan mode: how times are computed, privacy design, and known limits |
 | [docs/VERCEL_DEPLOY.md](docs/VERCEL_DEPLOY.md) | Serverless deployment with Neon |
 | [docs/WEB_DEPLOY.md](docs/WEB_DEPLOY.md) | Publishing the browser build |
 | [docs/PLAY_STORE.md](docs/PLAY_STORE.md) | Release checklist |

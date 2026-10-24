@@ -145,6 +145,19 @@ have.
       Forkast gives calorie guidance, so be precise that it is not a medical
       device and makes no medical claims.
 
+## What's new (Ramadan release)
+
+Short, plain-language copy for the Play Console's "What's new" field. No
+health claims, no assumption that the reader fasts:
+
+> Added an optional Ramadan mode. Turn it on in Profile to see sehri and
+> iftar times for your city instead of the usual breakfast, lunch and
+> dinner slots, with a simple countdown on the Home screen. Everything
+> about this is on by choice and stays on your device.
+
+See [docs/RAMADAN.md](RAMADAN.md) for how the feature works and what it
+does and does not send anywhere.
+
 ## Releasing
 
 1. Bump `version` in `mobile/app.config.js` by hand. The Android `versionCode` is
