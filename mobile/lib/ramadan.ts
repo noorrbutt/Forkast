@@ -136,6 +136,27 @@ export function withinRamadanWindow(now: Date): boolean {
   return now >= RAMADAN_1448.start && now <= RAMADAN_1448.end;
 }
 
+/** How many days before RAMADAN_1448 ends the share card is offered. */
+const SHARE_CARD_LEAD_DAYS = 3;
+
+/**
+ * When the Ramadan share card starts being offered on Trends.
+ *
+ * Three days before the end, not exactly on it: the whole point is
+ * reflecting on how the month went, and someone closing out the last few
+ * days still wants that, not a card that appears and disappears within one
+ * calendar day. No upper bound -- it stays offered once it starts, since
+ * the summary it is built from keeps describing the same month regardless
+ * of when the card is actually shared.
+ */
+export function shareCardOfferedFrom(): Date {
+  return new Date(RAMADAN_1448.end.getTime() - SHARE_CARD_LEAD_DAYS * 24 * 60 * 60_000);
+}
+
+export function shareCardVisible(now: Date): boolean {
+  return now >= shareCardOfferedFrom();
+}
+
 /**
  * Dish names (matching app/services/ai/desi.py's own dish names exactly)
  * that someone opening the iftar chips is most likely reaching for: the

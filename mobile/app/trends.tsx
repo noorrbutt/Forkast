@@ -2,9 +2,12 @@ import { useRouter } from 'expo-router';
 import { RefreshControl, Text, View } from 'react-native';
 
 import { CalorieBars } from '../components/CalorieBars';
+import { RamadanShareRow } from '../components/trends/RamadanShareRow';
+import { RamadanSummaryCard } from '../components/trends/RamadanSummaryCard';
 import { TrendCard } from '../components/trends/TrendCard';
 import { Card, ErrorState, Screen, SkeletonCard } from '../components/ui';
 import { useDashboard, useTrend } from '../hooks/useInsights';
+import { useRamadan } from '../hooks/useRamadan';
 import { describeError } from '../lib/api';
 import { useTheme } from '../theme';
 
@@ -24,6 +27,7 @@ export default function TrendsRoute() {
   const { colors, layout, spacing, type } = useTheme();
   const dashboard = useDashboard();
   const trend = useTrend();
+  const ramadan = useRamadan();
   const data = dashboard.data;
 
   return (
@@ -68,6 +72,13 @@ export default function TrendsRoute() {
         ) : null}
 
         <TrendCard trend={trend} />
+
+        {ramadan.enabled ? (
+          <>
+            <RamadanSummaryCard />
+            <RamadanShareRow />
+          </>
+        ) : null}
       </View>
     </Screen>
   );

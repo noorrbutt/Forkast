@@ -8,6 +8,8 @@ import {
   fastingWindow,
   phase,
   rankForRamadanSlot,
+  shareCardOfferedFrom,
+  shareCardVisible,
   withinRamadanWindow,
 } from '../lib/ramadan';
 
@@ -181,5 +183,23 @@ describe('rankForRamadanSlot', () => {
     }
     expect(IFTAR_DISHES.has('dates')).toBe(true);
     expect(SEHRI_DISHES.has('daliya')).toBe(true);
+  });
+});
+
+describe('shareCardVisible', () => {
+  test('offered exactly 3 days before the end', () => {
+    const offeredFrom = shareCardOfferedFrom();
+    expect(RAMADAN_1448.end.getTime() - offeredFrom.getTime()).toBe(3 * 24 * 60 * 60_000);
+  });
+
+  test('not visible before the offered date', () => {
+    const justBefore = new Date(shareCardOfferedFrom().getTime() - 60_000);
+    expect(shareCardVisible(justBefore)).toBe(false);
+  });
+
+  test('visible from the offered date onward, including after the end', () => {
+    expect(shareCardVisible(shareCardOfferedFrom())).toBe(true);
+    expect(shareCardVisible(RAMADAN_1448.end)).toBe(true);
+    expect(shareCardVisible(new Date(RAMADAN_1448.end.getTime() + 10 * 24 * 60 * 60_000))).toBe(true);
   });
 });
