@@ -135,3 +135,61 @@ export const RAMADAN_1448 = {
 export function withinRamadanWindow(now: Date): boolean {
   return now >= RAMADAN_1448.start && now <= RAMADAN_1448.end;
 }
+
+/**
+ * Dish names (matching app/services/ai/desi.py's own dish names exactly)
+ * that someone opening the iftar chips is most likely reaching for: the
+ * things that open a fast, plus a few common iftar-table staples.
+ */
+export const IFTAR_DISHES: ReadonlySet<string> = new Set([
+  'dates',
+  'dahi bhalla',
+  'fruit chaat',
+  'chana chaat',
+  'papri chaat',
+  'samosa',
+  'pakora',
+  'rooh afza',
+  'falooda',
+  'nimbu pani',
+  'jalebi',
+]);
+
+/** The same idea for sehri: light, before dawn, nothing heavy. */
+export const SEHRI_DISHES: ReadonlySet<string> = new Set([
+  'anda paratha',
+  'omelette',
+  'daliya',
+  'paratha',
+  'plain paratha',
+  'roti',
+  'sawaiyan',
+  'zarda',
+  'lassi',
+  'chai',
+  'doodh patti chai',
+]);
+
+/**
+ * Reorders dish-hint chips so a Ramadan-slot match comes first, without
+ * touching the server request that produced them.
+ *
+ * Client-side only, on purpose: the `/dishes` call itself must stay
+ * identical whether Ramadan mode is on or off, since the app's eating
+ * pattern during Ramadan is not something to tell the server about. `slot`
+ * is null outside sehri/iftar (standard mode, or deep in the fast with
+ * nothing to suggest), in which case the list comes back unchanged.
+ */
+export function rankForRamadanSlot<T extends { name: string }>(
+  hints: readonly T[],
+  slot: 'sehri' | 'iftar' | null,
+): T[] {
+  if (!slot) return [...hints];
+  const preferred = slot === 'iftar' ? IFTAR_DISHES : SEHRI_DISHES;
+  const matches: T[] = [];
+  const rest: T[] = [];
+  for (const hint of hints) {
+    (preferred.has(hint.name) ? matches : rest).push(hint);
+  }
+  return [...matches, ...rest];
+}
