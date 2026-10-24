@@ -191,7 +191,7 @@ export default function PlanRoute() {
               size="lg"
               full
               loading={generate.isPending}
-              onPress={() => generate.mutate({ goal, style: ramadan.enabled ? 'iftar_sehri' : 'standard' })}
+              onPress={() => generate.mutate({ goal, style: ramadan.enabled ? 'iftar_sehri' : undefined })}
             />
 
             {generate.isError ? (
@@ -323,7 +323,7 @@ export default function PlanRoute() {
                 variant="secondary"
                 align="start"
                 loading={generate.isPending}
-                onPress={() => generate.mutate({ goal, style: ramadan.enabled ? 'iftar_sehri' : 'standard' })}
+                onPress={() => generate.mutate({ goal, style: ramadan.enabled ? 'iftar_sehri' : undefined })}
               />
               {generate.isError ? (
                 <Text style={[type.caption, { color: colors.danger }]}>
