@@ -6,7 +6,7 @@ import { ChangePassword } from '../../components/ChangePassword';
 import { DeleteAccount } from '../../components/DeleteAccount';
 import { ProfileAvatar } from '../../components/ProfileAvatar';
 import { SessionManagement } from '../../components/SessionManagement';
-import { Chip, Dialog, ErrorState, Field, FormError, ListGroup, ListRow, Loading, Screen } from '../../components/ui';
+import { Button, Chip, Dialog, ErrorState, Field, FormError, ListGroup, ListRow, Loading, Screen } from '../../components/ui';
 import { useAuth, useMe } from '../../hooks/useAuth';
 import { hasAvatar } from '../../hooks/useAvatar';
 import { useUpdateProfile } from '../../hooks/useProfile';
@@ -17,6 +17,7 @@ import { describeError } from '../../lib/api';
 import { GOAL_BLURBS, GOAL_LABELS, MAX_TARGET, MIN_TARGET, formatDate, formatNumber, fullName } from '../../lib/format';
 import { deviceTimezone } from '../../lib/deviceTimezone';
 import { haptics } from '../../lib/haptics';
+import { OFFSET_MAX, OFFSET_MIN, clampOffset } from '../../lib/ramadanStore';
 import { GOALS, type Goal } from '../../lib/types';
 import { useTheme } from '../../theme';
 
@@ -754,12 +755,15 @@ function RamadanCityRow({
   );
 }
 
-const OFFSET_PATTERN = /^-?\d{0,3}$/;
-
 /**
  * The minute correction, for whoever's local timetable runs a few minutes
- * ahead of or behind a pure calculation. Saved as typed, with no server round
- * trip to wait on -- this is a device setting, not an account one.
+ * ahead of or behind a pure calculation. A stepper rather than free text:
+ * the range is deliberately narrow (see OFFSET_MIN/OFFSET_MAX) -- this is a
+ * correction against a calculated time, not a second timetable someone
+ * could set hours away from it -- and a stepper cannot be typed outside
+ * that range in the first place. Saved as soon as it changes, with no
+ * server round trip to wait on: this is a device setting, not an account
+ * one.
  */
 function RamadanOffsetRow({
   offsetMin,
@@ -770,18 +774,11 @@ function RamadanOffsetRow({
   onChange: (value: number) => void;
   last?: boolean;
 }) {
+  const { colors, spacing, type } = useTheme();
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState(String(offsetMin));
+  const [draft, setDraft] = useState(offsetMin);
 
-  const trimmed = draft.trim();
-  const parsed = Number(trimmed);
-  const valid = trimmed.length > 0 && trimmed !== '-' && Number.isInteger(parsed);
-
-  const onSave = () => {
-    if (!valid) return;
-    onChange(parsed);
-    setOpen(false);
-  };
+  const step = (delta: number) => setDraft((value) => clampOffset(value + delta));
 
   return (
     <>
@@ -790,7 +787,7 @@ function RamadanOffsetRow({
         value={`${offsetMin > 0 ? '+' : ''}${offsetMin} min`}
         hint="Shifts both sehri and iftar by this many minutes."
         onPress={() => {
-          setDraft(String(offsetMin));
+          setDraft(offsetMin);
           setOpen(true);
         }}
         last={last}
@@ -799,24 +796,26 @@ function RamadanOffsetRow({
         visible={open}
         onDismiss={() => setOpen(false)}
         title="Minute offset"
-        message="Positive runs later than the calculation, negative earlier."
+        message={`Positive runs later than the calculation, negative earlier. From ${OFFSET_MIN} to ${OFFSET_MAX} minutes.`}
         actions={[
-          { label: 'Save', variant: 'primary', onPress: onSave, disabled: !valid },
+          {
+            label: 'Save',
+            variant: 'primary',
+            onPress: () => {
+              onChange(draft);
+              setOpen(false);
+            },
+          },
           { label: 'Cancel', variant: 'secondary', onPress: () => setOpen(false) },
         ]}
       >
-        <Field
-          label="Minutes"
-          value={draft}
-          onChangeText={(next) => {
-            if (OFFSET_PATTERN.test(next)) setDraft(next);
-          }}
-          placeholder="0"
-          keyboardType="numbers-and-punctuation"
-          returnKeyType="done"
-          onSubmitEditing={onSave}
-          maxLength={4}
-        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.lg }}>
+          <Button label="-" variant="secondary" onPress={() => step(-1)} disabled={draft <= OFFSET_MIN} />
+          <Text style={[type.title, { color: colors.text, minWidth: 64, textAlign: 'center' }]}>
+            {`${draft > 0 ? '+' : ''}${draft}`}
+          </Text>
+          <Button label="+" variant="secondary" onPress={() => step(1)} disabled={draft >= OFFSET_MAX} />
+        </View>
       </Dialog>
     </>
   );
