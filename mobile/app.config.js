@@ -208,6 +208,10 @@ const config = {
         "expo-router",
         "expo-status-bar",
         "expo-secure-store",
+        // Shares the Ramadan summary card's captured image via the OS share
+        // sheet. No extra permission on either platform for a plain image
+        // share, so no config object is needed beyond listing the plugin.
+        "expo-sharing",
         // Pulled in by @expo/vector-icons. Listed explicitly so a native build
         // bundles the icon fonts rather than shipping an app full of blanks.
         "expo-font",
