@@ -314,8 +314,12 @@ describe('session management', () => {
   it('shows the current badge and only offers per-session sign out for other sessions', async () => {
     const screen = render(<ProfileScreen />, { wrapper });
 
-    await waitFor(() => expect(screen.getByText('Devices')).toBeTruthy());
-    expect(screen.getByText('Current')).toBeTruthy();
+    // 'Devices' is the group's own title and renders before the sessions
+    // query ever resolves; waiting on it proves nothing about the actual
+    // session rows, which is what the rest of this test is about. 'Current'
+    // only renders once sessions.data has arrived, so that is the real
+    // signal to wait for.
+    await waitFor(() => expect(screen.getByText('Current')).toBeTruthy());
     expect(screen.getAllByRole('button', { name: 'Sign out session' })).toHaveLength(1);
     expect(mockedApi.get).toHaveBeenCalledWith('/auth/sessions');
 
@@ -329,9 +333,14 @@ describe('session management', () => {
   it('confirms and calls revoke-others while the current row stays non-revocable', async () => {
     const screen = render(<ProfileScreen />, { wrapper });
 
-    await waitFor(() => expect(screen.getByText('Devices')).toBeTruthy());
+    // The button is disabled until otherSessions is non-empty, which it is
+    // not until sessions.data has arrived -- pressing it before then (while
+    // only 'Devices', the group's own title, is on screen) is a press on a
+    // disabled button that opens nothing. Waiting on 'Current' is waiting
+    // for the actual data, the same signal the test above uses.
+    await waitFor(() => expect(screen.getByText('Current')).toBeTruthy());
     fireEvent.press(screen.getByRole('button', { name: 'Sign out of all other devices' }));
-    expect(screen.getByText('Sign out other devices?')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Sign out other devices?')).toBeTruthy());
 
     fireEvent.press(screen.getByRole('button', { name: 'Sign out other devices' }));
 
