@@ -14,6 +14,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import ProfileScreen from '../app/(tabs)/profile';
 import { AuthProvider } from '../hooks/useAuth';
+import { RamadanProvider } from '../hooks/useRamadan';
 import { ThemeProvider } from '../theme';
 
 jest.mock('../lib/api', () => {
@@ -55,7 +56,7 @@ function wrapper({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <SafeAreaProvider initialMetrics={METRICS}>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider><RamadanProvider>{children}</RamadanProvider></AuthProvider>
         </SafeAreaProvider>
       </ThemeProvider>
     </QueryClientProvider>

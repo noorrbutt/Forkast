@@ -63,6 +63,7 @@ jest.mock('expo-secure-store', () => {
 
 import LogScreen from '../app/(tabs)/log';
 import { AuthProvider } from '../hooks/useAuth';
+import { RamadanProvider } from '../hooks/useRamadan';
 import { api, hydrateTokens } from '../lib/api';
 import { writeRamadanSettings } from '../lib/ramadanStore';
 import { ThemeProvider } from '../theme';
@@ -83,7 +84,7 @@ function wrapper({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <SafeAreaProvider initialMetrics={METRICS}>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider><RamadanProvider>{children}</RamadanProvider></AuthProvider>
         </SafeAreaProvider>
       </ThemeProvider>
     </QueryClientProvider>
@@ -127,6 +128,7 @@ async function enableRamadan() {
     cityId: 'karachi',
     offsetMin: 0,
     suggestionDismissed: false,
+      dismissedEnded: false,
   });
 }
 
@@ -139,6 +141,7 @@ beforeEach(async () => {
     cityId: 'karachi',
     offsetMin: 0,
     suggestionDismissed: false,
+      dismissedEnded: false,
   });
 });
 

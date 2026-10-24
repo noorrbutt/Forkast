@@ -17,6 +17,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { CrashView } from '../components/CrashView';
 import { AuthProvider, useAuth } from '../hooks/useAuth';
+import { RamadanProvider } from '../hooks/useRamadan';
 import { queryClient } from '../lib/queryClient';
 import { ThemeProvider, useTheme } from '../theme';
 
@@ -164,9 +165,11 @@ export default function RootLayout() {
         <ThemeProvider>
           <SafeAreaProvider>
             <AuthProvider>
-              <View style={{ flex: 1 }} onLayout={onReady}>
-                <RootNavigator />
-              </View>
+              <RamadanProvider>
+                <View style={{ flex: 1 }} onLayout={onReady}>
+                  <RootNavigator />
+                </View>
+              </RamadanProvider>
             </AuthProvider>
           </SafeAreaProvider>
         </ThemeProvider>

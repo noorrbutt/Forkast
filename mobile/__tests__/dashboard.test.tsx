@@ -48,6 +48,7 @@ jest.mock('../lib/api', () => {
 import DashboardScreen from '../app/(tabs)/index';
 import { Card, Icon, ListGroup, Skeleton } from '../components/ui';
 import { AuthProvider } from '../hooks/useAuth';
+import { RamadanProvider } from '../hooks/useRamadan';
 import { api, hydrateTokens } from '../lib/api';
 import { ThemeProvider, palettes, type } from '../theme';
 import { series } from '../theme/tokens';
@@ -75,7 +76,7 @@ function wrapper({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <SafeAreaProvider initialMetrics={METRICS}>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider><RamadanProvider>{children}</RamadanProvider></AuthProvider>
         </SafeAreaProvider>
       </ThemeProvider>
     </QueryClientProvider>

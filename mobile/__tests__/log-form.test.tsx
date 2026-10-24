@@ -49,6 +49,7 @@ jest.mock('../lib/api', () => {
 
 import LogScreen from '../app/(tabs)/log';
 import { AuthProvider } from '../hooks/useAuth';
+import { RamadanProvider } from '../hooks/useRamadan';
 import { api, hydrateTokens } from '../lib/api';
 import { ThemeProvider } from '../theme';
 
@@ -75,7 +76,7 @@ function wrapper({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <SafeAreaProvider initialMetrics={METRICS}>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider><RamadanProvider>{children}</RamadanProvider></AuthProvider>
         </SafeAreaProvider>
       </ThemeProvider>
     </QueryClientProvider>

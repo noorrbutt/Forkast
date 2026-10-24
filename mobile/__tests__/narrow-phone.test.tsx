@@ -47,6 +47,7 @@ import DashboardScreen from '../app/(tabs)/index';
 import HistoryScreen from '../app/(tabs)/history';
 import LoginScreen from '../app/(auth)/login';
 import { AuthProvider } from '../hooks/useAuth';
+import { RamadanProvider } from '../hooks/useRamadan';
 import { api, hydrateTokens } from '../lib/api';
 import { ThemeProvider } from '../theme';
 
@@ -69,7 +70,7 @@ function wrapper({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <SafeAreaProvider initialMetrics={METRICS}>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider><RamadanProvider>{children}</RamadanProvider></AuthProvider>
         </SafeAreaProvider>
       </ThemeProvider>
     </QueryClientProvider>

@@ -38,6 +38,7 @@ jest.mock('../lib/api', () => {
 
 import TrendsRoute from '../app/trends';
 import { AuthProvider } from '../hooks/useAuth';
+import { RamadanProvider } from '../hooks/useRamadan';
 import { api, hydrateTokens } from '../lib/api';
 import { ThemeProvider, palettes, split, type } from '../theme';
 import type { Dashboard, Today } from '../lib/types';
@@ -61,7 +62,7 @@ function wrapper({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <SafeAreaProvider initialMetrics={METRICS}>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider><RamadanProvider>{children}</RamadanProvider></AuthProvider>
         </SafeAreaProvider>
       </ThemeProvider>
     </QueryClientProvider>

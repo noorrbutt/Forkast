@@ -3,11 +3,22 @@ import { Platform } from 'react-native';
 
 const KEY = 'forkast.ramadan_settings';
 
+/** The minute offset's allowed range: a correction, not a second timetable. */
+export const OFFSET_MIN = -10;
+export const OFFSET_MAX = 10;
+
+export function clampOffset(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(OFFSET_MAX, Math.max(OFFSET_MIN, Math.round(value)));
+}
+
 export type RamadanSettings = {
   enabled: boolean;
   cityId: string;
   offsetMin: number;
   suggestionDismissed: boolean;
+  /** Whether the "turn it off now the month has ended?" banner was dismissed. */
+  dismissedEnded: boolean;
 };
 
 /**
@@ -66,8 +77,12 @@ export async function readRamadanSettings(): Promise<RamadanSettings | null> {
     return {
       enabled: Boolean(parsed.enabled),
       cityId: typeof parsed.cityId === 'string' ? parsed.cityId : 'karachi',
-      offsetMin: typeof parsed.offsetMin === 'number' ? parsed.offsetMin : 0,
+      // Clamped on read too, not just on write, so a value written by an
+      // older build (before the range existed) or edited by hand on disk
+      // can never come back out wider than the range actually allows.
+      offsetMin: clampOffset(typeof parsed.offsetMin === 'number' ? parsed.offsetMin : 0),
       suggestionDismissed: Boolean(parsed.suggestionDismissed),
+      dismissedEnded: Boolean(parsed.dismissedEnded),
     };
   } catch {
     // Settings written by a future, incompatible version of this file read
@@ -77,5 +92,5 @@ export async function readRamadanSettings(): Promise<RamadanSettings | null> {
 }
 
 export async function writeRamadanSettings(settings: RamadanSettings): Promise<void> {
-  await writeRaw(JSON.stringify(settings));
+  await writeRaw(JSON.stringify({ ...settings, offsetMin: clampOffset(settings.offsetMin) }));
 }

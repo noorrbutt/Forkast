@@ -11,7 +11,7 @@ import * as Notifications from 'expo-notifications';
 import type { ReactNode } from 'react';
 
 import { useReminders } from '../hooks/useReminders';
-import { useRamadan } from '../hooks/useRamadan';
+import { RamadanProvider, useRamadan } from '../hooks/useRamadan';
 import { writeRamadanSettings } from '../lib/ramadanStore';
 
 /** Both hooks together, the way Profile and Home really use them, so the
@@ -57,7 +57,11 @@ function wrapper({ children }: { children: ReactNode }) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false, gcTime: 0 } },
   });
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <RamadanProvider>{children}</RamadanProvider>
+    </QueryClientProvider>
+  );
 }
 
 function scheduledIds(): string[] {
@@ -67,11 +71,11 @@ function scheduledIds(): string[] {
 beforeEach(async () => {
   jest.clearAllMocks();
   mocked.getPermissionsAsync.mockResolvedValue({ granted: true, canAskAgain: true } as never);
-  await writeRamadanSettings({ enabled: false, cityId: 'karachi', offsetMin: 0, suggestionDismissed: false });
+  await writeRamadanSettings({ enabled: false, cityId: 'karachi', offsetMin: 0, suggestionDismissed: false, dismissedEnded: false });
 });
 
 test('Ramadan mode on: sehri/iftar reminders are scheduled, not the standard three', async () => {
-  await writeRamadanSettings({ enabled: true, cityId: 'karachi', offsetMin: 0, suggestionDismissed: false });
+  await writeRamadanSettings({ enabled: true, cityId: 'karachi', offsetMin: 0, suggestionDismissed: false, dismissedEnded: false });
 
   const { result } = renderHook(() => useCombined(), { wrapper });
   await waitFor(() => expect(result.current.ramadan.enabled).toBe(true));
@@ -84,7 +88,7 @@ test('Ramadan mode on: sehri/iftar reminders are scheduled, not the standard thr
 });
 
 test('turning Ramadan mode off cancels every Ramadan reminder', async () => {
-  await writeRamadanSettings({ enabled: true, cityId: 'karachi', offsetMin: 0, suggestionDismissed: false });
+  await writeRamadanSettings({ enabled: true, cityId: 'karachi', offsetMin: 0, suggestionDismissed: false, dismissedEnded: false });
 
   const { result } = renderHook(() => useCombined(), { wrapper });
   await waitFor(() => expect(result.current.ramadan.enabled).toBe(true));

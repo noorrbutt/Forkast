@@ -45,6 +45,7 @@ jest.mock('../lib/api', () => {
 
 import DashboardScreen from '../app/(tabs)/index';
 import { AuthProvider } from '../hooks/useAuth';
+import { RamadanProvider } from '../hooks/useRamadan';
 import { api, hydrateTokens } from '../lib/api';
 import { ThemeProvider } from '../theme';
 import type { Dashboard, Today } from '../lib/types';
@@ -65,7 +66,7 @@ function wrapper({ children }: { children: ReactNode }) {
         <SafeAreaProvider
           initialMetrics={{ frame: { x: 0, y: 0, width: mockWidth, height: mockHeight }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}
         >
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider><RamadanProvider>{children}</RamadanProvider></AuthProvider>
         </SafeAreaProvider>
       </ThemeProvider>
     </QueryClientProvider>
