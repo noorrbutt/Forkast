@@ -16,10 +16,23 @@ import type { FoodLog } from '../../lib/types';
  */
 
 export type StandardSlot = 'breakfast' | 'lunch' | 'dinner';
-export type RamadanSlot = 'sehri' | 'iftar' | 'late';
+/**
+ * 'daytime' is a real slot -- a log made while fasting is valid, and gets
+ * this label rather than a blank one -- but it is deliberately left out of
+ * `RAMADAN_SLOTS` below, which is what `activeSlots`/`openSlots` build the
+ * suggestion list from. GhostSlotTile and NextCard only ever offer or show
+ * what `openSlots` returns, so neither can surface 'daytime' even though
+ * `slotOf` can return it.
+ */
+export type RamadanSlot = 'sehri' | 'iftar' | 'late' | 'daytime';
 export type Slot = StandardSlot | RamadanSlot;
 
 export const SLOTS: readonly StandardSlot[] = ['breakfast', 'lunch', 'dinner'];
+/**
+ * The three slots offered as something to log or plan around. 'daytime' is
+ * not one of them (see `RamadanSlot`'s own note): it is a real answer from
+ * `slotOf`, just never a suggested one.
+ */
 const RAMADAN_SLOTS: readonly RamadanSlot[] = ['sehri', 'iftar', 'late'];
 
 export const SLOT_LABELS: Record<Slot, string> = {
@@ -29,6 +42,7 @@ export const SLOT_LABELS: Record<Slot, string> = {
   sehri: 'Sehri',
   iftar: 'Iftar',
   late: 'Late night',
+  daytime: 'During the day',
 };
 
 /** A day's fasting window, as lib/ramadan.ts's `fastingWindow` returns it. */
@@ -49,10 +63,19 @@ export function activeSlots(window: FastingWindow | null): readonly Slot[] {
  * The slot a local time falls in, or null when nothing is open yet.
  *
  * With no fasting window this is standard mode's fixed hour bands, null for
- * the small hours before 5am. With one, sehri is the stretch right before
- * fajr, iftar spans maghrib, and late covers the rest of the night; the
- * fasting hours in between have no open slot, same as the small hours do in
- * standard mode.
+ * the small hours before 5am. With one:
+ *
+ *   sehri   fajr-90min .. fajr
+ *   daytime fajr .. maghrib-30min   (fasting; a valid slot to log, never offered)
+ *   iftar   maghrib-30min .. maghrib+90min
+ *   late    maghrib+90min .. (next day's) fajr-90min
+ *
+ * `late` deliberately spans midnight: it is the same slot from the moment
+ * one day's iftar window closes until the next day's sehri window opens,
+ * not two separate slots either side of the date boundary. It still appears
+ * only once per calendar day in `activeSlots`/`openSlots`, the same as every
+ * other slot -- what crosses midnight is the real-world span of time it
+ * covers, not how many times a day it can be logged or offered.
  */
 export function slotOf(date: Date, window: FastingWindow | null = null): Slot | null {
   if (!window) {
@@ -70,8 +93,10 @@ export function slotOf(date: Date, window: FastingWindow | null = null): Slot | 
   if (date >= sehriStart && date < window.fajr) return 'sehri';
   if (date >= iftarStart && date < iftarEnd) return 'iftar';
   if (date >= iftarEnd || date < sehriStart) return 'late';
-  // Between fajr and the iftar window: fasting, nothing to log.
-  return null;
+  // Between fajr and the iftar window: fasting. A real, loggable slot --
+  // someone can and does eat or drink by mistake, forget, or simply log
+  // water -- just never one GhostSlotTile or NextCard offers.
+  return 'daytime';
 }
 
 /** The words a tile is announced with: the slot, or a plain name for 1am toast. */
@@ -133,8 +158,16 @@ export function openSlots(
   window: FastingWindow | null = null,
 ): Slot[] {
   const slots = activeSlots(window);
+  // A meal logged during 'daytime' (Ramadan mode only) never fills a real
+  // slot: 'daytime' is not in `slots`, so it simply has nothing to match
+  // against below, the same as it has nothing to be suggested as.
   const filled = new Set(meals.map((log) => slotOf(new Date(log.created_at), window)));
   const current = slotOf(now, window);
-  const from = current === null ? fromIndex(now, window) : slots.indexOf(current);
+  // slots.indexOf(current) is -1 both for null (nothing open yet) and for
+  // 'daytime' (a real slot, just not one of `slots`), and -1 would be read
+  // below as "every slot is still ahead", which is wrong for 'daytime':
+  // sehri has already passed by the time anyone is in it. `fromIndex`
+  // covers both cases correctly on its own.
+  const from = current !== null && slots.includes(current) ? slots.indexOf(current) : fromIndex(now, window);
   return slots.filter((slot, index) => index >= from && !filled.has(slot));
 }
