@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
 import {
@@ -82,26 +82,50 @@ export function useReminders() {
    * leaving next Tuesday's sehri reminder armed for a mode nobody is in
    * anymore.
    */
-  useEffect(() => {
-    if (!ramadan.loaded) return;
+  // Dedupes against the previous render's own state, not against anything
+  // persisted: an app relaunch always runs this at least once, which is the
+  // point, since a prior session's reminders can still be sitting at the OS
+  // level with nothing in this session's memory to say so. What this guards
+  // against is firing the same cancel-or-reschedule call again on every
+  // unrelated re-render (a log arriving, a streak changing) once nothing
+  // about Ramadan's own settings has actually moved.
+  const ramadanAppliedRef = useRef<string | null>(null);
 
-    if (enabled !== true || !ramadan.enabled) {
+  useEffect(() => {
+    if (!ramadan.loaded || enabled !== true) return;
+
+    const key = ramadan.enabled ? `on:${ramadan.city.id}:${ramadan.offsetMin}` : 'off';
+    if (ramadanAppliedRef.current === key) return;
+    ramadanAppliedRef.current = key;
+
+    if (!ramadan.enabled) {
       void cancelRamadanReminders();
       return;
     }
 
-    const reschedule = () => {
+    const windows = Array.from({ length: RAMADAN_DAYS_AHEAD }, (_, day) => {
+      const date = new Date();
+      date.setDate(date.getDate() + day);
+      return fastingWindow(date, ramadan.city, ramadan.offsetMin);
+    });
+    void scheduleRamadanReminders(windows);
+  }, [ramadan.loaded, ramadan.enabled, ramadan.city, ramadan.offsetMin, enabled]);
+
+  // The rolling 7-day window goes stale the longer the app sits in the
+  // background, so coming back to the foreground is what re-triggers it --
+  // independent of the dedupe above, which only cares whether the Ramadan
+  // *settings* changed, not how much time has passed.
+  useEffect(() => {
+    if (!ramadan.loaded || enabled !== true || !ramadan.enabled) return;
+
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
       const windows = Array.from({ length: RAMADAN_DAYS_AHEAD }, (_, day) => {
         const date = new Date();
         date.setDate(date.getDate() + day);
         return fastingWindow(date, ramadan.city, ramadan.offsetMin);
       });
       void scheduleRamadanReminders(windows);
-    };
-
-    reschedule();
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') reschedule();
     });
     return () => subscription.remove();
   }, [ramadan.loaded, ramadan.enabled, ramadan.city, ramadan.offsetMin, enabled]);
