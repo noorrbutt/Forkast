@@ -101,8 +101,9 @@ describe('phase', () => {
     expect(phase(new Date(2026, 1, 19, 18, 30), window)).toBe('iftar');
   });
 
-  test('90 minutes after maghrib is still iftar, 91 is night', () => {
-    expect(phase(new Date(window.maghrib.getTime() + 90 * 60_000), window)).toBe('iftar');
+  test('89 minutes after maghrib is still iftar; exactly 90 is night, matching slotOf’s own boundary', () => {
+    expect(phase(new Date(window.maghrib.getTime() + 89 * 60_000), window)).toBe('iftar');
+    expect(phase(new Date(window.maghrib.getTime() + 90 * 60_000), window)).toBe('night');
     expect(phase(new Date(window.maghrib.getTime() + 91 * 60_000), window)).toBe('night');
   });
 });
@@ -124,10 +125,19 @@ describe('countdownText', () => {
     expect(countdownText(new Date(window.maghrib.getTime() + 10 * 60_000), window)).toBe('Iftar time');
   });
 
-  test('says fasting resumes tomorrow at night', () => {
+  test('falls back to the plain "resumes tomorrow" line with no nextFajr given', () => {
     expect(countdownText(new Date(window.maghrib.getTime() + 200 * 60_000), window)).toBe(
       'Fasting resumes tomorrow',
     );
+  });
+
+  test('counts down to tomorrow’s fajr at night, when nextFajr is given', () => {
+    // Tomorrow's sehri window closes a little earlier/later than today's,
+    // same as any two consecutive days -- a round number here would make
+    // the test pass even if the function quietly used today's fajr again.
+    const nextFajr = new Date(2026, 1, 20, 5, 44);
+    const now = new Date(nextFajr.getTime() - (6 * 60 + 2) * 60_000);
+    expect(countdownText(now, window, nextFajr)).toBe('Sehri ends in 6h 02m');
   });
 });
 

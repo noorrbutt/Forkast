@@ -86,7 +86,13 @@ const IFTAR_WINDOW_MIN = 90;
 export function phase(now: Date, window: { fajr: Date; maghrib: Date }): RamadanPhase {
   if (now < window.fajr) return 'before_sehri';
   if (now < window.maghrib) return 'fasting';
-  if (now.getTime() <= window.maghrib.getTime() + IFTAR_WINDOW_MIN * 60_000) return 'iftar';
+  // Strictly less than, matching todayMeals.ts's slotOf exactly: that
+  // function's 'late' slot begins AT maghrib + IFTAR_WINDOW_MIN (its own
+  // iftarEnd), not a minute after it. The two used to disagree by one
+  // minute at this exact instant -- phase() read it as 'iftar' while
+  // slotOf() already called it 'late' -- which is the kind of one-minute
+  // seam that is easy to never notice and awkward to explain once found.
+  if (now.getTime() < window.maghrib.getTime() + IFTAR_WINDOW_MIN * 60_000) return 'iftar';
   return 'night';
 }
 
@@ -105,9 +111,18 @@ function formatDuration(ms: number): string {
  *
  * During the iftar window itself there is nothing left to count down to, so
  * the card says what the day is instead of measuring a window that already
- * closed.
+ * closed. Once the night phase proper has started, the next thing ahead is
+ * tomorrow's sehri ending at tomorrow's fajr, which this function has no way
+ * to compute from `window` alone (that is still today's fajr and maghrib) --
+ * `nextFajr` is tomorrow's fajr, passed in by the caller, who already has
+ * both days' windows to hand (see useRamadan's note on why it computes
+ * windows for both days rather than just today's).
  */
-export function countdownText(now: Date, window: { fajr: Date; maghrib: Date }): string {
+export function countdownText(
+  now: Date,
+  window: { fajr: Date; maghrib: Date },
+  nextFajr?: Date,
+): string {
   const day = phase(now, window);
   switch (day) {
     case 'before_sehri':
@@ -117,7 +132,9 @@ export function countdownText(now: Date, window: { fajr: Date; maghrib: Date }):
     case 'iftar':
       return 'Iftar time';
     case 'night':
-      return 'Fasting resumes tomorrow';
+      return nextFajr
+        ? `Sehri ends in ${formatDuration(nextFajr.getTime() - now.getTime())}`
+        : 'Fasting resumes tomorrow';
   }
 }
 

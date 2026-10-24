@@ -8,6 +8,7 @@ import { HomeHero } from '../../components/home/HomeHero';
 import { HomeSkeleton } from '../../components/home/HomeSkeleton';
 import { NextCard } from '../../components/home/NextCard';
 import { chooseNextStep } from '../../components/home/nextStep';
+import { RamadanEndedBanner } from '../../components/home/RamadanEndedBanner';
 import { RamadanSuggestionBanner } from '../../components/home/RamadanSuggestionBanner';
 import { TodayStrip } from '../../components/home/TodayStrip';
 import { openSlots, todaysMeals, type Slot } from '../../components/home/todayMeals';
@@ -16,6 +17,7 @@ import { WeekStrip } from '../../components/home/WeekStrip';
 import { ErrorState, Screen } from '../../components/ui';
 import { useDashboard } from '../../hooks/useInsights';
 import { useLogs } from '../../hooks/useLogs';
+import { useNow } from '../../hooks/useNow';
 import { usePlans } from '../../hooks/usePlans';
 import { useRamadan } from '../../hooks/useRamadan';
 import { describeError } from '../../lib/api';
@@ -46,10 +48,21 @@ export default function DashboardScreen() {
   const ramadan = useRamadan();
 
   const data = dashboard.data;
-  const now = new Date();
-  const window = ramadan.enabled ? fastingWindow(now, ramadan.city, ramadan.offsetMin) : null;
-  const meals = useMemo(() => todaysMeals(logs.data?.items ?? [], new Date()), [logs.data]);
-  const open = openSlots(meals, now, window);
+  // Shared across the app (see useNow's own note on why): without it, this
+  // screen's "now" was computed once per render and a phone left open past
+  // midnight, or across iftar, kept showing the window from whenever it last
+  // happened to re-render -- the fasting card stuck on "Fasting resumes
+  // tomorrow" at 2am the next day, for instance.
+  const now = useNow();
+  const ramadanWindow = ramadan.enabled ? fastingWindow(now, ramadan.city, ramadan.offsetMin) : null;
+  // Tomorrow's window too, only so the night phase can count down to
+  // tomorrow's sehri ending rather than saying nothing more specific than
+  // "resumes tomorrow" -- see countdownText's own note on why it needs this.
+  const tomorrowFajr = ramadan.enabled
+    ? fastingWindow(new Date(now.getTime() + 24 * 60 * 60_000), ramadan.city, ramadan.offsetMin).fajr
+    : null;
+  const meals = useMemo(() => todaysMeals(logs.data?.items ?? [], now), [logs.data, now]);
+  const open = openSlots(meals, now, ramadanWindow);
 
   const logSlot = (slot: Slot | null) =>
     router.navigate({ pathname: '/log', params: { slot: slot ?? '' } });
@@ -79,6 +92,10 @@ export default function DashboardScreen() {
 
         {ramadan.suggestVisible ? (
           <RamadanSuggestionBanner onDismiss={ramadan.dismissSuggestion} onOpenProfile={() => router.navigate('/profile')} />
+        ) : null}
+
+        {ramadan.endedBannerVisible ? (
+          <RamadanEndedBanner onDismiss={ramadan.dismissEnded} onOpenProfile={() => router.navigate('/profile')} />
         ) : null}
 
         {dashboard.isLoading ? <HomeSkeleton /> : null}
@@ -113,7 +130,9 @@ export default function DashboardScreen() {
           ) : null}
 
           <View style={[{ gap: spacing.xxl }, isExpanded ? { flex: 1 } : null]}>
-            {window ? <FastingCard window={window} city={ramadan.city} /> : null}
+            {ramadanWindow ? (
+              <FastingCard now={now} window={ramadanWindow} nextFajr={tomorrowFajr} city={ramadan.city} />
+            ) : null}
 
             <TodayStrip
               meals={meals}
@@ -131,7 +150,7 @@ export default function DashboardScreen() {
                 open,
                 plan: plans.data?.[0] ?? null,
                 now,
-                fastingWindow: window,
+                fastingWindow: ramadanWindow,
               })}
               onLogSlot={logSlot}
               onOpenPlan={() => router.push('/plan')}

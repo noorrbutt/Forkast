@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { Card } from '../ui';
@@ -12,23 +11,26 @@ import { useTheme } from '../../theme';
  * figure is still what is left of the calorie target, which Ramadan mode does
  * not change, so the fasting window gets its own card rather than crowding
  * the one HomeHero already has a licence for.
+ *
+ * `now` is Home's own shared clock (useNow), not a timer of this card's own:
+ * a card that ticks on its own schedule is exactly how this used to go stale
+ * at midnight while every other screen that reads the same window had
+ * already moved on. `nextFajr` is tomorrow's fajr, needed only for the night
+ * phase's "Sehri ends in..." countdown -- see countdownText's own note.
  */
 export function FastingCard({
+  now,
   window,
+  nextFajr,
   city,
 }: {
+  now: Date;
   window: { fajr: Date; maghrib: Date };
+  nextFajr: Date | null;
   city: City;
 }) {
   const { colors, spacing, type } = useTheme();
-  const [now, setNow] = useState(() => new Date());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(id);
-  }, []);
-
-  const title = countdownText(now, window);
+  const title = countdownText(now, window, nextFajr ?? undefined);
 
   return (
     <Card>
