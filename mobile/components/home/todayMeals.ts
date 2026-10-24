@@ -48,8 +48,15 @@ export const SLOT_LABELS: Record<Slot, string> = {
 /** A day's fasting window, as lib/ramadan.ts's `fastingWindow` returns it. */
 export type FastingWindow = { fajr: Date; maghrib: Date };
 
-/** The hours before fajr that count as the sehri slot. */
-const SEHRI_LEAD_MIN = 90;
+/**
+ * The hours before fajr that count as the sehri slot.
+ *
+ * Exported (not just a local constant) because useRamadanSummary needs the
+ * exact same anchor to resolve which 24-hour fasting cycle an arbitrary past
+ * instant belongs to -- see that file's own note on why a log's calendar
+ * date can't just be read off the host device's local timezone.
+ */
+export const SEHRI_LEAD_MIN = 90;
 /** The window around maghrib that counts as the iftar slot. */
 const IFTAR_LEAD_MIN = 30;
 const IFTAR_TRAIL_MIN = 90;

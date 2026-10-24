@@ -134,6 +134,27 @@ describe('summariseRamadanLogs', () => {
     expect(summary?.daysLogged).toBe(MIN_DAYS_FOR_SUMMARY);
   });
 
+  test('a sehri log classifies correctly even though its instant sits near UTC midnight', () => {
+    // Karachi's fajr sits around 00:47 UTC in February, so a sehri-time
+    // instant (fajr-90min..fajr) is only minutes from UTC midnight. A host
+    // reading that instant's calendar date in UTC -- exactly what the CI
+    // runner this suite actually runs on does -- used to see the previous
+    // UTC day and hand fastingWindow the wrong 24-hour cycle entirely. This
+    // is the fixture that caught the regression windowContaining fixes:
+    // it passed on a non-UTC machine and failed in CI until that fix
+    // existed, which is exactly why it is worth keeping rather than
+    // trusting `npx jest` to be run under a TZ that happens to hide it.
+    const logs: FoodLog[] = [];
+    for (let day = 1; day <= MIN_DAYS_FOR_SUMMARY; day += 1) {
+      const window = dayWindow(2027, 2, day + 6);
+      logs.push(log({ created_at: new Date(window.fajr.getTime() - 60 * 60_000).toISOString() }));
+    }
+    const summary = summariseRamadanLogs(logs, KARACHI, 0);
+    expect(summary?.avgSehriKcal).toBe(500);
+    expect(summary?.daysLogged).toBe(MIN_DAYS_FOR_SUMMARY);
+    expect(summary?.lateNightSharePct).toBe(0);
+  });
+
   test('a log logged while fasting (neither sehri nor iftar) counts toward "rest" only', () => {
     const logs: FoodLog[] = [];
     for (let day = 1; day <= MIN_DAYS_FOR_SUMMARY; day += 1) {
