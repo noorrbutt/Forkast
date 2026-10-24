@@ -86,7 +86,7 @@ DESI_DISHES: tuple[DesiDish, ...] = (
     DesiDish("naan", ("plain naan",), "paratha", 300, 420, "piece", 1),
     DesiDish("garlic naan", ("lehsun naan",), "paratha", 340, 460, "piece", 1),
     DesiDish("chana chaat", ("chickpea chaat",), "chaat", 280, 400, "katori", 1),
-    DesiDish("dahi bhalla", ("dahi baray",), "chaat", 300, 430, "plate", 1),
+    DesiDish("dahi bhalla", ("dahi baray", "dahi baira"), "chaat", 300, 430, "plate", 1),
     DesiDish("papri chaat", (), "chaat", 280, 400, "plate", 1),
     DesiDish("fruit chaat", (), "chaat", 250, 350, "katori", 1),
     DesiDish("samosa", ("aloo samosa", "chicken samosa"), "samosa_pakora", 300, 420, "piece", 2),
@@ -110,6 +110,31 @@ DESI_DISHES: tuple[DesiDish, ...] = (
     DesiDish("lassi", ("sweet lassi", "namkeen lassi"), "beverage", 200, 300, "glass", 1),
     DesiDish("mango lassi", (), "beverage", 220, 300, "glass", 1),
     DesiDish("rooh afza", ("sharbat",), "beverage", 170, 260, "glass", 1),
+    # Ramadan iftar/sehri staples. A few of these sit right at their
+    # category's floor because the category itself was never sized for a
+    # light serving (dates inside "fruit", an omelette or pulao inside
+    # "breakfast"/"biryani") -- see the summary of this change for which
+    # rows are a widened, lower-confidence fit rather than a tight one.
+    DesiDish("dates", ("khajoor", "khajur", "iftari"), "fruit", 75, 110, "piece", 3),
+    DesiDish("nimbu pani", ("nimbu paani",), "tea_coffee", 90, 140, "glass", 1),
+    DesiDish("falooda", (), "dessert", 400, 550, "glass", 1),
+    DesiDish("zarda", (), "dessert", 380, 520, "katori", 1),
+    DesiDish("sawaiyan", ("siwaiyan", "seviyan"), "dessert", 380, 520, "katori", 1),
+    DesiDish("anda paratha", ("egg paratha",), "paratha", 350, 480, "piece", 1),
+    # Low confidence: a plain omelette typically runs under 300 kcal, but the
+    # closest category is "breakfast" (floor 450), sized for a full plate
+    # rather than eggs alone. Widened to a generous 3-4 egg omelette with oil
+    # so the range is at least plausible for someone eating it as the whole
+    # meal, which is how it is usually logged.
+    DesiDish("omelette", ("omlet", "omlette"), "breakfast", 450, 600, "piece", 1),
+    DesiDish("daliya", ("daleya", "dalia"), "soup", 180, 240, "katori", 1),
+    DesiDish("bun kabab", ("bun kebab",), "sandwich", 450, 650, "piece", 2),
+    DesiDish("chicken roll", ("chicken frankie",), "sandwich", 450, 650, "piece", 1),
+    # Low confidence: a home-style pulao is usually lighter than this, but the
+    # closest category is "biryani" (floor 600), sized for a fuller rice
+    # plate. Pinned to the category floor rather than invented below it.
+    DesiDish("pulao", ("palao", "pilaf"), "biryani", 600, 800, "plate", 1),
+    DesiDish("chicken corn soup", (), "soup", 160, 230, "cup", 1),
 )
 
 

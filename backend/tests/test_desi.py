@@ -89,6 +89,44 @@ def test_suggest_finds_common_misspellings() -> None:
         assert expected in names, text
 
 
+def test_iftar_and_sehri_staples_are_in_the_table() -> None:
+    names = {d.name for d in desi.DESI_DISHES}
+    for name in (
+        "dates",
+        "nimbu pani",
+        "falooda",
+        "zarda",
+        "sawaiyan",
+        "anda paratha",
+        "omelette",
+        "daliya",
+        "bun kabab",
+        "chicken roll",
+        "pulao",
+        "chicken corn soup",
+    ):
+        assert name in names, name
+
+
+def test_iftar_and_sehri_aliases_resolve() -> None:
+    for text, expected in [
+        ("khajoor", "dates"),
+        ("khajur", "dates"),
+        ("iftari", "dates"),
+        ("dahi baray", "dahi bhalla"),
+        ("dahi baira", "dahi bhalla"),
+        ("nimbu paani", "nimbu pani"),
+    ]:
+        match = desi.lookup(text)
+        assert match is not None and match.name == expected, text
+
+
+def test_dates_typical_qty_is_three_pieces() -> None:
+    dates = next(d for d in desi.DESI_DISHES if d.name == "dates")
+    assert dates.unit == "piece"
+    assert dates.typical_qty == 3
+
+
 async def test_dishes_endpoint_returns_matches_with_a_real_category_id(
     auth_client: AsyncClient,
 ) -> None:
