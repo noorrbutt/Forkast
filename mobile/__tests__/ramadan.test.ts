@@ -1,10 +1,13 @@
 import {
   CITIES,
+  IFTAR_DISHES,
   RAMADAN_1448,
+  SEHRI_DISHES,
   cityById,
   countdownText,
   fastingWindow,
   phase,
+  rankForRamadanSlot,
   withinRamadanWindow,
 } from '../lib/ramadan';
 
@@ -138,5 +141,45 @@ describe('withinRamadanWindow', () => {
   test('inclusive of the start and end dates', () => {
     expect(withinRamadanWindow(RAMADAN_1448.start)).toBe(true);
     expect(withinRamadanWindow(RAMADAN_1448.end)).toBe(true);
+  });
+});
+
+describe('rankForRamadanSlot', () => {
+  const hints = [
+    { name: 'daal chawal' },
+    { name: 'daliya' },
+    { name: 'dates' },
+    { name: 'dahi bhalla' },
+  ];
+
+  test('null slot returns the list unchanged', () => {
+    expect(rankForRamadanSlot(hints, null)).toEqual(hints);
+  });
+
+  test('iftar moves IFTAR_DISHES matches to the front, order otherwise preserved', () => {
+    const ranked = rankForRamadanSlot(hints, 'iftar');
+    expect(ranked.map((h) => h.name)).toEqual(['dates', 'dahi bhalla', 'daal chawal', 'daliya']);
+  });
+
+  test('sehri moves SEHRI_DISHES matches to the front', () => {
+    const ranked = rankForRamadanSlot(hints, 'sehri');
+    expect(ranked.map((h) => h.name)).toEqual(['daliya', 'daal chawal', 'dates', 'dahi bhalla']);
+  });
+
+  test('returns a new array rather than mutating the input', () => {
+    const original = [...hints];
+    rankForRamadanSlot(hints, 'iftar');
+    expect(hints).toEqual(original);
+  });
+
+  test('IFTAR_DISHES and SEHRI_DISHES name real desi-table dishes', () => {
+    // A name here that does not exist in the dish table would silently never
+    // match anything the server could return.
+    for (const name of [...IFTAR_DISHES, ...SEHRI_DISHES]) {
+      expect(typeof name).toBe('string');
+      expect(name.length).toBeGreaterThan(0);
+    }
+    expect(IFTAR_DISHES.has('dates')).toBe(true);
+    expect(SEHRI_DISHES.has('daliya')).toBe(true);
   });
 });

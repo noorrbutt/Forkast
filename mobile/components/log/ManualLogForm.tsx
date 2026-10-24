@@ -4,8 +4,11 @@ import { Text, View } from 'react-native';
 import { MealPhoto } from '../MealPhoto';
 import { StarRating } from '../StarRating';
 import { Button, Chip, ControlLabel, ErrorState, Field, FormError, Loading, Select } from '../ui';
+import { slotOf } from '../home/todayMeals';
+import { useRamadan } from '../../hooks/useRamadan';
 import { describeError } from '../../lib/api';
 import { FRIEND_LABELS, FUN_HINT, FUN_LEVELS, formatNumber } from '../../lib/format';
+import { fastingWindow, rankForRamadanSlot } from '../../lib/ramadan';
 import { FRIEND_SCALES } from '../../lib/types';
 import { useTheme } from '../../theme';
 import { useLogFormStyles } from './formStyles';
@@ -87,6 +90,19 @@ export function ManualLogForm({
   // ConfirmEstimate's own guessResults already uses for the identical shape.
   const results = dishName.trim().length >= 2 ? search.data : undefined;
   const hasDesiHints = Boolean(dishHints.data && dishHints.data.length > 0);
+
+  // Ramadan mode never changes the /dishes request itself -- only the order
+  // the chips it returns are shown in, and only while the current slot is
+  // actually sehri or iftar (not "late", and not outside Ramadan mode).
+  const ramadan = useRamadan();
+  const ramadanWindow = ramadan.enabled
+    ? fastingWindow(new Date(), ramadan.city, ramadan.offsetMin)
+    : null;
+  const ramadanSlot = ramadanWindow ? slotOf(new Date(), ramadanWindow) : null;
+  const rankedDishHints = rankForRamadanSlot(
+    dishHints.data ?? [],
+    ramadanSlot === 'sehri' || ramadanSlot === 'iftar' ? ramadanSlot : null,
+  );
   const noMatches =
     Boolean(results) &&
     results?.dishes.length === 0 &&
@@ -146,7 +162,7 @@ export function ManualLogForm({
           <View style={{ gap: spacing.sm }}>
             <ControlLabel>Common desi dishes</ControlLabel>
             <View style={optionRow}>
-              {dishHints.data.slice(0, 8).map((hint) => (
+              {rankedDishHints.slice(0, 8).map((hint) => (
                 <Chip
                   key={hint.name}
                   label={hint.name}
