@@ -173,5 +173,8 @@ async def test_the_dishes_endpoint_resolves_the_new_categories(
     assert "eggs" in categories
     assert "rice" in categories
 
-    hits = {h["name"]: h for h in (await auth_client.get("/api/v1/dishes", params={"q": "omelette"})).json()}
+    hits = {
+        h["name"]: h
+        for h in (await auth_client.get("/api/v1/dishes", params={"q": "omelette"})).json()
+    }
     assert hits["omelette"]["category_id"] == categories["eggs"]["id"]
