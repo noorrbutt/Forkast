@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 import { OFFSET_MAX, OFFSET_MIN, clampOffset, readRamadanSettings, writeRamadanSettings } from '../lib/ramadanStore';
 
 jest.mock('expo-secure-store', () => {
@@ -65,5 +67,84 @@ describe('writeRamadanSettings / readRamadanSettings clamp the offset', () => {
 
     const stored = await readRamadanSettings();
     expect(stored?.offsetMin).toBe(OFFSET_MIN);
+  });
+});
+
+describe('on web, settings survive closing the tab', () => {
+  const realPlatformOS = Platform.OS;
+  let fakeLocalStorage: Record<string, string>;
+  let fakeSessionStorage: Record<string, string>;
+
+  beforeEach(() => {
+    Object.defineProperty(Platform, 'OS', { get: () => 'web', configurable: true });
+    fakeLocalStorage = {};
+    fakeSessionStorage = {};
+    (globalThis as { localStorage?: Storage }).localStorage = {
+      getItem: (key: string) => fakeLocalStorage[key] ?? null,
+      setItem: (key: string, value: string) => {
+        fakeLocalStorage[key] = value;
+      },
+      removeItem: (key: string) => {
+        delete fakeLocalStorage[key];
+      },
+      clear: () => {
+        fakeLocalStorage = {};
+      },
+      key: () => null,
+      length: 0,
+    } as Storage;
+    // Present but must never be touched: sessionStorage is what tokenStore
+    // uses for auth tokens (deliberately gone when the tab closes), and
+    // this setting -- already documented as never leaving the device at
+    // all -- has no reason to inherit that same short lifetime.
+    (globalThis as { sessionStorage?: Storage }).sessionStorage = {
+      getItem: (key: string) => fakeSessionStorage[key] ?? null,
+      setItem: (key: string, value: string) => {
+        fakeSessionStorage[key] = value;
+      },
+      removeItem: (key: string) => {
+        delete fakeSessionStorage[key];
+      },
+      clear: () => {
+        fakeSessionStorage = {};
+      },
+      key: () => null,
+      length: 0,
+    } as Storage;
+  });
+
+  afterEach(() => {
+    Object.defineProperty(Platform, 'OS', { get: () => realPlatformOS, configurable: true });
+    delete (globalThis as { localStorage?: Storage }).localStorage;
+    delete (globalThis as { sessionStorage?: Storage }).sessionStorage;
+  });
+
+  test('a write lands in localStorage, not sessionStorage', async () => {
+    await writeRamadanSettings({
+      enabled: true,
+      cityId: 'lahore',
+      offsetMin: 3,
+      suggestionDismissed: false,
+      dismissedEnded: false,
+    });
+
+    expect(fakeLocalStorage['forkast.ramadan_settings']).toBeTruthy();
+    expect(fakeSessionStorage['forkast.ramadan_settings']).toBeUndefined();
+  });
+
+  test('still reads back after sessionStorage is cleared -- simulating the tab having closed and reopened', async () => {
+    await writeRamadanSettings({
+      enabled: true,
+      cityId: 'lahore',
+      offsetMin: 3,
+      suggestionDismissed: false,
+      dismissedEnded: false,
+    });
+
+    fakeSessionStorage = {}; // what closing the tab does to sessionStorage
+
+    const stored = await readRamadanSettings();
+    expect(stored?.enabled).toBe(true);
+    expect(stored?.cityId).toBe('lahore');
   });
 });

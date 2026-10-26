@@ -25,18 +25,25 @@ export type RamadanSettings = {
  * Where Ramadan mode's settings live on the device.
  *
  * This is religious observance data, which the app must not hold in its own
- * database: no API call, no DB column, no migration. The storage shape
- * mirrors lib/tokenStore.ts's own reasoning -- SecureStore on native, a
- * sessionStorage probe on web since expo-secure-store ships an empty web
- * implementation, and an in-memory map as the last resort so a blocked or
- * unavailable store degrades to "forgotten on reload" rather than a crash.
+ * database: no API call, no DB column, no migration. SecureStore on native,
+ * an in-memory map as the last resort so a blocked or unavailable store
+ * degrades to "forgotten on reload" rather than a crash.
+ *
+ * On web this deliberately uses localStorage, not lib/tokenStore.ts's
+ * sessionStorage. tokenStore's choice is about blast radius: a stolen auth
+ * token is a live session, so it is made to not outlive the tab. There is
+ * no equivalent risk here -- this is a toggle, a city and a number, already
+ * documented as never leaving the device -- so the ordinary expectation for
+ * a saved preference applies instead: turn it on, close the tab, reopen it,
+ * it is still on. sessionStorage could not do that; it forgot the setting
+ * the moment the tab closed.
  */
 const memory = new Map<string, string>();
 
 function webStore(): Storage | null {
   if (Platform.OS !== 'web') return null;
   try {
-    const probe = globalThis.sessionStorage;
+    const probe = globalThis.localStorage;
     probe.setItem('forkast.probe', '1');
     probe.removeItem('forkast.probe');
     return probe;
