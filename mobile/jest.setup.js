@@ -11,6 +11,29 @@
 // waiting on a network; the slowest thing is a render settling.
 jest.setTimeout(30_000);
 
+// React Query's notifyManager batches updates through a setTimeout(0) by
+// default (see @tanstack/query-core/src/notifyManager.ts). A render that's
+// still in flight when a test file ends leaves that timer pending past the
+// test, which is exactly what surfaces as a Jest worker failing to exit
+// gracefully under --detectOpenHandles.
+//
+// Two alternatives were tried and rejected. Running the scheduler fully
+// synchronously broke __tests__/repeat.test.tsx, which relies on a real tick
+// of deferral between an update firing and the screen reacting to it.
+// Swapping in queueMicrotask avoided that, but React Testing Library's
+// act(...) specifically knows how to flush a pending setTimeout(0) and not a
+// microtask, so every update scheduled this way started firing outside its
+// act() scope -- trading one warning for a flood of "not wrapped in act"
+// ones. unref() keeps the real setTimeout (so act() still flushes it exactly
+// as before) and only tells Node it is not a reason for the process to stay
+// alive, which is also the fix Node's own docs suggest for a timer whose
+// result nothing needs once it's scheduled.
+const { notifyManager } = require('@tanstack/react-query');
+notifyManager.setScheduler((callback) => {
+  const timer = setTimeout(callback, 0);
+  if (typeof timer === 'object' && typeof timer.unref === 'function') timer.unref();
+});
+
 const { configure } = require('@testing-library/react-native');
 configure({ asyncUtilTimeout: 10_000 });
 
