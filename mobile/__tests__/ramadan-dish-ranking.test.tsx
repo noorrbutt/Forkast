@@ -127,7 +127,7 @@ async function enableRamadan() {
     enabled: true,
     cityId: 'karachi',
     offsetMin: 0,
-    suggestionDismissed: false,
+    dismissedSuggestion: false,
       dismissedEnded: false,
   });
 }
@@ -140,7 +140,7 @@ beforeEach(async () => {
     enabled: false,
     cityId: 'karachi',
     offsetMin: 0,
-    suggestionDismissed: false,
+    dismissedSuggestion: false,
       dismissedEnded: false,
   });
 });

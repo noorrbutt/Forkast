@@ -48,7 +48,7 @@ describe('writeRamadanSettings / readRamadanSettings clamp the offset', () => {
       enabled: true,
       cityId: 'karachi',
       offsetMin: 999,
-      suggestionDismissed: false,
+      dismissedSuggestion: false,
       dismissedEnded: false,
     });
     const stored = await readRamadanSettings();
@@ -67,6 +67,26 @@ describe('writeRamadanSettings / readRamadanSettings clamp the offset', () => {
 
     const stored = await readRamadanSettings();
     expect(stored?.offsetMin).toBe(OFFSET_MIN);
+  });
+
+  test('a row written under the old field name (suggestionDismissed) still reads as dismissed', async () => {
+    // dismissedSuggestion was named suggestionDismissed before it was
+    // renamed to match dismissedEnded's convention. An account that
+    // already dismissed the banner under the old name must not see it
+    // reappear just because the field was renamed.
+    const raw = JSON.stringify({
+      enabled: false,
+      cityId: 'karachi',
+      offsetMin: 0,
+      suggestionDismissed: true,
+    });
+    const SecureStore = jest.requireMock('expo-secure-store') as {
+      setItemAsync: (key: string, value: string) => Promise<void>;
+    };
+    await SecureStore.setItemAsync('forkast.ramadan_settings', raw);
+
+    const stored = await readRamadanSettings();
+    expect(stored?.dismissedSuggestion).toBe(true);
   });
 });
 
@@ -124,7 +144,7 @@ describe('on web, settings survive closing the tab', () => {
       enabled: true,
       cityId: 'lahore',
       offsetMin: 3,
-      suggestionDismissed: false,
+      dismissedSuggestion: false,
       dismissedEnded: false,
     });
 
@@ -137,7 +157,7 @@ describe('on web, settings survive closing the tab', () => {
       enabled: true,
       cityId: 'lahore',
       offsetMin: 3,
-      suggestionDismissed: false,
+      dismissedSuggestion: false,
       dismissedEnded: false,
     });
 

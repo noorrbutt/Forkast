@@ -23,7 +23,7 @@ const DEFAULTS: RamadanSettings = {
   enabled: false,
   cityId: DEFAULT_CITY_ID,
   offsetMin: 0,
-  suggestionDismissed: false,
+  dismissedSuggestion: false,
   dismissedEnded: false,
 };
 
@@ -95,7 +95,7 @@ export function RamadanProvider({ children }: { children: ReactNode }) {
     [settings, persist],
   );
   const dismissSuggestion = useCallback(
-    () => persist({ ...settings, suggestionDismissed: true }),
+    () => persist({ ...settings, dismissedSuggestion: true }),
     [settings, persist],
   );
   const dismissEnded = useCallback(
@@ -103,7 +103,7 @@ export function RamadanProvider({ children }: { children: ReactNode }) {
     [settings, persist],
   );
 
-  const suggestVisible = loaded && !settings.enabled && !settings.suggestionDismissed && withinRamadanWindow(now);
+  const suggestVisible = loaded && !settings.enabled && !settings.dismissedSuggestion && withinRamadanWindow(now);
   const endedBannerVisible =
     loaded && settings.enabled && !settings.dismissedEnded && now.getTime() > RAMADAN_1448.end.getTime();
 

@@ -35,7 +35,7 @@ describe('useRamadan', () => {
       enabled: false,
       cityId: 'karachi',
       offsetMin: 0,
-      suggestionDismissed: false,
+      dismissedSuggestion: false,
       dismissedEnded: false,
     });
   });
@@ -45,7 +45,7 @@ describe('useRamadan', () => {
       enabled: true,
       cityId: 'lahore',
       offsetMin: 5,
-      suggestionDismissed: true,
+      dismissedSuggestion: true,
       dismissedEnded: false,
     });
 
@@ -101,7 +101,7 @@ describe('useRamadan', () => {
       enabled: true,
       cityId: 'karachi',
       offsetMin: 0,
-      suggestionDismissed: false,
+      dismissedSuggestion: false,
       dismissedEnded: false,
     });
 
@@ -117,7 +117,7 @@ describe('useRamadan', () => {
       enabled: false,
       cityId: 'karachi',
       offsetMin: 0,
-      suggestionDismissed: true,
+      dismissedSuggestion: true,
       dismissedEnded: false,
     });
 
@@ -133,7 +133,7 @@ describe('useRamadan', () => {
       enabled: false,
       cityId: 'karachi',
       offsetMin: 0,
-      suggestionDismissed: false,
+      dismissedSuggestion: false,
       dismissedEnded: false,
     });
 
@@ -149,7 +149,7 @@ describe('useRamadan', () => {
       enabled: false,
       cityId: 'karachi',
       offsetMin: 0,
-      suggestionDismissed: false,
+      dismissedSuggestion: false,
       dismissedEnded: false,
     });
 
@@ -161,7 +161,7 @@ describe('useRamadan', () => {
     await waitFor(() => expect(result.current.suggestVisible).toBe(false));
 
     const persisted = await readRamadanSettings();
-    expect(persisted?.suggestionDismissed).toBe(true);
+    expect(persisted?.dismissedSuggestion).toBe(true);
     jest.useRealTimers();
   });
 

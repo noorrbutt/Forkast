@@ -71,11 +71,11 @@ function scheduledIds(): string[] {
 beforeEach(async () => {
   jest.clearAllMocks();
   mocked.getPermissionsAsync.mockResolvedValue({ granted: true, canAskAgain: true } as never);
-  await writeRamadanSettings({ enabled: false, cityId: 'karachi', offsetMin: 0, suggestionDismissed: false, dismissedEnded: false });
+  await writeRamadanSettings({ enabled: false, cityId: 'karachi', offsetMin: 0, dismissedSuggestion: false, dismissedEnded: false });
 });
 
 test('Ramadan mode on: sehri/iftar reminders are scheduled, not the standard three', async () => {
-  await writeRamadanSettings({ enabled: true, cityId: 'karachi', offsetMin: 0, suggestionDismissed: false, dismissedEnded: false });
+  await writeRamadanSettings({ enabled: true, cityId: 'karachi', offsetMin: 0, dismissedSuggestion: false, dismissedEnded: false });
 
   const { result } = renderHook(() => useCombined(), { wrapper });
   await waitFor(() => expect(result.current.ramadan.enabled).toBe(true));
@@ -88,7 +88,7 @@ test('Ramadan mode on: sehri/iftar reminders are scheduled, not the standard thr
 });
 
 test('turning Ramadan mode off cancels every Ramadan reminder', async () => {
-  await writeRamadanSettings({ enabled: true, cityId: 'karachi', offsetMin: 0, suggestionDismissed: false, dismissedEnded: false });
+  await writeRamadanSettings({ enabled: true, cityId: 'karachi', offsetMin: 0, dismissedSuggestion: false, dismissedEnded: false });
 
   const { result } = renderHook(() => useCombined(), { wrapper });
   await waitFor(() => expect(result.current.ramadan.enabled).toBe(true));

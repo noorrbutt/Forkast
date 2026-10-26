@@ -16,7 +16,7 @@ export type RamadanSettings = {
   enabled: boolean;
   cityId: string;
   offsetMin: number;
-  suggestionDismissed: boolean;
+  dismissedSuggestion: boolean;
   /** Whether the "turn it off now the month has ended?" banner was dismissed. */
   dismissedEnded: boolean;
 };
@@ -88,7 +88,11 @@ export async function readRamadanSettings(): Promise<RamadanSettings | null> {
       // older build (before the range existed) or edited by hand on disk
       // can never come back out wider than the range actually allows.
       offsetMin: clampOffset(typeof parsed.offsetMin === 'number' ? parsed.offsetMin : 0),
-      suggestionDismissed: Boolean(parsed.suggestionDismissed),
+      // `suggestionDismissed` was this field's name before it was renamed
+      // to match `dismissedEnded`'s convention. Falling back to it means an
+      // account that already dismissed the suggestion banner under the old
+      // name does not see it reappear just because the field was renamed.
+      dismissedSuggestion: Boolean(parsed.dismissedSuggestion ?? parsed.suggestionDismissed),
       dismissedEnded: Boolean(parsed.dismissedEnded),
     };
   } catch {
