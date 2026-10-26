@@ -109,7 +109,18 @@ jobs:
 
       - name: Tests
         working-directory: backend
-        run: python -m pytest -q --cov=app --cov-report=term-missing
+        run: python -m pytest -q --cov=app --cov-report=term-missing --cov-report=json
+
+      # Only one cell of the matrix needs to feed the badge; otherwise the
+      # badges job below would receive two same-named artifacts and fail to
+      # tell them apart.
+      - name: Upload coverage summary
+        if: matrix.python-version == '3.14'
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.json
+          retention-days: 1
 
   mobile:
     name: Mobile (tsc + jest)
@@ -140,4 +151,78 @@ jobs:
 
       - name: Tests
         working-directory: mobile
-        run: npx jest --ci --coverage
+        run: npx jest --ci --coverage --coverageReporters=text --coverageReporters=json-summary
+
+      - name: Upload coverage summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-coverage
+          path: mobile/coverage/coverage-summary.json
+          retention-days: 1
+
+  badges:
+    name: Coverage badges
+    needs: [backend, mobile]
+    # Only main has anywhere to commit the badge data to, and a fork's PR
+    # can't push back to this repo's own branch regardless.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-coverage
+          path: badge-input/backend
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: mobile-coverage
+          path: badge-input/mobile
+
+      - name: Render badge data
+        run: |
+          python - <<'PY'
+          import json
+
+          def color(pct):
+              if pct >= 90:
+                  return "brightgreen"
+              if pct >= 75:
+                  return "green"
+              if pct >= 60:
+                  return "yellow"
+              return "red"
+
+          backend_pct = round(json.load(open("badge-input/backend/coverage.json"))["totals"]["percent_covered"], 1)
+          mobile_pct = round(json.load(open("badge-input/mobile/coverage-summary.json"))["total"]["lines"]["pct"], 1)
+
+          import os
+          os.makedirs(".github/badges", exist_ok=True)
+          for name, pct in (("backend", backend_pct), ("mobile", mobile_pct)):
+              with open(f".github/badges/{name}-coverage.json", "w") as f:
+                  json.dump(
+                      {
+                          "schemaVersion": 1,
+                          "label": "coverage",
+                          "message": f"{pct}%",
+                          "color": color(pct),
+                      },
+                      f,
+                  )
+          PY
+
+      # shields.io's endpoint badge (referenced from README.md) reads these
+      # files straight off raw.githubusercontent.com, so there is no gist,
+      # no token and no third-party account to keep working -- only this
+      # commit, made with the workflow's own built-in token.
+      - name: Commit badge data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/badges
+          git diff --cached --quiet && exit 0
+          git commit -m "Update coverage badges [skip ci]"
+          git push

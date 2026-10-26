@@ -1,6 +1,8 @@
 # Forkast
 
 [![CI](https://github.com/noorrbutt/Forkast/actions/workflows/ci.yml/badge.svg)](https://github.com/noorrbutt/Forkast/actions/workflows/ci.yml)
+[![Backend coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/noorrbutt/Forkast/main/.github/badges/backend-coverage.json)](https://github.com/noorrbutt/Forkast/actions/workflows/ci.yml)
+[![Mobile coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/noorrbutt/Forkast/main/.github/badges/mobile-coverage.json)](https://github.com/noorrbutt/Forkast/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
