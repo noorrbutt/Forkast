@@ -34,7 +34,13 @@ export function FastingCard({
 
   return (
     <Card>
-      <View testID="fasting-card" style={{ gap: spacing.xs }}>
+      <View
+        testID="fasting-card"
+        style={{ gap: spacing.xs }}
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel={`Ramadan, ${city.label}. ${title}. Times are calculated; follow your local timetable.`}
+      >
         <Text style={[type.labelSoft, { color: colors.muted }]}>Ramadan · {city.label}</Text>
         <Text style={[type.subtitle, { color: colors.text }]}>{title}</Text>
         <Text style={[type.caption, { color: colors.muted }]}>

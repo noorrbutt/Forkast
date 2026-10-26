@@ -68,4 +68,14 @@ describe('FastingCard', () => {
     );
     expect(screen.getByText(`Ramadan · ${KARACHI.label}`)).toBeTruthy();
   });
+
+  test('exposes one accessible label naming the city and the countdown, for a screen reader', () => {
+    const screen = render(
+      <FastingCard now={new Date(2026, 1, 19, 12, 0)} window={todayWindow} nextFajr={null} city={KARACHI} />,
+      { wrapper },
+    );
+    const card = screen.getByTestId('fasting-card');
+    expect(card.props.accessible).toBe(true);
+    expect(card.props.accessibilityLabel).toContain(KARACHI.label);
+  });
 });
