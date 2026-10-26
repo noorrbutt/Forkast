@@ -152,3 +152,26 @@ async def test_dishes_endpoint_requires_auth(client: AsyncClient) -> None:
 
 async def test_dishes_endpoint_limit_is_bounded(auth_client: AsyncClient) -> None:
     assert (await auth_client.get("/api/v1/dishes", params={"limit": 11})).status_code == 422
+
+
+def test_omelette_and_pulao_no_longer_sit_on_another_categorys_floor() -> None:
+    """Both used to be pinned to a category floor well above their real
+    range (breakfast's 450, biryani's 600) -- migration 0023 gave them their
+    own categories instead, sized for what they actually are."""
+    omelette = next(d for d in desi.DESI_DISHES if d.name == "omelette")
+    pulao = next(d for d in desi.DESI_DISHES if d.name == "pulao")
+    assert omelette.category_slug == "eggs"
+    assert omelette.kcal_max < 450, "still inflated to the old breakfast floor"
+    assert pulao.category_slug == "rice"
+    assert pulao.kcal_max < 600, "still inflated to the old biryani floor"
+
+
+async def test_the_dishes_endpoint_resolves_the_new_categories(
+    auth_client: AsyncClient,
+) -> None:
+    categories = {c["slug"]: c for c in (await auth_client.get("/api/v1/categories")).json()}
+    assert "eggs" in categories
+    assert "rice" in categories
+
+    hits = {h["name"]: h for h in (await auth_client.get("/api/v1/dishes", params={"q": "omelette"})).json()}
+    assert hits["omelette"]["category_id"] == categories["eggs"]["id"]

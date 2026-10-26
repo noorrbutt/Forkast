@@ -88,6 +88,13 @@ FOOD_CATEGORIES: list[CategorySeed] = [
     # plate, which is the clearest junk case in the desi list.
     CategorySeed("desi", "halwa_puri", "Halwa Puri", 700, 1150, is_junk=True),
     CategorySeed("desi", "samosa_pakora", "Samosa and Pakora", 300, 520, is_junk=True),
+    # Added by migration 0023 for dishes that don't fit any existing desi
+    # floor: a plain omelette and a home-style pulao are both lighter than
+    # the closest category they used to be pinned to (breakfast and biryani
+    # respectively), which overestimated the common, lighter version of
+    # either dish.
+    CategorySeed("desi", "eggs", "Eggs", 150, 350, is_junk=False),
+    CategorySeed("desi", "rice", "Rice", 400, 650, is_junk=False),
     # American. Mostly the fast food end, which is exactly why it is here.
     CategorySeed("american", "burger", "Burger", 550, 950, is_junk=True),
     CategorySeed("american", "fried_chicken", "Fried Chicken and Broast", 600, 980, is_junk=True),
@@ -238,6 +245,20 @@ DISH_NAMES: dict[str, list[str]] = {
         "mixed pakora",
         "veg pakora",
         "fried samosa plate",
+    ],
+    "eggs": [
+        "omelette",
+        "fried egg",
+        "boiled egg",
+        "anda bhurji",
+        "egg paratha roll",
+    ],
+    "rice": [
+        "pulao",
+        "chicken pulao",
+        "vegetable pulao",
+        "zeera rice",
+        "yakhni pulao",
     ],
     "burger": [
         "zinger burger",
