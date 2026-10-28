@@ -9,16 +9,29 @@ import { haptics } from '../../lib/haptics';
 import { useTheme } from '../../theme';
 import { motion } from '../../theme/motion';
 
-type FloatingTabBarProps = Pick<BottomTabBarProps, 'state' | 'descriptors' | 'insets'> & {
-  emitter: {
-    emit: (event: {
-      type: 'tabPress';
-      target: string;
-      canPreventDefault: true;
-    }) => { defaultPrevented: boolean };
-  };
-  navigateToTab: (routeKey: string) => void;
-};
+type FloatingTabBarProps = Pick<BottomTabBarProps, 'state' | 'descriptors' | 'insets'> &
+  (
+    | {
+        emitter: {
+          emit: (event: {
+            type: 'tabPress';
+            target: string;
+            canPreventDefault: true;
+          }) => { defaultPrevented: boolean };
+        };
+        navigateToTab: (routeKey: string) => void;
+      }
+    | {
+        navigation: {
+          emit: (event: {
+            type: 'tabPress';
+            target: string;
+            canPreventDefault: true;
+          }) => { defaultPrevented: boolean };
+          navigate: (name: string, params?: object) => void;
+        };
+      }
+  );
 
 /**
  * Which glyph belongs to which route, and which one is the raised action.
@@ -112,9 +125,8 @@ function TabIcon({ name, focused, size }: TabIconProps) {
 export function FloatingTabBar({
   state,
   descriptors,
-  emitter,
-  navigateToTab,
   insets,
+  ...navigationProps
 }: FloatingTabBarProps) {
   const { colors, layout, radius, spacing, type } = useTheme();
   // The raised button only ever hides on the Log screen itself -- there it
@@ -123,12 +135,23 @@ export function FloatingTabBar({
   const fabHidden = state.routes[state.index]?.name === RAISED_ROUTE;
 
   const go = (route: (typeof state.routes)[number], focused: boolean) => {
-    const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+    const eventEmitter = 'emitter' in navigationProps
+      ? navigationProps.emitter
+      : navigationProps.navigation;
+    const event = eventEmitter.emit({
+      type: 'tabPress',
+      target: route.key,
+      canPreventDefault: true,
+    });
     // Only when the tab actually changes. Bumping on a tap that goes nowhere
     // teaches the user the feedback means nothing.
     if (!focused && !event.defaultPrevented) {
       haptics.tap();
-      navigateToTab(route.key);
+      if ('navigateToTab' in navigationProps) {
+        navigationProps.navigateToTab(route.key);
+      } else {
+        navigationProps.navigation.navigate(route.name, route.params);
+      }
     }
   };
 
@@ -262,7 +285,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
-      tabBar={(props) => <FloatingTabBar {...(props as FloatingTabBarProps)} />}
+      tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg } }}
     >
       {/* Order matters: log sits third of five so the raised button lands dead
