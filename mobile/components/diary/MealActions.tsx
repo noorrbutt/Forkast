@@ -88,7 +88,7 @@ export function MealActions({
             height: PILL_HEIGHT,
             borderRadius: radius.pill,
             paddingHorizontal: spacing.sm,
-            backgroundColor: pressed ? colors.dangerSoft : 'transparent',
+            backgroundColor: pressed ? colors.surfaceAlt : 'transparent',
           })}
         >
           {/* Icon only, in muted ink. It sat beside Log again at the same
@@ -96,8 +96,8 @@ export function MealActions({
               saffron, so the rare destructive action competed with the
               everyday one. The glyph still names it, the accessibility label
               says "Delete", and the confirmation dialog it opens is unchanged,
-              so nothing about how safe it is has moved. Red is kept for that
-              dialog and the press state, where the action is actually taken. */}
+              so nothing about how safe it is has moved. Red is kept for the
+              confirmation dialog, where the action is actually taken. */}
           <Icon name="trash" size={16} color={colors.muted} />
         </Pressable>
       </View>

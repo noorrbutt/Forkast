@@ -47,11 +47,7 @@ export function SwipeToDelete({
             width: 96,
             alignItems: 'center',
             justifyContent: 'center',
-            // dangerSoft fill with danger ink, not a solid danger fill with
-            // white text: the same pairing every other destructive control
-            // in this app uses (Button's danger variant), and the one the
-            // contrast tests already check clears 4.5:1.
-            backgroundColor: colors.dangerSoft,
+            backgroundColor: colors.surfaceAlt,
           }}
         >
           <Icon name="trash" size={20} color={colors.danger} />
