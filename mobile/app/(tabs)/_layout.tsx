@@ -9,6 +9,17 @@ import { haptics } from '../../lib/haptics';
 import { useTheme } from '../../theme';
 import { motion } from '../../theme/motion';
 
+type FloatingTabBarProps = Pick<BottomTabBarProps, 'state' | 'descriptors' | 'insets'> & {
+  emitter: {
+    emit: (event: {
+      type: 'tabPress';
+      target: string;
+      canPreventDefault: true;
+    }) => { defaultPrevented: boolean };
+  };
+  navigateToTab: (routeKey: string) => void;
+};
+
 /**
  * Which glyph belongs to which route, and which one is the raised action.
  *
@@ -98,7 +109,13 @@ function TabIcon({ name, focused, size }: TabIconProps) {
 }
 
 /** Exported for the tests, which drive it with a fabricated navigation state. */
-export function FloatingTabBar({ state, descriptors, emitter, navigateToTab, insets }: BottomTabBarProps) {
+export function FloatingTabBar({
+  state,
+  descriptors,
+  emitter,
+  navigateToTab,
+  insets,
+}: FloatingTabBarProps) {
   const { colors, layout, radius, spacing, type } = useTheme();
   // The raised button only ever hides on the Log screen itself -- there it
   // could only navigate to where you already are. Everywhere else, Home
@@ -245,7 +262,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
-      tabBar={(props) => <FloatingTabBar {...props} />}
+      tabBar={(props) => <FloatingTabBar {...(props as FloatingTabBarProps)} />}
       screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg } }}
     >
       {/* Order matters: log sits third of five so the raised button lands dead
