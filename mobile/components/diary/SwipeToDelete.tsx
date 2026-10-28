@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { Pressable, Text } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 
 import { Icon } from '../ui';
 import { useTheme } from '../../theme';
@@ -28,7 +28,7 @@ export function SwipeToDelete({
   children: React.ReactNode;
 }) {
   const { colors, spacing, type } = useTheme();
-  const ref = useRef<Swipeable>(null);
+  const ref = useRef<SwipeableMethods>(null);
 
   if (disabled) return <>{children}</>;
 

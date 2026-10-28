@@ -47,7 +47,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 );
 
 function mountBar(selected: number) {
-  const navigate = jest.fn();
+  const navigateToTab = jest.fn();
   const emit = jest.fn(() => ({ defaultPrevented: false }));
   const routes = TABS.map((tab) => ({
     key: `${tab.route}-key`,
@@ -61,12 +61,13 @@ function mountBar(selected: number) {
   const props = {
     state: { index: selected, routes },
     descriptors,
-    navigation: { navigate, emit },
+    emitter: { emit },
+    navigateToTab,
     // An iPhone 14, so the bar floats above a real home indicator.
     insets: { top: 59, bottom: 34, left: 0, right: 0 },
   } as unknown as BottomTabBarProps;
 
-  return { screen: render(<FloatingTabBar {...props} />, { wrapper }), navigate, emit };
+  return { screen: render(<FloatingTabBar {...props} />, { wrapper }), navigateToTab, emit };
 }
 
 /** What the cross fade left this layer at, once the style array is flattened. */
@@ -131,39 +132,39 @@ describe('the glyph the selection draws', () => {
 
 describe('moving between tabs', () => {
   it('navigates to the tab that was tapped', () => {
-    const { screen, navigate } = mountBar(0);
+    const { screen, navigateToTab } = mountBar(0);
 
     fireEvent.press(screen.getByLabelText('Diary'));
 
-    expect(navigate).toHaveBeenCalledWith('history', undefined);
+    expect(navigateToTab).toHaveBeenCalledWith('history-key');
   });
 
   it('bumps only when the tap actually goes somewhere', () => {
-    const { screen, navigate } = mountBar(0);
+    const { screen, navigateToTab } = mountBar(0);
 
     fireEvent.press(screen.getByLabelText('Home'));
 
-    expect(navigate).not.toHaveBeenCalled();
+    expect(navigateToTab).not.toHaveBeenCalled();
     expect(mockedHaptics.impactAsync).not.toHaveBeenCalled();
   });
 
   it('respects a tab press the navigator cancelled', () => {
-    const { screen, navigate, emit } = mountBar(0);
+    const { screen, navigateToTab, emit } = mountBar(0);
     emit.mockReturnValue({ defaultPrevented: true });
 
     fireEvent.press(screen.getByLabelText('Streaks'));
 
-    expect(navigate).not.toHaveBeenCalled();
+    expect(navigateToTab).not.toHaveBeenCalled();
   });
 });
 
 describe('the raised centre button', () => {
   it('still navigates to the log tab', () => {
-    const { screen, navigate } = mountBar(1);
+    const { screen, navigateToTab } = mountBar(1);
 
     fireEvent.press(screen.getByLabelText('Log a meal'));
 
-    expect(navigate).toHaveBeenCalledWith('log', undefined);
+    expect(navigateToTab).toHaveBeenCalledWith('log-key');
   });
 
   it('says what it does, since a plus sign on its own does not', () => {

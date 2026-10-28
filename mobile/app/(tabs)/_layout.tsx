@@ -98,7 +98,7 @@ function TabIcon({ name, focused, size }: TabIconProps) {
 }
 
 /** Exported for the tests, which drive it with a fabricated navigation state. */
-export function FloatingTabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
+export function FloatingTabBar({ state, descriptors, emitter, navigateToTab, insets }: BottomTabBarProps) {
   const { colors, layout, radius, spacing, type } = useTheme();
   // The raised button only ever hides on the Log screen itself -- there it
   // could only navigate to where you already are. Everywhere else, Home
@@ -106,15 +106,12 @@ export function FloatingTabBar({ state, descriptors, navigation, insets }: Botto
   const fabHidden = state.routes[state.index]?.name === RAISED_ROUTE;
 
   const go = (route: (typeof state.routes)[number], focused: boolean) => {
-    const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+    const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
     // Only when the tab actually changes. Bumping on a tap that goes nowhere
     // teaches the user the feedback means nothing.
     if (!focused && !event.defaultPrevented) {
       haptics.tap();
-      // NavigationHelpers types navigate against a generic param list, so the
-      // concrete route name and params need a widening cast here.
-      const navigate = navigation.navigate as (name: string, params?: object) => void;
-      navigate(route.name, route.params);
+      navigateToTab(route.key);
     }
   };
 
