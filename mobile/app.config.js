@@ -328,6 +328,34 @@ module.exports = () => {
     };
   }
 
+  const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+  const sentryOrg = process.env.SENTRY_ORG;
+  const sentryProject = process.env.SENTRY_PROJECT;
+  const sentryEnvironment =
+    process.env.EAS_BUILD_PROFILE ||
+    (process.env.NODE_ENV === 'production' ? 'production' : 'development');
+  if (sentryDsn) {
+    next = {
+      ...next,
+      extra: { ...next.extra, sentryEnvironment },
+    };
+    if (sentryOrg && sentryProject) {
+      next = {
+        ...next,
+        plugins: [
+          ...next.plugins,
+          [
+            '@sentry/react-native/expo',
+            {
+              organization: sentryOrg,
+              project: sentryProject,
+            },
+          ],
+        ],
+      };
+    }
+  }
+
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) return next;
 

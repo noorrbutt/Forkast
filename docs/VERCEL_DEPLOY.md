@@ -169,6 +169,7 @@ Optional, with their defaults in `backend/app/config.py`:
 - `TRUSTED_PROXY_HOPS` (1)
 - `APP_DOMAIN`, `APPLE_APP_ID_PREFIX`, `ANDROID_SHA256_CERT_FINGERPRINT`
 - `GOOGLE_CLIENT_IDS`
+- `SENTRY_DSN` (optional; leave unset to disable error reporting)
 - `DEFAULT_TIMEZONE`
 - `JWT_ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`,
   `REFRESH_REUSE_LEEWAY_SECONDS`

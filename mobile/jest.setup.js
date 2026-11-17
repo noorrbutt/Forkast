@@ -37,6 +37,14 @@ notifyManager.setScheduler((callback) => {
 const { configure } = require('@testing-library/react-native');
 configure({ asyncUtilTimeout: 10_000 });
 
+// Never initialize an SDK that could send test errors to an external project.
+jest.mock('@sentry/react-native', () => ({
+  init: jest.fn(),
+  captureException: jest.fn(),
+  wrap: (component) => component,
+  wrapExpoRouterErrorBoundary: (component) => component,
+}));
+
 // The library's own jest setup: without it, GestureHandlerRootView and any
 // gesture-driven component (the diary's swipe-to-delete) reach for native
 // modules at import time the same way every other native module here does.

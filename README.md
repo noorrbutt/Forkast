@@ -210,6 +210,7 @@ list. The ones you will touch most:
 | `PHOTO_ESTIMATE_ENABLED` | `true` | Kill switch for photo estimation alone |
 | `BREVO_API_KEY`, `EMAIL_FROM_ADDRESS` | empty | Verification and reset emails. `EMAIL_FROM_NAME` defaults to `Forkast` |
 | `GOOGLE_CLIENT_IDS` | empty | Audiences accepted for Google sign in. Empty turns the feature off |
+| `SENTRY_DSN` | empty | Optional backend error reporting; empty disables Sentry |
 | `CORS_ORIGINS` | `*` | Restrict this in production |
 | `TRUST_PROXY_HEADERS`, `TRUSTED_PROXY_HOPS` | `false`, `1` | Only enable behind a proxy you control, or callers can spoof their rate-limit identity |
 | `SERVERLESS` | `false` | `true` only on Vercel. See [docs/VERCEL_DEPLOY.md](docs/VERCEL_DEPLOY.md) |
@@ -220,7 +221,10 @@ all in `.env.example` with the reasoning next to each.
 
 On the app side, only `EXPO_PUBLIC_API_URL` is required. Put it in
 `mobile/.env.local`. Expo inlines every `EXPO_PUBLIC_` value into the shipped
-bundle in plaintext, so never put a secret behind that prefix.
+bundle in plaintext, so never put a secret behind that prefix. Optional
+`EXPO_PUBLIC_SENTRY_DSN` enables mobile error reporting (Expo Go skips it);
+`SENTRY_ORG`, `SENTRY_PROJECT` and the secret `SENTRY_AUTH_TOKEN` enable native
+source-map uploads. See [docs/PLAY_STORE.md](docs/PLAY_STORE.md).
 
 ## API overview
 

@@ -39,6 +39,70 @@ from app.web import router as web_router
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
+
+def _scrub_sentry_event(event: dict[str, Any], _hint: Any) -> dict[str, Any]:
+    if "request" in event:
+        request = event.get("request")
+        method = request.get("method") if isinstance(request, dict) else None
+        event["request"] = {"method": method} if isinstance(method, str) else {}
+
+    breadcrumbs = event.get("breadcrumbs")
+    if isinstance(breadcrumbs, dict):
+        values = breadcrumbs.get("values")
+        if isinstance(values, list):
+            for breadcrumb in values:
+                if not isinstance(breadcrumb, dict):
+                    continue
+                data = breadcrumb.get("data")
+                if breadcrumb.get("category") in {"fetch", "http", "xhr"}:
+                    breadcrumb["data"] = (
+                        {
+                            key: data[key]
+                            for key in ("method", "status", "status_code")
+                            if key in data
+                        }
+                        if isinstance(data, dict)
+                        else {}
+                    )
+                else:
+                    breadcrumb.pop("data", None)
+                breadcrumb.pop("message", None)
+    return event
+
+
+def _scrub_sentry_breadcrumb(breadcrumb: dict[str, Any], _hint: Any) -> dict[str, Any]:
+    data = breadcrumb.get("data")
+    if breadcrumb.get("category") in {"fetch", "http", "xhr"}:
+        breadcrumb["data"] = (
+            {
+                key: data[key]
+                for key in ("method", "status", "status_code")
+                if key in data
+            }
+            if isinstance(data, dict)
+            else {}
+        )
+    else:
+        breadcrumb.pop("data", None)
+    breadcrumb.pop("message", None)
+    return breadcrumb
+
+
+if settings.sentry_dsn:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment=settings.environment.value,
+        integrations=[FastApiIntegration()],
+        send_default_pii=False,
+        max_request_body_size="never",
+        before_send=_scrub_sentry_event,
+        before_breadcrumb=_scrub_sentry_breadcrumb,
+    )
+
+
 # Whether the configured Groq models answered the startup probe, text and
 # vision tracked separately -- Groq has retired one without the other before
 # (see groq_service's module docstring), and a deploy with a working text

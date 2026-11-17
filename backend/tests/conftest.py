@@ -64,6 +64,8 @@ os.environ.setdefault("ARGON2_PARALLELISM", "1")
 # in their shell or backend/.env. Service tests inject a mock send function.
 os.environ["BREVO_API_KEY"] = ""
 os.environ["EMAIL_FROM_ADDRESS"] = ""
+# Tests must never send events to an externally configured Sentry project.
+os.environ["SENTRY_DSN"] = ""
 # The timing-equaliser pads every failed login to a fixed wall-clock cost
 # regardless of how fast Argon2 itself runs, so the brute-force tests -- which
 # fire off dozens of bad logins each -- pay this back to back. 250ms of real

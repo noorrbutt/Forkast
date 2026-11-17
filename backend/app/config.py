@@ -66,6 +66,7 @@ class Settings(BaseSettings):
     )
 
     environment: Environment = Field(alias="ENVIRONMENT")
+    sentry_dsn: str = Field(default="", alias="SENTRY_DSN")
 
     database_url: str = Field(alias="DATABASE_URL")
     # Read only by tests/conftest.py -- nothing in the application itself

@@ -69,6 +69,13 @@ address fails on EAS with an explanation instead of shipping.
       Google Cloud console to the package name `com.forkast.app` plus the SHA-1 of
       the Play app signing certificate. An unrestricted key inside a published app
       is a bill waiting to happen.
+- [ ] Optional Sentry monitoring: set `EXPO_PUBLIC_SENTRY_DSN` in the EAS
+      development, preview or production environment to enable it for that build;
+      leave it unset to disable reporting. The Expo Go client is excluded.
+- [ ] For readable native stack traces, also set `SENTRY_ORG` and `SENTRY_PROJECT`
+      and store `SENTRY_AUTH_TOKEN` as a sensitive EAS environment variable. The
+      Sentry Expo plugin is added only when the DSN and project coordinates are
+      present. Never put the auth token in an `EXPO_PUBLIC_` variable or commit it.
 
 ## Things only you can do
 

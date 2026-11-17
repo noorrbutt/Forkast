@@ -7,6 +7,8 @@ import { Figtree_500Medium } from '@expo-google-fonts/figtree/500Medium';
 import { Figtree_600SemiBold } from '@expo-google-fonts/figtree/600SemiBold';
 import { useFonts } from 'expo-font';
 import { QueryClientProvider } from '@tanstack/react-query';
+import * as Sentry from '@sentry/react-native';
+import Constants, { AppOwnership, ExecutionEnvironment } from 'expo-constants';
 import { Stack, usePathname, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -20,6 +22,50 @@ import { AuthProvider, useAuth } from '../hooks/useAuth';
 import { RamadanProvider } from '../hooks/useRamadan';
 import { queryClient } from '../lib/queryClient';
 import { ThemeProvider, useTheme } from '../theme';
+
+const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+// StoreClient also includes expo-dev-client; appOwnership distinguishes Expo Go.
+const isExpoGo =
+  Constants.executionEnvironment === ExecutionEnvironment.StoreClient &&
+  Constants.appOwnership === AppOwnership.Expo;
+const sentryEnabled = Boolean(sentryDsn) && !isExpoGo;
+
+function scrubSentryBreadcrumb(breadcrumb: Sentry.Breadcrumb): Sentry.Breadcrumb {
+  if (['fetch', 'http', 'xhr'].includes(breadcrumb.category ?? '')) {
+    const safeData: Record<string, unknown> = {};
+    for (const key of ['method', 'status', 'status_code']) {
+      if (breadcrumb.data && key in breadcrumb.data) {
+        safeData[key] = breadcrumb.data[key];
+      }
+    }
+    breadcrumb.data = safeData;
+  } else {
+    delete breadcrumb.data;
+  }
+  delete breadcrumb.message;
+  return breadcrumb;
+}
+
+function scrubSentryEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
+  if (event.request) {
+    event.request = {
+      ...(event.request.method ? { method: event.request.method } : {}),
+    };
+  }
+  event.breadcrumbs?.forEach(scrubSentryBreadcrumb);
+  return event;
+}
+
+if (sentryEnabled) {
+  Sentry.init({
+    dsn: sentryDsn,
+    environment:
+      Constants.expoConfig?.extra?.sentryEnvironment ?? (__DEV__ ? 'development' : 'production'),
+    sendDefaultPii: false,
+    beforeSend: scrubSentryEvent,
+    beforeBreadcrumb: scrubSentryBreadcrumb,
+  });
+}
 
 /**
  * Hold the native splash until the app can actually paint itself.
@@ -125,11 +171,21 @@ function RootNavigator() {
  * not, including a failure in the providers themselves. That is also why
  * CrashView refuses to use the theme context: at this level, it is gone.
  */
-export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
+type RootErrorBoundaryProps = { error: Error; retry: () => Promise<void> };
+
+function RootErrorBoundary({ error, retry }: RootErrorBoundaryProps) {
   return <CrashView error={error} retry={() => void retry()} />;
 }
 
-export default function RootLayout() {
+const SentryErrorBoundary = sentryEnabled
+  ? Sentry.wrapExpoRouterErrorBoundary(RootErrorBoundary)
+  : RootErrorBoundary;
+
+export function ErrorBoundary(props: RootErrorBoundaryProps) {
+  return <SentryErrorBoundary {...props} />;
+}
+
+function RootLayout() {
   /**
    * The four cuts the type scale actually asks for, and no more.
    *
@@ -177,3 +233,5 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+export default sentryEnabled ? Sentry.wrap(RootLayout) : RootLayout;
