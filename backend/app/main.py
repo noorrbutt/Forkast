@@ -74,11 +74,7 @@ def _scrub_sentry_breadcrumb(breadcrumb: dict[str, Any], _hint: Any) -> dict[str
     data = breadcrumb.get("data")
     if breadcrumb.get("category") in {"fetch", "http", "xhr"}:
         breadcrumb["data"] = (
-            {
-                key: data[key]
-                for key in ("method", "status", "status_code")
-                if key in data
-            }
+            {key: data[key] for key in ("method", "status", "status_code") if key in data}
             if isinstance(data, dict)
             else {}
         )
