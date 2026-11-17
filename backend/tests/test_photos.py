@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import base64
 import io
+import uuid
 
 from httpx import AsyncClient
 from PIL import Image
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import MAX_PHOTO_BYTES
+from app.models import MAX_PHOTO_BYTES, FoodLogPhoto
 
 LOGS = "/api/v1/logs"
 
@@ -45,6 +47,12 @@ async def _log(client: AsyncClient, dish: str = "photo meal") -> str:
 
 def _upload(data: bytes, name: str = "meal.png", content_type: str = "image/png") -> dict:
     return {"file": (name, data, content_type)}
+
+
+def _decompression_bomb_png() -> bytes:
+    buffer = io.BytesIO()
+    Image.new("1", (20_000, 20_000), 0).save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 async def test_a_photo_can_be_attached_and_read_back(auth_client: AsyncClient) -> None:
@@ -134,6 +142,16 @@ async def test_an_oversized_photo_is_refused_with_413_not_a_500(
 
     assert response.status_code == 413
     assert "KB" in response.json()["detail"], response.text
+
+
+async def test_a_photo_over_the_pixel_limit_is_refused(auth_client: AsyncClient) -> None:
+    log_id = await _log(auth_client)
+
+    response = await auth_client.put(
+        f"{LOGS}/{log_id}/photo", files=_upload(_decompression_bomb_png())
+    )
+
+    assert response.status_code == 422, response.text
 
 
 async def test_an_empty_file_is_refused(auth_client: AsyncClient) -> None:
@@ -287,6 +305,28 @@ async def test_an_undecodable_photo_falls_back_to_the_original(auth_client: Asyn
 
     assert fetched.status_code == 200
     assert fetched.content == JPEG
+
+
+async def test_a_stored_bomb_photo_falls_back_to_the_original(
+    auth_client: AsyncClient, session: AsyncSession
+) -> None:
+    log_id = await _log(auth_client)
+    bomb = _decompression_bomb_png()
+    session.add(
+        FoodLogPhoto(
+            food_log_id=uuid.UUID(log_id),
+            content_type="image/png",
+            byte_size=len(bomb),
+            data=bomb,
+        )
+    )
+    await session.commit()
+
+    fetched = await auth_client.get(f"{LOGS}/{log_id}/photo", params={"w": 300})
+
+    assert fetched.status_code == 200
+    assert fetched.content == bomb
+    assert fetched.headers["content-type"].startswith("image/png")
 
 
 async def test_w_out_of_bounds_is_refused(auth_client: AsyncClient) -> None:

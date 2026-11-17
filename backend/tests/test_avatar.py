@@ -8,8 +8,10 @@ these are about.
 from __future__ import annotations
 
 import base64
+import io
 
 from httpx import AsyncClient
+from PIL import Image
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +34,12 @@ WAV = bytes.fromhex("52494646") + b"\x00\x00\x00\x00" + bytes.fromhex("57415645"
 
 def _upload(data: bytes, name: str = "me.png", content_type: str = "image/png") -> dict:
     return {"file": (name, data, content_type)}
+
+
+def _decompression_bomb_png() -> bytes:
+    buffer = io.BytesIO()
+    Image.new("1", (20_000, 20_000), 0).save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 async def _register(client: AsyncClient, email: str) -> dict:
@@ -114,6 +122,13 @@ async def test_an_oversized_picture_is_refused_with_413_not_a_500(
 
     assert response.status_code == 413
     assert "KB" in response.json()["detail"], response.text
+    assert (await auth_client.get(AVATAR)).status_code == 404
+
+
+async def test_a_picture_over_the_pixel_limit_is_refused(auth_client: AsyncClient) -> None:
+    response = await auth_client.put(AVATAR, files=_upload(_decompression_bomb_png()))
+
+    assert response.status_code == 422, response.text
     assert (await auth_client.get(AVATAR)).status_code == 404
 
 

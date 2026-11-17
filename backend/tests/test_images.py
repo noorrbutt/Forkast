@@ -5,9 +5,16 @@ from __future__ import annotations
 import io
 
 import pytest
+from fastapi import HTTPException
 from PIL import Image
 
-from app.services.images import JPEG_QUALITY, MAX_DIMENSION, compress_for_estimation, thumbnail
+from app.services.images import (
+    JPEG_QUALITY,
+    MAX_DIMENSION,
+    check_upload,
+    compress_for_estimation,
+    thumbnail,
+)
 
 
 def _photo(width: int, height: int, *, fmt: str = "PNG", exif: bytes | None = None) -> bytes:
@@ -17,6 +24,12 @@ def _photo(width: int, height: int, *, fmt: str = "PNG", exif: bytes | None = No
         image.save(buffer, format=fmt, exif=exif)
     else:
         image.save(buffer, format=fmt)
+    return buffer.getvalue()
+
+
+def _decompression_bomb_png(width: int = 20_000, height: int = 20_000) -> bytes:
+    buffer = io.BytesIO()
+    Image.new("1", (width, height), 0).save(buffer, format="PNG")
     return buffer.getvalue()
 
 
@@ -89,3 +102,46 @@ def test_thumbnail_declines_a_photo_already_inside_the_bound() -> None:
 
 def test_thumbnail_declines_bytes_it_cannot_decode() -> None:
     assert thumbnail(bytes.fromhex("ffd8ffe0") + b"\x00" * 32, 300) is None
+
+
+def test_upload_check_still_accepts_signature_only_images() -> None:
+    jpeg = bytes.fromhex("ffd8ffe000104a46494600010100000100010000") + b"\x00" * 64
+
+    assert check_upload(jpeg, max_bytes=len(jpeg), noun="Photos") == "image/jpeg"
+
+
+def test_upload_check_rejects_an_image_over_the_pixel_limit() -> None:
+    bomb = _decompression_bomb_png()
+
+    with pytest.raises(HTTPException) as exc_info:
+        check_upload(bomb, max_bytes=len(bomb) + 1, noun="Photos")
+
+    assert exc_info.value.status_code == 422
+
+
+def test_estimation_compression_rejects_an_image_over_the_pixel_limit() -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        compress_for_estimation(_decompression_bomb_png())
+
+    assert exc_info.value.status_code == 422
+
+
+def test_thumbnail_declines_an_image_over_the_pixel_limit() -> None:
+    assert thumbnail(_decompression_bomb_png(), 300) is None
+
+
+def test_images_above_the_pixel_limit_but_below_pillow_error_threshold_are_rejected() -> None:
+    data = _decompression_bomb_png(5_001, 5_000)
+
+    with pytest.warns(Image.DecompressionBombWarning):
+        with pytest.raises(HTTPException) as exc_info:
+            check_upload(data, max_bytes=len(data) + 1, noun="Photos")
+    assert exc_info.value.status_code == 422
+
+    with pytest.warns(Image.DecompressionBombWarning):
+        with pytest.raises(HTTPException) as exc_info:
+            compress_for_estimation(data)
+    assert exc_info.value.status_code == 422
+
+    with pytest.warns(Image.DecompressionBombWarning):
+        assert thumbnail(data, 300) is None

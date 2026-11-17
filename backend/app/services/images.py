@@ -20,6 +20,9 @@ import io
 from fastapi import HTTPException, status
 from PIL import Image, ImageOps
 
+MAX_IMAGE_PIXELS = 25_000_000
+Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+
 # What a phone camera and an image picker actually produce. Checked by magic
 # bytes rather than by the declared content type, because the header is whatever
 # the client says it is and this content is served straight back to other users
@@ -33,6 +36,7 @@ _MAGIC: tuple[tuple[bytes, str], ...] = (
     (bytes.fromhex("89504e470d0a1a0a"), "image/png"),
     (bytes.fromhex("52494646"), "image/webp"),
 )
+_IMAGE_TOO_LARGE = "That image is too large to process."
 
 
 def sniff(data: bytes) -> str | None:
@@ -71,6 +75,22 @@ def check_upload(data: bytes, *, max_bytes: int, noun: str) -> str:
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail=f"{noun} must be JPEG, PNG or WebP.",
         )
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            if image.width * image.height > MAX_IMAGE_PIXELS:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=_IMAGE_TOO_LARGE,
+                )
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_IMAGE_TOO_LARGE,
+        ) from exc
+    except (EOFError, OSError, SyntaxError, ValueError):
+        # Preserve the signature check for files Pillow cannot size; decoding
+        # failures are handled by the estimator or by thumbnail's fallback.
+        pass
     return content_type
 
 
@@ -87,27 +107,33 @@ JPEG_QUALITY = 82
 
 
 def compress_for_estimation(data: bytes) -> bytes:
-    """Re-encode `data` as a downscaled JPEG, ready to send to a vision model.
+    """Re-encode a bounded `data` image as a downscaled JPEG for a vision model.
 
-    Never raises on a malformed image: the caller has already run this past
-    sniff, which only accepts real JPEG, PNG or WebP signatures, so a failure
-    here means Pillow could not decode bytes that passed that check, which is
-    a corrupt or truncated upload rather than a well-formed one this function
-    should have handled. That is reported the same way a transport failure
-    to Groq is, by the caller, rather than crashing the request with a raw
-    Pillow exception.
+    Oversized images raise a 422 before pixel decoding. Other decode failures
+    propagate to the route, which reports the upload as unreadable.
     """
-    with Image.open(io.BytesIO(data)) as image:
-        # EXIF orientation is stripped by the resize below (Pillow does not
-        # carry EXIF through a resave by default), so it has to be baked into
-        # the pixels first or a photo taken in portrait comes out sideways.
-        image = ImageOps.exif_transpose(image) or image
-        image = image.convert("RGB")
-        image.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.Resampling.LANCZOS)
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            if image.width * image.height > MAX_IMAGE_PIXELS:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=_IMAGE_TOO_LARGE,
+                )
+            # EXIF orientation is stripped by the resize below (Pillow does not
+            # carry EXIF through a resave by default), so it has to be baked into
+            # the pixels first or a photo taken in portrait comes out sideways.
+            image = ImageOps.exif_transpose(image) or image
+            image = image.convert("RGB")
+            image.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.Resampling.LANCZOS)
 
-        buffer = io.BytesIO()
-        image.save(buffer, format="JPEG", quality=JPEG_QUALITY, optimize=True)
-        return buffer.getvalue()
+            buffer = io.BytesIO()
+            image.save(buffer, format="JPEG", quality=JPEG_QUALITY, optimize=True)
+            return buffer.getvalue()
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_IMAGE_TOO_LARGE,
+        ) from exc
 
 
 # The bounds a caller may ask a served photo to be shrunk to. The floor keeps
@@ -126,12 +152,13 @@ def thumbnail(data: bytes, max_edge: int) -> tuple[bytes, str] | None:
     stays upright here too.
 
     None when there is nothing to gain: the photo is already within the bound,
-    or Pillow cannot decode bytes that passed sniff. The caller serves the
-    original either way, which is always a correct answer, just a larger one.
+    exceeds the pixel safety limit, or Pillow cannot decode bytes that passed
+    sniff. The caller serves the original either way, which is always a correct
+    answer, just a larger one.
     """
     try:
         with Image.open(io.BytesIO(data)) as image:
-            if max(image.size) <= max_edge:
+            if max(image.size) <= max_edge or image.width * image.height > MAX_IMAGE_PIXELS:
                 return None
             image = ImageOps.exif_transpose(image) or image
             image = image.convert("RGB")
@@ -140,5 +167,12 @@ def thumbnail(data: bytes, max_edge: int) -> tuple[bytes, str] | None:
             buffer = io.BytesIO()
             image.save(buffer, format="JPEG", quality=JPEG_QUALITY, optimize=True)
             return buffer.getvalue(), "image/jpeg"
-    except (OSError, ValueError):
+    except (
+        EOFError,
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
+        OSError,
+        SyntaxError,
+        ValueError,
+    ):
         return None
