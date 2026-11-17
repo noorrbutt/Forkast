@@ -539,14 +539,14 @@ async def test_a_token_works_immediately_after_registering(client: AsyncClient) 
     assert me.status_code == 200
 
 
-async def test_two_simultaneous_refreshes_of_one_token_yield_exactly_one_new_pair(
-    client: AsyncClient,
+async def test_simultaneous_refresh_retries_leave_one_live_pair(
+    client: AsyncClient, session: AsyncSession
 ) -> None:
-    """Rotation has to be atomic, not read-then-check-then-write.
+    """A concurrent lost-response retry may get a second pair within leeway.
 
-    Two requests arriving together with the same token both pass a plain read
-    and check, and both get issued a fresh pair, which quietly defeats rotation.
-    Claiming the row with a single conditional UPDATE means only one can win.
+    The conditional update lets only one request claim the presented token.
+    The other is treated as a retry and retires the first successor, so only
+    the latest returned pair remains live.
     """
     registered = (
         await client.post(
@@ -564,11 +564,26 @@ async def test_two_simultaneous_refreshes_of_one_token_yield_exactly_one_new_pai
     first, second = await asyncio.gather(
         client.post(REFRESH, json={"refresh_token": token}),
         client.post(REFRESH, json={"refresh_token": token}),
-        return_exceptions=True,
     )
 
-    statuses = sorted(r.status_code for r in (first, second) if not isinstance(r, BaseException))
-    assert statuses.count(200) == 1, f"expected exactly one winner, got {statuses}"
+    responses = (first, second)
+    assert all(response.status_code == 200 for response in responses)
+
+    user = await session.scalar(select(User).where(User.email == "racer@forkast.app"))
+    assert user is not None
+    live = (
+        await session.scalars(
+            select(RefreshToken).where(
+                RefreshToken.user_id == user.id,
+                RefreshToken.revoked_at.is_(None),
+            )
+        )
+    ).all()
+    assert len(live) == 1
+    returned_hashes = {
+        hash_refresh_token(response.json()["refresh_token"]) for response in responses
+    }
+    assert live[0].token_hash in returned_hashes
 
 
 async def test_login_does_not_answer_faster_for_an_unknown_email(client: AsyncClient) -> None:
@@ -605,11 +620,10 @@ async def test_login_does_not_answer_faster_for_an_unknown_email(client: AsyncCl
 async def test_replaying_a_spent_refresh_token_kills_the_whole_chain(
     client: AsyncClient, session: AsyncSession
 ) -> None:
-    """Rotation alone does not help if the thief refreshes first.
+    """A replay outside the grace window kills the whole chain.
 
-    The victim gets a 401 and the thief holds a chain that keeps rotating
-    forever. A replay of an already-revoked token is the signal that the chain
-    leaked, so every live token for that account goes with it. RFC 9700 4.14.2.
+    An immediate same-session replay is indistinguishable from a lost response,
+    so this models a stolen token replayed after that recovery window.
     """
     tokens = (
         await client.post(
@@ -625,7 +639,17 @@ async def test_replaying_a_spent_refresh_token_kills_the_whole_chain(
 
     rotated = (await client.post(REFRESH, json={"refresh_token": tokens["refresh_token"]})).json()
 
-    # The stolen, already-spent token is presented again.
+    reused = await session.scalar(
+        select(RefreshToken).where(
+            RefreshToken.token_hash == hash_refresh_token(tokens["refresh_token"])
+        )
+    )
+    assert reused is not None
+    reused.revoked_at = dt.datetime.now(dt.UTC) - dt.timedelta(
+        seconds=get_settings().refresh_reuse_leeway_seconds + 1
+    )
+    await session.commit()
+
     replay = await client.post(REFRESH, json={"refresh_token": tokens["refresh_token"]})
     assert replay.status_code == 401
 

@@ -8,7 +8,15 @@ having asked.
 
 from __future__ import annotations
 
+import datetime as dt
+
 from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import get_settings
+from app.models import RefreshToken
+from app.services.security import hash_refresh_token
 
 ME = "/api/v1/me"
 PASSWORD = "/api/v1/me/password"
@@ -145,7 +153,7 @@ async def test_an_evicted_device_cannot_take_the_caller_down_with_it(
 
 
 async def test_replaying_the_callers_own_spent_token_still_kills_the_chain(
-    client: AsyncClient,
+    client: AsyncClient, session: AsyncSession
 ) -> None:
     """Reuse detection must survive a password change for the session that is
     still in use, or changing a password would quietly disarm it."""
@@ -160,7 +168,17 @@ async def test_replaying_the_callers_own_spent_token_still_kills_the_chain(
 
     rotated = (await client.post(REFRESH, json={"refresh_token": tokens["refresh_token"]})).json()
 
-    # The spent one comes back, the way a stolen copy would.
+    reused = await session.scalar(
+        select(RefreshToken).where(
+            RefreshToken.token_hash == hash_refresh_token(tokens["refresh_token"])
+        )
+    )
+    assert reused is not None
+    reused.revoked_at = dt.datetime.now(dt.UTC) - dt.timedelta(
+        seconds=get_settings().refresh_reuse_leeway_seconds + 1
+    )
+    await session.commit()
+
     assert (
         await client.post(REFRESH, json={"refresh_token": tokens["refresh_token"]})
     ).status_code == 401
