@@ -182,15 +182,9 @@ async def test_refresh_tokens_are_stored_only_as_a_hash(
 async def test_an_unrelated_live_session_grants_no_leniency_on_a_replay(
     client: AsyncClient, session: AsyncSession
 ) -> None:
-    """A second, unrelated session being live used to be read as "this looks
-    like a client retry, not a leak" and bought the replayed token a fresh
-    pair instead of a 401. That answers the wrong question: having another
-    device signed in is completely normal and says nothing about whether
-    THIS request is the real client retrying or an attacker replaying a
-    stolen token. Two ordinary sessions for the same account must not weaken
-    reuse detection on either one -- see _is_timeout_retry's own note on
-    this. The only legitimate leniency left is a later rotation in the SAME
-    session (test_retrying_a_recently_spent_refresh_within_the_same_session)."""
+    """A second, unrelated live session is not evidence that this session
+    retried. Reuse detection only allows leniency when the replayed session
+    itself has a live successor."""
     registered = (
         await client.post(
             REGISTER,
@@ -221,16 +215,52 @@ async def test_an_unrelated_live_session_grants_no_leniency_on_a_replay(
     rotated = await client.post(REFRESH, json={"refresh_token": first_refresh})
     assert rotated.status_code == 200
 
+    successor = await session.scalar(
+        select(RefreshToken).where(
+            RefreshToken.token_hash == hash_refresh_token(rotated.json()["refresh_token"])
+        )
+    )
+    assert successor is not None
+    successor.revoked_at = dt.datetime.now(dt.UTC)
+    await session.commit()
+
     replay = await client.post(REFRESH, json={"refresh_token": first_refresh})
     assert replay.status_code == 401
 
-    # The replay is treated as a leak, so the chain it belonged to is dead --
-    # including the pair the legitimate rotation just received.
-    after = await client.post(REFRESH, json={"refresh_token": rotated.json()["refresh_token"]})
-    assert after.status_code == 401
-
     # The unrelated session is exactly that: unrelated. It is untouched.
     assert (await client.post(REFRESH, json={"refresh_token": second_raw})).status_code == 200
+
+
+async def test_retrying_a_lost_refresh_response_retires_its_live_successor(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    registered = (
+        await client.post(
+            REGISTER,
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "lost-refresh-response@forkast.app",
+                "password": "password123",
+            },
+        )
+    ).json()
+    original_refresh = registered["refresh_token"]
+
+    rotated = await client.post(REFRESH, json={"refresh_token": original_refresh})
+    assert rotated.status_code == 200
+
+    replay = await client.post(REFRESH, json={"refresh_token": original_refresh})
+    assert replay.status_code == 200
+    assert replay.json()["refresh_token"] != rotated.json()["refresh_token"]
+
+    successor = await session.scalar(
+        select(RefreshToken).where(
+            RefreshToken.token_hash == hash_refresh_token(rotated.json()["refresh_token"])
+        )
+    )
+    assert successor is not None
+    assert successor.revoked_at is not None
 
 
 async def test_retrying_a_recently_spent_refresh_within_the_same_session(
@@ -238,9 +268,8 @@ async def test_retrying_a_recently_spent_refresh_within_the_same_session(
 ) -> None:
     """The one case leniency still covers: the server's own earlier response
     to THIS client was lost, the client retried with the token it still had,
-    and the session kept going on its own in the meantime. A later rotation
-    already landing in the same session is evidence the chain is healthy,
-    which an unrelated session elsewhere never was."""
+    and the same session has one live successor. An unrelated session
+    elsewhere is never enough."""
     registered = (
         await client.post(
             REGISTER,
@@ -257,8 +286,7 @@ async def test_retrying_a_recently_spent_refresh_within_the_same_session(
     rotated = await client.post(REFRESH, json={"refresh_token": first_refresh})
     assert rotated.status_code == 200
 
-    # The session continues again, which is the later-rotation signal: proof
-    # the chain kept working fine after first_refresh was spent.
+    # The session continues again; the final rotation remains its live successor.
     continued = await client.post(REFRESH, json={"refresh_token": rotated.json()["refresh_token"]})
     assert continued.status_code == 200
 
@@ -309,7 +337,8 @@ async def test_reusing_a_refresh_after_the_leeway_revokes_only_that_session(
     )
     await session.commit()
 
-    assert (await client.post(REFRESH, json={"refresh_token": first_refresh})).status_code == 200
+    rotated = await client.post(REFRESH, json={"refresh_token": first_refresh})
+    assert rotated.status_code == 200
 
     stale = await session.scalar(
         select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_token(first_refresh))
@@ -323,6 +352,14 @@ async def test_reusing_a_refresh_after_the_leeway_revokes_only_that_session(
     replay = await client.post(REFRESH, json={"refresh_token": first_refresh})
     assert replay.status_code == 401
     assert (await client.post(REFRESH, json={"refresh_token": second_raw})).status_code == 200
+
+    stale_successor = await session.scalar(
+        select(RefreshToken).where(
+            RefreshToken.token_hash == hash_refresh_token(rotated.json()["refresh_token"])
+        )
+    )
+    assert stale_successor is not None
+    assert stale_successor.revoked_at is not None
 
     live_rows = await session.scalars(
         select(RefreshToken).where(
