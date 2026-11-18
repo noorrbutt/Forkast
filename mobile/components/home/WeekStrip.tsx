@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { Card, Icon } from '../ui';
 import { formatNumber, shortDay } from '../../lib/format';
@@ -37,6 +38,7 @@ export function WeekStrip({
   target: number | null;
   onSeeTrends: () => void;
 }) {
+  const { t, i18n } = useTranslation();
   const { colors, spacing, type } = useTheme();
   const week = days.slice(-7);
   const goal = target !== null && target > 0 ? target : null;
@@ -44,7 +46,11 @@ export function WeekStrip({
   const targetBottom = goal !== null ? (goal / top) * CHART_HEIGHT : 0;
 
   const summary = week
-    .map((day) => `${shortDay(day.day)} ${formatNumber(day.calories)} kcal`)
+    .map((day) =>
+      `${shortDay(day.day, i18n.language)} ${t('home.calories', {
+        calories: formatNumber(day.calories),
+      })}`,
+    )
     .join(', ');
 
   // Seven empty dashes and one bar say almost nothing on their own, so the
@@ -57,19 +63,20 @@ export function WeekStrip({
     goal === null
       ? null
       : loggedDays === 0
-        ? 'Nothing logged this week yet.'
-        : `${onTargetDays} of ${week.length} days on target.`;
+        ? t('home.nothingLoggedThisWeek')
+        : t('home.daysOnTarget', { onTarget: onTargetDays, days: week.length });
+  const targetA11y = goal === null ? '' : t('home.weekTarget', { calories: formatNumber(goal) });
 
   return (
     <Card>
       <View style={{ gap: spacing.lg }}>
-        <Text style={[type.title, { color: colors.text }]}>Last 7 days</Text>
+        <Text style={[type.title, { color: colors.text }]}>{t('home.lastSevenDays')}</Text>
 
         <View
           testID="week-strip"
           accessible
           accessibilityRole="image"
-          accessibilityLabel={`Last seven days: ${summary}.${goal !== null ? ` Target ${formatNumber(goal)} kcal.` : ''}`}
+          accessibilityLabel={t('home.weekA11y', { summary, target: targetA11y })}
           style={{ gap: spacing.sm }}
         >
           <View style={{ height: CHART_HEIGHT, flexDirection: 'row', alignItems: 'flex-end' }}>
@@ -127,7 +134,7 @@ export function WeekStrip({
                     },
                   ]}
                 >
-                  {`Target ${formatNumber(goal)}`}
+                  {t('home.target', { calories: formatNumber(goal) })}
                 </Text>
               </>
             ) : null}
@@ -139,7 +146,7 @@ export function WeekStrip({
                 key={day.day}
                 style={[type.labelSoft, { flex: 1, textAlign: 'center', color: colors.muted }]}
               >
-                {shortDay(day.day)}
+                {shortDay(day.day, i18n.language)}
               </Text>
             ))}
           </View>
@@ -155,7 +162,7 @@ export function WeekStrip({
         <Pressable
           onPress={onSeeTrends}
           accessibilityRole="button"
-          accessibilityLabel="See trends"
+          accessibilityLabel={t('home.seeTrends')}
           style={({ pressed }) => ({
             flexDirection: 'row',
             alignItems: 'center',
@@ -165,7 +172,9 @@ export function WeekStrip({
             minHeight: 44,
           })}
         >
-          <Text style={[type.body, { color: colors.accent, fontWeight: '600' }]}>See trends</Text>
+          <Text style={[type.body, { color: colors.accent, fontWeight: '600' }]}>
+            {t('home.seeTrends')}
+          </Text>
           <Icon name="forward" size={16} color={colors.accent} />
         </Pressable>
       </View>

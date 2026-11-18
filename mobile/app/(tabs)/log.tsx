@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { ConfirmEstimate } from '../../components/log/ConfirmEstimate';
 import { useLogFormStyles } from '../../components/log/formStyles';
@@ -9,7 +10,6 @@ import { OrderReviewForm } from '../../components/log/OrderReviewForm';
 import { RecentMeals } from '../../components/log/RecentMeals';
 import { useLogForm, type LogForm } from '../../components/log/useLogForm';
 import { Button, Chip, ControlLabel, FormError, Loading, Screen, UndoSnackbar } from '../../components/ui';
-import { SERVING_LABELS } from '../../lib/format';
 import type { FoodLog } from '../../lib/types';
 import { SERVING_SIZES } from '../../lib/types';
 import { useTheme } from '../../theme';
@@ -30,18 +30,19 @@ import { useTheme } from '../../theme';
  * the question is asked the same way on both.
  */
 function ServingSizeQuestion({ form, hint }: { form: LogForm; hint?: string }) {
+  const { t } = useTranslation();
   const { colors, spacing, type } = useTheme();
   const { optionRow, optionChip } = useLogFormStyles();
   const { servingSize, setServingSize } = form;
 
   return (
     <View style={{ gap: spacing.sm }}>
-      <ControlLabel>Serving size</ControlLabel>
+      <ControlLabel>{t('log.servingSize')}</ControlLabel>
       <View style={optionRow}>
         {SERVING_SIZES.map((size) => (
           <Chip
             key={size}
-            label={SERVING_LABELS[size]}
+            label={t(`log.serving${size[0].toUpperCase()}${size.slice(1)}`)}
             selected={servingSize === size}
             showCheck
             style={optionChip}
@@ -55,6 +56,7 @@ function ServingSizeQuestion({ form, hint }: { form: LogForm; hint?: string }) {
 }
 
 export default function LogScreen() {
+  const { t } = useTranslation();
   const { colors, layout, spacing, type } = useTheme();
   const router = useRouter();
   const { slot } = useLocalSearchParams<{ slot?: string }>();
@@ -136,8 +138,9 @@ export default function LogScreen() {
             the ordinary photo/manual save above, which already asked for
             everything it needed up front and has nothing to take back. */}
         <UndoSnackbar
-          message={undoLog ? `Logged ${undoLog.dish_name} again.` : null}
+          message={undoLog ? t('log.undoMessage', { dish: undoLog.dish_name }) : null}
           onUndo={undoRecent}
+          undoLabel={t('log.undo')}
         />
       </Screen>
     );
@@ -148,28 +151,29 @@ export default function LogScreen() {
     const orderBusy = photoPicker.preparing || estimateOrder.isPending;
 
     return (
-      <Screen title="Log a meal">
+      <Screen title={t('log.screenTitle')}>
         <View style={column}>
           <View style={{ gap: spacing.sm, paddingBottom: spacing.sm }}>
             {/* Named for the slot when Home's ghost tile for it sent you here.
                 The slot itself is read off the time the meal is saved, which
                 is why Home only offers slots whose hours have not passed. */}
             <Text style={[type.display, { color: colors.text }]}>
-              {slotName ? `What did you have for ${slotName}?` : 'What did you eat?'}
+              {slotName
+                ? t('log.captureSlotTitle', {
+                    slot: t(`home.slots.${slotName}`).toLocaleLowerCase(),
+                  })
+                : t('log.captureTitle')}
             </Text>
-            <Text style={[type.body, { color: colors.muted }]}>
-              Snap a photo and Forkast guesses the dish, the portion and the calories. Typing it in
-              yourself works just as well.
-            </Text>
+            <Text style={[type.body, { color: colors.muted }]}>{t('log.captureBody')}</Text>
           </View>
 
-          {busy ? <Loading label="Looking at your photo" /> : null}
-          {orderBusy ? <Loading label="Reading your order" /> : null}
+          {busy ? <Loading label={t('log.lookingAtPhoto')} /> : null}
+          {orderBusy ? <Loading label={t('log.readingOrder')} /> : null}
           {estimateNotice ? <FormError>{estimateNotice}</FormError> : null}
 
           <View style={{ gap: spacing.md }}>
             <Button
-              label="Take a photo"
+              label={t('log.takePhoto')}
               icon="camera"
               size="lg"
               full
@@ -178,7 +182,7 @@ export default function LogScreen() {
               onPress={() => void captureAndEstimate(true)}
             />
             <Button
-              label="Choose from library"
+              label={t('log.chooseLibrary')}
               variant="secondary"
               size="lg"
               full
@@ -192,7 +196,7 @@ export default function LogScreen() {
                 a nicer entry point but needs a dev build, so it is out of
                 scope for now. */}
             <Button
-              label="Import a delivery order"
+              label={t('log.importOrder')}
               variant="secondary"
               size="lg"
               full
@@ -204,7 +208,7 @@ export default function LogScreen() {
                 the alternative to the photo, and one was outlined while the
                 other was saffron text, a difference that meant nothing. */}
             <Button
-              label="Type it in instead"
+              label={t('log.typeInstead')}
               variant="secondary"
               size="lg"
               full
@@ -228,7 +232,7 @@ export default function LogScreen() {
 
   if (mode === 'confirm' && estimate) {
     return (
-      <Screen title="Log a meal" onBack={resetForm}>
+      <Screen title={t('log.screenTitle')} onBack={resetForm} backLabel={t('log.goBack')}>
         <View style={column}>
           <ConfirmEstimate
             form={form}
@@ -242,7 +246,7 @@ export default function LogScreen() {
 
   if (mode === 'order') {
     return (
-      <Screen title="Log a meal" onBack={resetForm}>
+      <Screen title={t('log.screenTitle')} onBack={resetForm} backLabel={t('log.goBack')}>
         <View style={column}>
           <OrderReviewForm form={form} />
         </View>
@@ -251,15 +255,12 @@ export default function LogScreen() {
   }
 
   return (
-    <Screen title="Log a meal" onBack={resetForm}>
+    <Screen title={t('log.screenTitle')} onBack={resetForm} backLabel={t('log.goBack')}>
       <View style={column}>
         <ManualLogForm
           form={form}
           servingSizeQuestion={
-            <ServingSizeQuestion
-              form={form}
-              hint="The estimate scales with this, so a large portion goes past the range above."
-            />
+            <ServingSizeQuestion form={form} hint={t('log.servingHint')} />
           }
         />
       </View>

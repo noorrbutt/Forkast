@@ -4,11 +4,17 @@ import { useTheme } from '../../theme';
 import type { EstimateSource } from '../../lib/types';
 import { Icon } from './Icon';
 
-export function EstimateSourceLabel({ source }: { source?: EstimateSource }) {
+export function EstimateSourceLabel({
+  source,
+  labels,
+}: {
+  source?: EstimateSource;
+  labels?: { ai: string; local: string };
+}) {
   const { colors, type } = useTheme();
   if (!source) return null;
 
-  const label = source === 'ai' ? 'Estimate: AI' : 'Estimate: local';
+  const label = source === 'ai' ? labels?.ai ?? 'Estimate: AI' : labels?.local ?? 'Estimate: local';
   return (
     <Text
       accessibilityRole="text"

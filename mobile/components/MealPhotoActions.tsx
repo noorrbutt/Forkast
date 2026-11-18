@@ -21,6 +21,12 @@ type MealPhotoActionsProps = {
   removing: boolean;
   onAttach: (fromCamera: boolean) => void;
   onRemove: () => void;
+  labels?: {
+    takePhoto: string;
+    retake: string;
+    choose: string;
+    remove: string;
+  };
 };
 
 /**
@@ -59,13 +65,14 @@ export function MealPhotoActions({
   removing,
   onAttach,
   onRemove,
+  labels,
 }: MealPhotoActionsProps) {
   const { spacing } = useTheme();
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, flexWrap: 'wrap' }}>
       <Button
-        label={hasPhoto ? 'Retake' : 'Take a photo'}
+        label={hasPhoto ? labels?.retake ?? 'Retake' : labels?.takePhoto ?? 'Take a photo'}
         // Quiet once there is a photo, and quiet wherever the picture is not
         // what the screen is for. A primary button is a claim about what to do
         // next, and on a meal that already exists that claim belongs to Save.
@@ -76,7 +83,7 @@ export function MealPhotoActions({
         loading={attaching}
       />
       <Button
-        label="Choose"
+        label={labels?.choose ?? 'Choose'}
         variant="secondary"
         compact
         onPress={() => onAttach(false)}
@@ -84,7 +91,7 @@ export function MealPhotoActions({
       />
       {hasPhoto ? (
         <Button
-          label="Remove"
+          label={labels?.remove ?? 'Remove'}
           variant="ghost"
           compact
           onPress={onRemove}

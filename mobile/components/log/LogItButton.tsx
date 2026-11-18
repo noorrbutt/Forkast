@@ -1,4 +1,5 @@
 import { Text } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '../ui';
 import { useTheme } from '../../theme';
@@ -12,13 +13,14 @@ import type { LogForm } from './useLogForm';
  * a press has actually been refused.
  */
 export function LogItButton({ form }: { form: LogForm }) {
+  const { t } = useTranslation();
   const { colors, type } = useTheme();
   const { createLog, outstanding, refused, submit } = form;
 
   return (
     <>
       <Button
-        label={createLog.isPending ? 'Saving' : 'Log it'}
+        label={createLog.isPending ? t('log.saving') : t('log.logIt')}
         icon="check"
         size="lg"
         full

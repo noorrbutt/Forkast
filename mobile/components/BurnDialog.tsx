@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { useBurnToday, useClearBurn, useSetBurn } from '../hooks/useBurn';
 import { describeError } from '../lib/api';
@@ -31,6 +32,7 @@ type Props = {
  * same whether or not it has one.
  */
 export function BurnDialog({ visible, onDismiss }: Props) {
+  const { t } = useTranslation();
   const { spacing } = useTheme();
   const today = useBurnToday();
   const save = useSetBurn();
@@ -87,7 +89,7 @@ export function BurnDialog({ visible, onDismiss }: Props) {
   // about and the hint would be answering a question nobody asked.
   const problem =
     (asked || trimmed.length > 0) && !valid
-      ? `Enter a whole number between 0 and ${formatNumber(MAX_BURN)}.`
+      ? t('home.burn.invalid', { maximum: formatNumber(MAX_BURN) })
       : null;
 
   const onSave = () => {
@@ -129,11 +131,11 @@ export function BurnDialog({ visible, onDismiss }: Props) {
     <Dialog
       visible={visible}
       onDismiss={busy ? () => undefined : onDismiss}
-      title="Burned today"
-      message="Optional. Add it if you tracked a workout or a long walk, and it comes off your total."
+      title={t('home.burn.title')}
+      message={t('home.burn.message')}
       actions={[
         {
-          label: saved ? 'Update' : 'Save',
+          label: saved ? t('home.burn.update') : t('home.burn.save'),
           variant: 'primary',
           onPress: onSave,
           // Live until the request is actually running. A primary action that
@@ -146,7 +148,7 @@ export function BurnDialog({ visible, onDismiss }: Props) {
         ...(saved
           ? [
               {
-                label: 'Remove it',
+                label: t('home.burn.remove'),
                 variant: 'secondary' as const,
                 onPress: onClear,
                 disabled: busy,
@@ -154,12 +156,12 @@ export function BurnDialog({ visible, onDismiss }: Props) {
               },
             ]
           : []),
-        { label: 'Cancel', variant: 'ghost' as const, onPress: onDismiss, disabled: busy },
+        { label: t('home.burn.cancel'), variant: 'ghost' as const, onPress: onDismiss, disabled: busy },
       ]}
     >
       <View style={{ gap: spacing.md }}>
         <Field
-          label="Calories"
+          label={t('home.burn.calories')}
           value={draft}
           onChangeText={(next) => {
             setTouched(true);
@@ -167,7 +169,7 @@ export function BurnDialog({ visible, onDismiss }: Props) {
             // keypad's stray characters never reach validation.
             setDraft(next.replace(/[^0-9]/g, ''));
           }}
-          placeholder="e.g. 420"
+          placeholder={t('home.burn.example')}
           keyboardType="number-pad"
           returnKeyType="done"
           onSubmitEditing={onSave}

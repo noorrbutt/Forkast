@@ -60,8 +60,6 @@ export function formatRatio(value: number | null | undefined): string {
   return `${Math.round(Math.min(Math.max(value, 0), 1) * 100)}%`;
 }
 
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
 /** A bare calendar day, with no time and no zone: what the API sends for a date. */
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -87,9 +85,11 @@ function parseApiDate(value: string): Date {
 }
 
 /** Short weekday for an ISO day string, falling back to the raw tail. */
-export function shortDay(day: string): string {
+export function shortDay(day: string, locale = 'en-US'): string {
   const parsed = parseApiDate(day);
-  if (!Number.isNaN(parsed.getTime())) return DAY_NAMES[parsed.getDay()];
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toLocaleDateString(locale, { weekday: 'short' });
+  }
   return day.slice(-2);
 }
 
@@ -236,13 +236,21 @@ const LIGHT_CATEGORY_SLUGS = new Set([
  * acknowledgement. No category on the log (an old export, or a category since
  * removed) falls back to the plainest of the three.
  */
-export function saveReaction(category: Pick<Category, 'name' | 'slug' | 'is_junk'> | null): string {
-  if (!category) return 'Logged. On the board.';
+export function saveReaction(
+  category: Pick<Category, 'name' | 'slug' | 'is_junk'> | null,
+  copy?: {
+    default: string;
+    light: (categoryName: string) => string;
+    junk: string;
+    ordinary: (categoryName: string) => string;
+  },
+): string {
+  if (!category) return copy?.default ?? 'Logged. On the board.';
   if (LIGHT_CATEGORY_SLUGS.has(category.slug)) {
-    return `Nice, that's ${category.name.toLowerCase()} — lighter one today.`;
+    return copy?.light(category.name.toLowerCase()) ?? `Nice, that's ${category.name.toLowerCase()} — lighter one today.`;
   }
   if (category.is_junk) {
-    return 'Logged. Everything counts, even this one.';
+    return copy?.junk ?? 'Logged. Everything counts, even this one.';
   }
-  return `Nice, ${category.name.toLowerCase()} is on the board.`;
+  return copy?.ordinary(category.name.toLowerCase()) ?? `Nice, ${category.name.toLowerCase()} is on the board.`;
 }

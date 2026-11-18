@@ -1,4 +1,5 @@
 import { Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { Button, Card } from '../ui';
 import { formatNumber } from '../../lib/format';
@@ -23,6 +24,7 @@ export function NextCard({
   onLogSlot: (slot: Slot) => void;
   onOpenPlan: () => void;
 }) {
+  const { t } = useTranslation();
   const { colors, spacing, type } = useTheme();
 
   const copy = (() => {
@@ -30,46 +32,50 @@ export function NextCard({
       case 'over':
         return {
           eyebrow: null,
-          title: `${formatNumber(step.by)} kcal over today`,
-          body: 'One day does not make a trend. Tomorrow starts at your full target again.',
+          title: t('home.nextOverTitle', { amount: formatNumber(step.by) }),
+          body: t('home.nextOverBody'),
           action: null,
         };
       case 'log':
         return {
           eyebrow: null,
-          title: 'Nothing logged yet today',
-          body: 'A quick entry now keeps the number above honest.',
+          title: t('home.nothingLogged'),
+          body: t('home.quickEntry'),
           action: {
-            label: `Log ${SLOT_LABELS[step.slot].toLowerCase()}`,
+            label: t('home.logSlot', { slot: t(`home.slots.${step.slot}`).toLowerCase() }),
             primary: true,
             onPress: () => onLogSlot(step.slot),
           },
         };
       case 'plan': {
-        const { eyebrow, dish, note } = planSummary(step);
+        const { dish, note } = planSummary(step);
+        const slot = Object.entries(SLOT_LABELS).find(([, label]) => label === step.slotLabel)?.[0];
         return {
-          eyebrow,
+          eyebrow: t('home.planEyebrow', {
+            slot: slot ? t(`home.slots.${slot}`) : step.slotLabel,
+            calories: formatNumber(step.meal.approx_calories),
+          }),
           title: dish,
           body: note,
-          action: { label: 'See the plan', primary: false, onPress: onOpenPlan },
+          action: { label: t('home.seePlan'), primary: false, onPress: onOpenPlan },
         };
       }
       case 'plan-done':
         return {
           eyebrow: null,
-          title: "Today's plan",
-          body: 'Nothing left on it for the rest of today.',
-          action: { label: 'See the plan', primary: false, onPress: onOpenPlan },
+          title: t('home.todayPlan'),
+          body: t('home.planDone'),
+          action: { label: t('home.seePlan'), primary: false, onPress: onOpenPlan },
         };
       case 'make-plan':
         return {
           eyebrow: null,
-          title: step.expired ? 'Your plan has run its three days' : 'A plan for your goal',
+          title: step.expired ? t('home.expiredPlan') : t('home.goalPlan'),
           // Three, because that is what the plan prompt asks for and what the
           // plan screen draws.
-          body: 'Three days of meals shaped around your goal.',
+          body: t('home.threeDaysPlan'),
           action: {
-            label: step.expired ? 'Make a new plan' : 'Make a meal plan',
+            label: step.expired ? t('home.makeNewPlan') : t('home.makeMealPlan'),
             primary: false,
             onPress: onOpenPlan,
           },

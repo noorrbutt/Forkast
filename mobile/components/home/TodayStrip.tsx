@@ -1,4 +1,5 @@
 import { ScrollView, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { Skeleton } from '../ui';
 import type { FoodLog, Uuid } from '../../lib/types';
@@ -35,16 +36,17 @@ export function TodayStrip({
   onOpen: (id: Uuid) => void;
   onLogSlot: (slot: Slot | null) => void;
 }) {
+  const { t } = useTranslation();
   const { colors, layout, radius, spacing, type } = useTheme();
   const size = useTileSize(spacing.md);
 
   return (
     <View style={{ gap: spacing.md }}>
-      <Text style={[type.title, { color: colors.text }]}>Today</Text>
+      <Text style={[type.title, { color: colors.text }]}>{t('home.today')}</Text>
 
       {failed ? (
         <Text style={[type.caption, { color: colors.muted }]}>
-          {"Today's meals did not load. Pull down to try again."}
+          {t('home.todayMealsFailed')}
         </Text>
       ) : (
         <ScrollView

@@ -25,6 +25,16 @@ def test_lookup_finds_a_roman_urdu_alias() -> None:
     assert match is not None and match.name == "biryani"
 
 
+def test_lookup_finds_urdu_dish_aliases() -> None:
+    for text, expected in [
+        ("نہاری", "nihari"),
+        ("حلیم", "haleem"),
+        ("چائے پراٹھا", "chai paratha"),
+    ]:
+        match = desi.lookup(text)
+        assert match is not None and match.name == expected, text
+
+
 def test_lookup_finds_other_common_misspellings() -> None:
     for text, expected in [
         ("briyani", "biryani"),

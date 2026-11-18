@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { MealPhoto } from '../MealPhoto';
 import { StarRating } from '../StarRating';
@@ -7,7 +8,7 @@ import { Button, Chip, ControlLabel, ErrorState, Field, FormError, Loading, Sele
 import { slotOf } from '../home/todayMeals';
 import { useRamadan } from '../../hooks/useRamadan';
 import { describeError } from '../../lib/api';
-import { FRIEND_LABELS, FUN_HINT, FUN_LEVELS, formatNumber } from '../../lib/format';
+import { FUN_LEVELS, formatNumber } from '../../lib/format';
 import { fastingWindow, rankForRamadanSlot } from '../../lib/ramadan';
 import { FRIEND_SCALES } from '../../lib/types';
 import { useTheme } from '../../theme';
@@ -17,10 +18,6 @@ import type { LogForm } from './useLogForm';
 
 /** A plain "s" plural is close enough for every unit the desi dish table
  * actually uses (roti, piece, katori, plate, cup, glass, serving). */
-function pluralUnit(unit: string, qty: number): string {
-  return qty === 1 ? unit : `${unit}s`;
-}
-
 /**
  * The typed-in path: "What did you eat?" as the screen's largest text, then
  * three groups -- what you ate, where you ate it, how it was -- and the photo.
@@ -37,6 +34,7 @@ export function ManualLogForm({
   /** Rendered by the screen so this form and the confirm step share one. */
   servingSizeQuestion: ReactNode;
 }) {
+  const { t } = useTranslation();
   const { colors, spacing, type } = useTheme();
   const { optionRow, optionChip, group } = useLogFormStyles();
   const {
@@ -108,17 +106,29 @@ export function ManualLogForm({
     results?.dishes.length === 0 &&
     results?.categories.length === 0 &&
     !hasDesiHints;
+  const unitKey: Record<string, string> = {
+    roti: 'roti',
+    piece: 'piece',
+    katori: 'katori',
+    plate: 'plate',
+    cup: 'cup',
+    glass: 'glass',
+    serving: 'serving',
+  };
+  const portionUnit = dishHint
+    ? unitKey[dishHint.unit.toLowerCase()]
+      ? t(`log.servingUnits.${unitKey[dishHint.unit.toLowerCase()]}`)
+      : dishHint.unit
+    : '';
 
   return (
     <>
       {/* The largest type on the form, with a full step more space beneath
           it than between anything else. */}
       <View style={{ gap: spacing.sm, paddingBottom: spacing.sm }}>
-        <Text style={[type.display, { color: colors.text }]}>What did you eat?</Text>
+        <Text style={[type.display, { color: colors.text }]}>{t('log.whatDidYouEat')}</Text>
         <Text style={[type.body, { color: colors.muted }]}>
-          Search what people have already logged, or name the dish and pick the category it
-          belongs to. The category and the serving size are what Forkast estimates the calories
-          from.
+          {t('log.manualIntro')}
         </Text>
       </View>
 
@@ -139,19 +149,18 @@ export function ManualLogForm({
             those additionally fills the category, which free text typed
             with no pick never touches. */}
         <Field
-          label="Dish name"
-          hint="Start typing to see dishes others have logged, or just describe this one."
+          label={t('log.dishName')}
+          hint={t('log.dishHint')}
           value={dishName}
           onChangeText={setDishName}
-          placeholder="Chicken karahi"
+          placeholder={t('log.dishPlaceholder')}
         />
 
-        {search.isFetching ? <Loading label="Searching" /> : null}
+        {search.isFetching ? <Loading label={t('log.searching')} /> : null}
 
         {noMatches ? (
           <Text style={[type.caption, { color: colors.muted }]}>
-            Nothing matched yet. Forkast only knows the dishes people have logged so far -- keep
-            typing and pick the category it belongs to below.
+            {t('log.noMatchesYet')}
           </Text>
         ) : null}
 
@@ -160,7 +169,7 @@ export function ManualLogForm({
             than a dish someone else merely happened to type the same way. */}
         {dishHints.data && dishHints.data.length > 0 ? (
           <View style={{ gap: spacing.sm }}>
-            <ControlLabel>Common desi dishes</ControlLabel>
+            <ControlLabel>{t('log.commonDesiDishes')}</ControlLabel>
             <View style={optionRow}>
               {rankedDishHints.slice(0, 8).map((hint) => (
                 <Chip
@@ -181,7 +190,7 @@ export function ManualLogForm({
             serving size question below still answers on its behalf. */}
         {dishHint && portionQty !== null ? (
           <View style={{ gap: spacing.sm }}>
-            <ControlLabel>Portion</ControlLabel>
+            <ControlLabel>{t('log.portion')}</ControlLabel>
             <View
               style={{
                 flexDirection: 'row',
@@ -195,7 +204,10 @@ export function ManualLogForm({
                 onPress={() => changePortionQty(portionQty - 1)}
               />
               <Text style={[type.body, { color: colors.text }]}>
-                {portionQty} {pluralUnit(dishHint.unit, portionQty)}
+                {portionQty}{' '}
+                {portionQty === 1
+                  ? portionUnit
+                  : t('log.servingUnits.plural', { unit: portionUnit, count: portionQty })}
               </Text>
               <Button
                 label="+"
@@ -212,7 +224,7 @@ export function ManualLogForm({
             these would be saying the obvious. */}
         {results && results.dishes.length > 0 ? (
           <View style={{ gap: spacing.sm }}>
-            <ControlLabel>Dishes people logged</ControlLabel>
+            <ControlLabel>{t('log.dishesPeopleLogged')}</ControlLabel>
             <View style={optionRow}>
               {results.dishes.slice(0, 8).map((dish, index) => (
                 <Chip
@@ -233,7 +245,7 @@ export function ManualLogForm({
 
         {results && results.categories.length > 0 ? (
           <View style={{ gap: spacing.sm }}>
-            <ControlLabel>Categories</ControlLabel>
+            <ControlLabel>{t('log.categories')}</ControlLabel>
             <View style={optionRow}>
               {results.categories.slice(0, 8).map((category) => (
                 <Chip
@@ -257,49 +269,63 @@ export function ManualLogForm({
             open a searchable list. */}
         {cuisines.isError ? (
           <ErrorState
-            title="Cuisines unavailable"
+            title={t('log.cuisinesUnavailable')}
             message={describeError(cuisines.error)}
             onRetry={() => void cuisines.refetch()}
           />
         ) : (
           <Select
-            label="Cuisine"
+            label={t('log.cuisine')}
             value={cuisineId === null ? null : String(cuisineId)}
             options={cuisineOptions}
             onChange={chooseCuisine}
-            placeholder={cuisines.isLoading ? 'Loading cuisines' : 'Any cuisine'}
-            hint="Optional. It narrows the categories below."
+            placeholder={cuisines.isLoading ? t('log.loadingCuisines') : t('log.anyCuisine')}
+            hint={t('log.cuisineOptional')}
             disabled={!cuisines.data}
-            emptyText="No cuisine by that name."
+            emptyText={t('log.noCuisine')}
+            copy={{
+              closeLabel: t('log.close'),
+              searchPlaceholder: t('log.search'),
+              clearSearchLabel: t('log.clearSearch'),
+              opensSearchableListHint: t('log.opensSearchableList'),
+            }}
           />
         )}
 
         {categories.isError ? (
           <ErrorState
-            title="Categories unavailable"
+            title={t('log.categoriesUnavailable')}
             message={describeError(categories.error)}
             onRetry={() => void categories.refetch()}
           />
         ) : (
           <Select
-            label="Category"
+            label={t('log.category')}
             value={categoryId === null ? null : String(categoryId)}
             options={categoryOptions}
             onChange={chooseCategory}
             placeholder={
               categories.isLoading
-                ? 'Loading categories'
-                : `Search ${categoryOptions.length} categories`
+                ? t('log.loadingCategories')
+                : t('log.searchCategories', { count: categoryOptions.length })
             }
             hint={
               selectedCategory
-                ? `Usually ${formatNumber(selectedCategory.base_calorie_min)} to ${formatNumber(
-                  selectedCategory.base_calorie_max,
-                )} kcal${selectedCategory.is_junk ? ', counts as junk' : ''}.`
-                : 'The calorie estimate comes from this. Type a cuisine to see its categories.'
+                ? t('log.categoryHintSelected', {
+                    minimum: formatNumber(selectedCategory.base_calorie_min),
+                    maximum: formatNumber(selectedCategory.base_calorie_max),
+                    junk: selectedCategory.is_junk ? t('log.countsAsJunk') : '',
+                  })
+                : t('log.categoryHintDefault')
             }
             disabled={categoryOptions.length === 0}
-            emptyText="Nothing matches that. Try the cuisine, for example Italian."
+            emptyText={t('log.categoryEmptyDefault')}
+            copy={{
+              closeLabel: t('log.close'),
+              searchPlaceholder: t('log.search'),
+              clearSearchLabel: t('log.clearSearch'),
+              opensSearchableListHint: t('log.opensSearchableList'),
+            }}
           />
         )}
 
@@ -308,11 +334,10 @@ export function ManualLogForm({
         {categories.data && visibleCategories.length === 0 ? (
           <View style={{ gap: spacing.md, alignItems: 'flex-start' }}>
             <Text style={[type.caption, { color: colors.muted }]}>
-              Nothing is filed under this cuisine yet, and the category is what the estimate is
-              built from.
+              {t('log.noCategoryForCuisine')}
             </Text>
             <Button
-              label="Search every category"
+              label={t('log.searchEveryCategory')}
               variant="secondary"
               onPress={() => pickCuisine(null)}
             />
@@ -323,17 +348,17 @@ export function ManualLogForm({
       </View>
 
       <View style={group}>
-        <Text style={[type.title, { color: colors.text }]}>Where you ate it</Text>
+        <Text style={[type.title, { color: colors.text }]}>{t('log.whereYouAte')}</Text>
 
         <View style={{ gap: spacing.md }}>
           <Field
-            label="Restaurant"
+            label={t('log.restaurant')}
             value={restaurantName}
             onChangeText={(value) => {
               setRestaurantName(value);
               setRestaurantId(null);
             }}
-            placeholder="Leave blank if you cooked"
+            placeholder={t('log.cookedPlaceholder')}
           />
           {restaurants.data && restaurantName.trim().length > 0 && restaurantId === null ? (
             <View style={optionRow}>
@@ -354,18 +379,18 @@ export function ManualLogForm({
         </View>
 
         <Field
-          label="Area"
+          label={t('log.area')}
           value={area}
           onChangeText={setArea}
-          placeholder="Optional neighbourhood"
+          placeholder={t('log.neighbourhoodPlaceholder')}
         />
       </View>
 
       <View style={group}>
-        <Text style={[type.title, { color: colors.text }]}>How it was</Text>
+        <Text style={[type.title, { color: colors.text }]}>{t('log.howItWas')}</Text>
 
         <View style={{ gap: spacing.sm }}>
-          <ControlLabel>Rating</ControlLabel>
+          <ControlLabel>{t('log.rating')}</ControlLabel>
           {/* The stars keep the left edge every heading and field uses, and
               the count takes the right, so the row ends where the column does
               rather than stopping halfway across it. */}
@@ -378,12 +403,14 @@ export function ManualLogForm({
             }}
           >
             <StarRating value={rating} onChange={setRating} />
-            <Text style={[type.caption, { color: colors.muted }]}>{rating} of 5</Text>
+            <Text style={[type.caption, { color: colors.muted }]}>
+              {t('log.ratingValue', { rating })}
+            </Text>
           </View>
         </View>
 
         <View style={{ gap: spacing.sm }}>
-          <ControlLabel>Fun scale</ControlLabel>
+          <ControlLabel>{t('log.funScale')}</ControlLabel>
           <View style={optionRow}>
             {FUN_LEVELS.map((level) => (
               <Chip
@@ -399,16 +426,22 @@ export function ManualLogForm({
           {/* The ends said in words. Five numerals on their own are a scale
               nobody has defined, and every other choice on this form says
               what it means. */}
-          <Text style={[type.caption, { color: colors.muted }]}>{FUN_HINT}</Text>
+          <Text style={[type.caption, { color: colors.muted }]}>{t('log.funHint')}</Text>
         </View>
 
         <View style={{ gap: spacing.sm }}>
-          <ControlLabel>Who was there</ControlLabel>
+          <ControlLabel>{t('log.whoWasThere')}</ControlLabel>
           <View style={optionRow}>
             {FRIEND_SCALES.map((scale) => (
               <Chip
                 key={scale}
-                label={FRIEND_LABELS[scale]}
+                label={t(
+                  scale === 'solo'
+                    ? 'log.friendSolo'
+                    : scale === 'small_group'
+                      ? 'log.friendSmallGroup'
+                      : 'log.friendSquad',
+                )}
                 selected={friendScale === scale}
                 showCheck
                 style={optionChip}
@@ -421,7 +454,26 @@ export function ManualLogForm({
 
       {/* No log id yet, so the picked file waits here and goes up the moment
           the meal is created. */}
-      <MealPhoto photo={photo} onPhotoChange={setPhoto} />
+      <MealPhoto
+        photo={photo}
+        onPhotoChange={setPhoto}
+        copy={{
+          label: t('log.photo'),
+          mealPhotoLabel: t('log.mealPhoto'),
+          removePhotoHint: t('log.removePhotoHint'),
+          pendingHint: t('log.photoOptional'),
+          removeTitle: t('log.photoRemoveTitle'),
+          removeMessage: t('log.photoRemoveMessage'),
+          removeAction: t('log.remove'),
+          keepAction: t('log.keepPhoto'),
+          actions: {
+            takePhoto: t('log.takePhotoAction'),
+            retake: t('log.retake'),
+            choose: t('log.choose'),
+            remove: t('log.remove'),
+          },
+        }}
+      />
 
       {createLog.isError ? (
         <FormError>{describeError(createLog.error)}</FormError>

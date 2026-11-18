@@ -310,4 +310,32 @@ describe('logging the selected items', () => {
       ),
     );
   });
+
+  it('waits for the default category when categories are still loading', async () => {
+    const pendingCategories: ((response: { data: typeof CATEGORIES }) => void)[] = [];
+    mockedApi.get.mockImplementation(async (url: string) => {
+      if (url === '/categories') {
+        return new Promise((resolve) => pendingCategories.push(resolve));
+      }
+      if (url.endsWith('/health')) return { data: { status: 'ok', ai_provider: 'fake' } };
+      if (url === '/cuisines') return { data: [] };
+      if (url === '/restaurants') return { data: [] };
+      if (url === '/dishes') return { data: [] };
+      return { data: null };
+    });
+
+    const screen = await importOrder();
+    await waitFor(() => expect(pendingCategories.length).toBeGreaterThan(0));
+    fireEvent.press(screen.getByText('Log 2 items'));
+
+    await waitFor(() => {
+      while (pendingCategories.length > 0) {
+        pendingCategories.shift()?.({ data: CATEGORIES });
+      }
+      expect(mockedApi.post).toHaveBeenCalledWith(
+        '/logs',
+        expect.objectContaining({ dish_name: 'coke', category_id: 2 }),
+      );
+    });
+  });
 });

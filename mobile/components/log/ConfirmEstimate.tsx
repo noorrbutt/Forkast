@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Image, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { Button, Chip, ControlLabel, ErrorState, Field, FormError, Select } from '../ui';
 import { describeError } from '../../lib/api';
@@ -14,9 +15,14 @@ import type { LogForm } from './useLogForm';
 
 /** What the confirm screen says about how much to trust the guess. */
 const CONFIDENCE_COPY: Record<PhotoEstimate['confidence'], string> = {
-  high: 'Forkast is fairly sure about this one.',
-  medium: 'A decent guess, worth a glance before you log it.',
-  low: 'Not very sure about this one. Take a look before logging it.',
+  high: 'photoConfidenceHigh',
+  medium: 'photoConfidenceMedium',
+  low: 'photoConfidenceLow',
+};
+const PORTION_LABEL_KEYS: Record<string, string> = {
+  small: 'portionSmall',
+  medium: 'portionMedium',
+  large: 'portionLarge',
 };
 
 /**
@@ -38,6 +44,7 @@ export function ConfirmEstimate({
   /** Rendered by the screen so this step and the manual form share one. */
   servingSizeQuestion: ReactNode;
 }) {
+  const { t } = useTranslation();
   const { colors, isDark, radius, spacing, type } = useTheme();
   const { optionRow, optionChip, group } = useLogFormStyles();
   const {
@@ -80,9 +87,9 @@ export function ConfirmEstimate({
   return (
     <>
       <View style={{ gap: spacing.sm, paddingBottom: spacing.sm }}>
-        <Text style={[type.display, { color: colors.text }]}>Is this right?</Text>
+        <Text style={[type.display, { color: colors.text }]}>{t('log.isThisRight')}</Text>
         <Text style={[type.body, { color: colors.muted }]}>
-          {CONFIDENCE_COPY[estimate.confidence]}
+          {t(`log.${CONFIDENCE_COPY[estimate.confidence]}`)}
         </Text>
         {/* AI_PROVIDER not being "groq" is a deploy-config choice the
             server makes (a free demo with no Groq key is legitimate --
@@ -95,10 +102,10 @@ export function ConfirmEstimate({
         {estimate.estimate_source === 'local' ? (
           <Text
             accessibilityRole="text"
-            accessibilityLabel="Demo estimate, from an offline model, not a real AI guess"
+            accessibilityLabel={t('log.demoEstimateA11y')}
             style={[type.caption, { color: colors.muted }]}
           >
-            Demo estimate (offline model)
+            {t('log.demoEstimate')}
           </Text>
         ) : null}
       </View>
@@ -139,7 +146,7 @@ export function ConfirmEstimate({
               style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, flexWrap: 'wrap' }}
             >
               <Button
-                label="Retake"
+                label={t('log.retake')}
                 variant="secondary"
                 compact
                 disabled={photoBusy}
@@ -147,14 +154,14 @@ export function ConfirmEstimate({
                 onPress={() => void captureAndEstimate(true)}
               />
               <Button
-                label="Choose"
+                label={t('log.choose')}
                 variant="secondary"
                 compact
                 disabled={photoBusy}
                 onPress={() => void captureAndEstimate(false)}
               />
               <Button
-                label="Remove"
+                label={t('log.remove')}
                 variant="ghost"
                 compact
                 disabled={photoBusy}
@@ -168,10 +175,10 @@ export function ConfirmEstimate({
         ) : null}
 
         <Field
-          label="Dish"
+          label={t('log.dish')}
           value={dishName}
           onChangeText={setDishName}
-          placeholder="Chicken karahi"
+          placeholder={t('log.dishPlaceholder')}
         />
 
         {/* The fastest way to a category: the same dish search the manual
@@ -181,7 +188,7 @@ export function ConfirmEstimate({
             it at all. */}
         {guessResults && guessResults.dishes.length > 0 ? (
           <View style={{ gap: spacing.sm }}>
-            <ControlLabel>Matches this dish</ControlLabel>
+            <ControlLabel>{t('log.matchesThisDish')}</ControlLabel>
             <View style={optionRow}>
               {guessResults.dishes.slice(0, 4).map((dish, index) => (
                 <Chip
@@ -202,7 +209,7 @@ export function ConfirmEstimate({
 
         {guessResults && guessResults.categories.length > 0 ? (
           <View style={{ gap: spacing.sm }}>
-            <ControlLabel>Or the category</ControlLabel>
+            <ControlLabel>{t('log.orCategory')}</ControlLabel>
             <View style={optionRow}>
               {guessResults.categories.slice(0, 4).map((category) => (
                 <Chip
@@ -228,30 +235,38 @@ export function ConfirmEstimate({
             directly rather than only by bailing out to manual entry. */}
         {categories.isError ? (
           <ErrorState
-            title="Categories unavailable"
+            title={t('log.categoriesUnavailable')}
             message={describeError(categories.error)}
             onRetry={() => void categories.refetch()}
           />
         ) : (
           <Select
-            label="Category"
+            label={t('log.category')}
             value={categoryId === null ? null : String(categoryId)}
             options={categoryOptions}
             onChange={chooseCategory}
             placeholder={
               categories.isLoading
-                ? 'Loading categories'
-                : `Search ${categoryOptions.length} categories`
+                ? t('log.loadingCategories')
+                : t('log.searchCategories', { count: categoryOptions.length })
             }
             hint={
               selectedCategory
-                ? `Usually ${formatNumber(selectedCategory.base_calorie_min)} to ${formatNumber(
-                  selectedCategory.base_calorie_max,
-                )} kcal${selectedCategory.is_junk ? ', counts as junk' : ''}.`
-                : 'Nothing above matching? Search the full list.'
+                ? t('log.categoryHint', {
+                    minimum: formatNumber(selectedCategory.base_calorie_min),
+                    maximum: formatNumber(selectedCategory.base_calorie_max),
+                    junk: selectedCategory.is_junk ? t('log.countsAsJunk') : '',
+                  })
+                : t('log.categoryNoMatchHint')
             }
             disabled={categoryOptions.length === 0}
-            emptyText="Nothing matches that. Try a cuisine, for example Continental."
+            emptyText={t('log.categoryEmpty')}
+            copy={{
+              closeLabel: t('log.close'),
+              searchPlaceholder: t('log.search'),
+              clearSearchLabel: t('log.clearSearch'),
+              opensSearchableListHint: t('log.opensSearchableList'),
+            }}
           />
         )}
 
@@ -263,12 +278,18 @@ export function ConfirmEstimate({
             second screen or asks for a gram figure. */}
         {estimate.portion_ambiguous && estimate.portion_options.length > 0 ? (
           <View style={{ gap: spacing.sm }}>
-            <ControlLabel>Which portion is closest?</ControlLabel>
+            <ControlLabel>{t('log.whichPortion')}</ControlLabel>
             <View style={optionRow}>
               {estimate.portion_options.map((option) => (
                 <Chip
                   key={option.label}
-                  label={`${option.label} (~${formatNumber(Math.round(option.calories))} kcal)`}
+                  label={t('log.portionOption', {
+                    label:
+                      PORTION_LABEL_KEYS[option.label.toLowerCase()] !== undefined
+                        ? t(`log.${PORTION_LABEL_KEYS[option.label.toLowerCase()]}`)
+                        : option.label,
+                    calories: formatNumber(Math.round(option.calories)),
+                  })}
                   selected={portionCalories === option.calories}
                   showCheck
                   style={optionChip}
@@ -277,23 +298,24 @@ export function ConfirmEstimate({
               ))}
             </View>
             <Text style={[type.caption, { color: colors.muted }]}>
-              Hard to tell the portion from the photo alone. Pick the closest one.
+              {t('log.portionPhotoHint')}
             </Text>
           </View>
         ) : null}
 
         <View style={{ gap: spacing.xs }}>
           <Text style={[type.title, { color: colors.text }]}>
-            About {formatNumber(Math.round(previewCalories))} kcal
+            {t('log.aboutCalories', { calories: formatNumber(Math.round(previewCalories)) })}
           </Text>
           <Text style={[type.caption, { color: colors.muted }]}>
-            {formatNumber(Math.round(previewMacros.protein_g))}g protein ·{' '}
-            {formatNumber(Math.round(previewMacros.carbs_g))}g carbs ·{' '}
-            {formatNumber(Math.round(previewMacros.fat_g))}g fat
+            {t('log.macros', {
+              protein: formatNumber(Math.round(previewMacros.protein_g)),
+              carbs: formatNumber(Math.round(previewMacros.carbs_g)),
+              fat: formatNumber(Math.round(previewMacros.fat_g)),
+            })}
           </Text>
           <Text style={[type.caption, { color: colors.muted }]}>
-            A preview from the photo alone. The saved figure comes from the category you pick,
-            same as it always does.
+            {t('log.estimatePreview')}
           </Text>
         </View>
       </View>
@@ -304,7 +326,7 @@ export function ConfirmEstimate({
         <LogItButton form={form} />
 
         <Button
-          label="Not right? Edit manually"
+          label={t('log.editManually')}
           variant="ghost"
           size="lg"
           full

@@ -47,6 +47,15 @@ class CategorySeed:
 
 
 @dataclass(frozen=True, slots=True)
+class DishSynonymSeed:
+    """A search term and the canonical dish/category it suggests."""
+
+    alias: str
+    dish_name: str
+    category_slug: str
+
+
+@dataclass(frozen=True, slots=True)
 class RestaurantSeed:
     """A starter map pin. Users create the rest as they log."""
 
@@ -148,6 +157,30 @@ FOOD_CATEGORIES: list[CategorySeed] = [
     # every log already filed under it stays where it is and stays junk.
     CategorySeed("continental", "beverage", "Sweet Drink", 170, 300, is_junk=True),
     CategorySeed("continental", "tea_coffee", "Tea and Coffee", 90, 160, is_junk=False),
+]
+
+# Common Urdu and roman-Urdu spellings mapped to the canonical dish name and
+# category shown by catalog search. Migration 0024 installs the same snapshot
+# for databases that already exist.
+DISH_SYNONYMS: list[DishSynonymSeed] = [
+    DishSynonymSeed("نہاری", "nihari", "nihari"),
+    DishSynonymSeed("nihaari", "nihari", "nihari"),
+    DishSynonymSeed("حلیم", "haleem", "haleem"),
+    DishSynonymSeed("daleem", "haleem", "haleem"),
+    DishSynonymSeed("چائے پراٹھا", "chai paratha", "breakfast"),
+    DishSynonymSeed("بریانی", "biryani", "biryani"),
+    DishSynonymSeed("biriyani", "biryani", "biryani"),
+    DishSynonymSeed("کڑاہی", "karahi", "karahi"),
+    DishSynonymSeed("قورمہ", "karahi", "karahi"),
+    DishSynonymSeed("پراٹھا", "paratha", "paratha"),
+    DishSynonymSeed("parantha", "paratha", "paratha"),
+    DishSynonymSeed("چائے", "chai", "tea_coffee"),
+    DishSynonymSeed("دودھ پتی", "chai", "tea_coffee"),
+    DishSynonymSeed("دال چاول", "daal chawal", "daal_chawal"),
+    DishSynonymSeed("حلوہ پوری", "halwa puri", "halwa_puri"),
+    DishSynonymSeed("سموسہ", "samosa", "samosa_pakora"),
+    DishSynonymSeed("روٹی", "roti", "paratha"),
+    DishSynonymSeed("نان", "naan", "paratha"),
 ]
 
 # Starter map pins for Karachi.
@@ -523,6 +556,24 @@ def validate() -> None:
 
     missing = category_slugs - set(DISH_NAMES)
     assert not missing, f"categories with no dish names: {sorted(missing)}"
+
+    synonym_keys: set[str] = set()
+    for synonym in DISH_SYNONYMS:
+        key = " ".join(synonym.alias.casefold().split())
+        assert key and key not in synonym_keys, (
+            f"duplicate or blank dish synonym: {synonym.alias!r}"
+        )
+        assert synonym.alias == synonym.alias.strip(), (
+            f"dish synonym has surrounding whitespace: {synonym.alias!r}"
+        )
+        assert synonym.dish_name == synonym.dish_name.lower().strip(), (
+            f"canonical dish name must be lowercase and trimmed: {synonym.dish_name!r}"
+        )
+        assert synonym.category_slug in category_slugs, (
+            f"dish synonym {synonym.alias!r} points at unknown category "
+            f"{synonym.category_slug!r}"
+        )
+        synonym_keys.add(key)
 
     restaurant_keys: set[tuple[str, str]] = set()
     for restaurant in RESTAURANTS:

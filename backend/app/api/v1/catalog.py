@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import CurrentUser, RateLimiterDep, SessionDep
 from app.config import get_settings
-from app.models import Cuisine, FoodCategory, FoodLog, Restaurant
+from app.models import Cuisine, DishSynonym, FoodCategory, FoodLog, Restaurant
 from app.schemas.catalog import (
     SMALLINT_MAX,
     CategoryOut,
@@ -116,12 +116,10 @@ async def search(
     q: Annotated[text_field(max_length=100), Query()],
     limit: int = Query(default=10, ge=1, le=50),
 ) -> SearchResults:
-    """Typo tolerant search across cuisines, categories and the user's own dishes.
+    """Typo tolerant search across cuisines, categories, and dish names.
 
-    Combines a prefix/substring match with pg_trgm similarity so that both
-    "biry" and the misspelled "biriani" land on Biryani. Substring matches are
-    ranked first because an exact fragment is a stronger signal than a fuzzy
-    score.
+    Combines substring and pg_trgm matching so English misspellings and seeded
+    Urdu/roman-Urdu dish aliases return the same canonical dish suggestion.
     """
     await _apply_similarity_threshold(session)
 
@@ -173,14 +171,38 @@ async def search(
         .limit(limit)
     )
 
+    synonym_stmt = (
+        select(DishSynonym.dish_name, DishSynonym.category_id)
+        .where(
+            or_(
+                DishSynonym.alias.ilike(pattern, escape=_LIKE_ESCAPE),
+                _fuzzy(DishSynonym.alias, term),
+            )
+        )
+        .order_by(
+            DishSynonym.alias.ilike(pattern, escape=_LIKE_ESCAPE).desc(),
+            func.similarity(DishSynonym.alias, term).desc(),
+        )
+        .limit(limit)
+    )
+
     cuisines = list(await session.scalars(cuisine_stmt))
     categories = list(await session.scalars(category_stmt))
     dish_rows = (await session.execute(dish_stmt)).all()
+    synonym_rows = (await session.execute(synonym_stmt)).all()
+
+    dishes: list[DishSuggestion] = []
+    seen_dishes: set[tuple[str, int]] = set()
+    for name, category_id in (*dish_rows, *synonym_rows):
+        key = (name, category_id)
+        if key not in seen_dishes:
+            dishes.append(DishSuggestion(dish_name=name, category_id=category_id))
+            seen_dishes.add(key)
 
     return SearchResults(
         cuisines=[CuisineOut.model_validate(c) for c in cuisines],
         categories=[CategoryOut.model_validate(c) for c in categories],
-        dishes=[DishSuggestion(dish_name=name, category_id=cid) for name, cid in dish_rows],
+        dishes=dishes[:limit],
     )
 
 

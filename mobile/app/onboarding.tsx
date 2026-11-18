@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { Button, Chip, Screen } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
@@ -8,17 +9,17 @@ import type { BiggestStruggle, EatingOutFrequency } from '../lib/types';
 import { useTheme } from '../theme';
 
 const FREQUENCY_OPTIONS: { value: EatingOutFrequency; label: string }[] = [
-  { value: 'rarely', label: 'Rarely' },
-  { value: 'sometimes', label: 'Sometimes' },
-  { value: 'often', label: 'Often' },
+  { value: 'rarely', label: 'rarely' },
+  { value: 'sometimes', label: 'sometimes' },
+  { value: 'often', label: 'often' },
 ];
 
 const STRUGGLE_OPTIONS: { value: BiggestStruggle; label: string }[] = [
-  { value: 'cravings', label: 'Cravings' },
-  { value: 'portion_size', label: 'Portion sizes' },
-  { value: 'eating_out', label: 'Eating out too much' },
-  { value: 'consistency', label: 'Staying consistent' },
-  { value: 'knowledge', label: "Not sure what's healthy" },
+  { value: 'cravings', label: 'cravings' },
+  { value: 'portion_size', label: 'portionSizes' },
+  { value: 'eating_out', label: 'eatingOut' },
+  { value: 'consistency', label: 'consistency' },
+  { value: 'knowledge', label: 'knowledge' },
 ];
 
 /**
@@ -39,6 +40,7 @@ const STRUGGLE_OPTIONS: { value: BiggestStruggle; label: string }[] = [
  * from day one.
  */
 export default function OnboardingScreen() {
+  const { t } = useTranslation();
   const { colors, layout, spacing, type } = useTheme();
   const { completeOnboarding } = useAuth();
   const updateProfile = useUpdateProfile();
@@ -84,10 +86,10 @@ export default function OnboardingScreen() {
           <>
             <View style={{ gap: spacing.sm, paddingBottom: spacing.sm }}>
               <Text style={[type.display, { color: colors.text }]}>
-                How often do you eat out?
+                {t('onboarding.frequencyTitle')}
               </Text>
               <Text style={[type.body, { color: colors.muted }]}>
-                Just a rough sense. It shapes the suggestions your plan makes, nothing else.
+                {t('onboarding.frequencyBody')}
               </Text>
             </View>
 
@@ -95,7 +97,7 @@ export default function OnboardingScreen() {
               {FREQUENCY_OPTIONS.map((option) => (
                 <Chip
                   key={option.value}
-                  label={option.label}
+                  label={t(`onboarding.${option.label}`)}
                   selected={frequency === option.value}
                   showCheck
                   style={{ flexGrow: 1 }}
@@ -108,7 +110,7 @@ export default function OnboardingScreen() {
             </View>
 
             <Button
-              label="Skip this"
+              label={t('onboarding.skip')}
               variant="secondary"
               size="lg"
               full
@@ -119,10 +121,10 @@ export default function OnboardingScreen() {
           <>
             <View style={{ gap: spacing.sm, paddingBottom: spacing.sm }}>
               <Text style={[type.display, { color: colors.text }]}>
-                What trips you up most?
+                {t('onboarding.struggleTitle')}
               </Text>
               <Text style={[type.body, { color: colors.muted }]}>
-                Whatever you pick, your coach leans into it rather than around it.
+                {t('onboarding.struggleBody')}
               </Text>
             </View>
 
@@ -130,7 +132,7 @@ export default function OnboardingScreen() {
               {STRUGGLE_OPTIONS.map((option) => (
                 <Chip
                   key={option.value}
-                  label={option.label}
+                  label={t(`onboarding.${option.label}`)}
                   selected={struggle === option.value}
                   showCheck
                   style={{ flexGrow: 1 }}
@@ -141,7 +143,7 @@ export default function OnboardingScreen() {
 
             <View style={{ gap: spacing.md }}>
               <Button
-                label="Continue"
+                label={t('onboarding.continue')}
                 size="lg"
                 full
                 loading={updateProfile.isPending}
@@ -153,7 +155,7 @@ export default function OnboardingScreen() {
                 }
               />
               <Button
-                label="Skip this"
+                label={t('onboarding.skip')}
                 variant="secondary"
                 size="lg"
                 full

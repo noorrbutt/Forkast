@@ -1,7 +1,8 @@
 import { Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { Card } from '../ui';
-import { countdownText, type City } from '../../lib/ramadan';
+import { phase, type City } from '../../lib/ramadan';
 import { useTheme } from '../../theme';
 
 /**
@@ -29,8 +30,39 @@ export function FastingCard({
   nextFajr: Date | null;
   city: City;
 }) {
+  const { t } = useTranslation();
   const { colors, spacing, type } = useTheme();
-  const title = countdownText(now, window, nextFajr ?? undefined);
+  const dayPhase = phase(now, window);
+  const countdownTarget =
+    dayPhase === 'before_sehri'
+      ? window.fajr
+      : dayPhase === 'fasting'
+        ? window.maghrib
+        : dayPhase === 'night'
+          ? nextFajr
+          : null;
+  const durationMinutes =
+    countdownTarget === null ? 0 : Math.max(0, Math.round((countdownTarget.getTime() - now.getTime()) / 60_000));
+  const hours = Math.floor(durationMinutes / 60);
+  const minutes = durationMinutes % 60;
+  const duration =
+    hours === 0
+      ? t('home.durationMinutes', { minutes })
+      : t('home.durationHoursMinutes', {
+          hours,
+          minutes: String(minutes).padStart(2, '0'),
+        });
+  const title =
+    dayPhase === 'before_sehri'
+      ? t('home.sehriEndsIn', { duration })
+      : dayPhase === 'fasting'
+        ? t('home.iftarIn', { duration })
+        : dayPhase === 'iftar'
+          ? t('home.iftarTime')
+          : nextFajr
+            ? t('home.sehriEndsIn', { duration })
+            : t('home.fastingResumes');
+  const cityLabel = t(`home.cities.${city.id}`, { defaultValue: city.label });
 
   return (
     <Card>
@@ -39,12 +71,17 @@ export function FastingCard({
         style={{ gap: spacing.xs }}
         accessible
         accessibilityRole="text"
-        accessibilityLabel={`Ramadan, ${city.label}. ${title}. Times are calculated; follow your local timetable.`}
+        accessibilityLabel={t('home.fastingA11y', {
+          city: cityLabel,
+          title,
+        })}
       >
-        <Text style={[type.labelSoft, { color: colors.muted }]}>Ramadan · {city.label}</Text>
+        <Text style={[type.labelSoft, { color: colors.muted }]}>
+          {t('home.ramadanCity', { city: cityLabel })}
+        </Text>
         <Text style={[type.subtitle, { color: colors.text }]}>{title}</Text>
         <Text style={[type.caption, { color: colors.muted }]}>
-          Times are calculated; follow your local timetable.
+          {t('home.timetableNote')}
         </Text>
       </View>
     </Card>

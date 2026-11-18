@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import { Pressable, Text } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { useMe } from '../../hooks/useAuth';
 import { useTheme } from '../../theme';
@@ -13,6 +14,7 @@ import { useTheme } from '../../theme';
  * outranks today's number.
  */
 export function VerifyEmailBanner() {
+  const { t } = useTranslation();
   const { colors, spacing, type } = useTheme();
   const router = useRouter();
   const me = useMe();
@@ -31,7 +33,7 @@ export function VerifyEmailBanner() {
       }}
     >
       <Text style={[type.caption, { color: colors.text }]}>
-        Verify your email to keep your account secure. Tap to resend the link.
+        {t('home.verifyEmail')}
       </Text>
     </Pressable>
   );

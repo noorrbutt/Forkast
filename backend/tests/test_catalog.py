@@ -49,6 +49,27 @@ async def test_search_survives_a_misspelling(auth_client: AsyncClient) -> None:
     assert any(c["slug"] == "biryani" for c in results["categories"])
 
 
+async def test_search_matches_urdu_dish_synonyms(auth_client: AsyncClient) -> None:
+    categories = {
+        category["slug"]: category
+        for category in (await auth_client.get("/api/v1/categories")).json()
+    }
+
+    for term, dish_name, category_slug in [
+        ("نہاری", "nihari", "nihari"),
+        ("حلیم", "haleem", "haleem"),
+        ("چائے پراٹھا", "chai paratha", "breakfast"),
+    ]:
+        results = (
+            await auth_client.get("/api/v1/search", params={"q": term})
+        ).json()
+
+        assert {
+            "dish_name": dish_name,
+            "category_id": categories[category_slug]["id"],
+        } in results["dishes"]
+
+
 async def test_search_matches_a_cuisine_by_origin(auth_client: AsyncClient) -> None:
     results = (await auth_client.get("/api/v1/search", params={"q": "italian"})).json()
 

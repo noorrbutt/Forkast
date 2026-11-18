@@ -11,6 +11,7 @@ type ScreenProps = {
   scroll?: boolean;
   /** Title for the frosted header that floats over the content. */
   title?: string;
+  backLabel?: string;
   /** One quiet line above the title, sentence case, at labelSoft. */
   eyebrow?: string;
   headerRight?: ReactNode;
@@ -54,6 +55,7 @@ export function Screen({
   children,
   scroll = true,
   title,
+  backLabel = 'Go back',
   eyebrow,
   headerRight,
   onBack,
@@ -162,7 +164,7 @@ export function Screen({
               <Pressable
                 onPress={onBack}
                 accessibilityRole="button"
-                accessibilityLabel="Go back"
+                accessibilityLabel={backLabel}
                 // A real box, not hitSlop, which react-native-web drops.
                 style={({ pressed }) => ({
                   opacity: pressed ? 0.6 : 1,

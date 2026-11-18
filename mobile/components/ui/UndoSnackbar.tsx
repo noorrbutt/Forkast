@@ -13,6 +13,7 @@ type UndoSnackbarProps = {
    * that happens to carry the same text. */
   message: string | null;
   onUndo: () => void;
+  undoLabel?: string;
 };
 
 /**
@@ -24,7 +25,7 @@ type UndoSnackbarProps = {
  * screen reader's focus there on its own, and by the time someone swiped
  * onto it by chance the undo window may already have closed.
  */
-export function UndoSnackbar({ message, onUndo }: UndoSnackbarProps) {
+export function UndoSnackbar({ message, onUndo, undoLabel = 'Undo' }: UndoSnackbarProps) {
   const { colors, layout, radius, spacing, type, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const opacity = useSharedValue(0);
@@ -80,10 +81,10 @@ export function UndoSnackbar({ message, onUndo }: UndoSnackbarProps) {
         <Pressable
           onPress={onUndo}
           accessibilityRole="button"
-          accessibilityLabel="Undo"
+          accessibilityLabel={undoLabel}
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' })}
         >
-          <Text style={[type.body, { color: colors.accent, fontWeight: '600' }]}>Undo</Text>
+          <Text style={[type.body, { color: colors.accent, fontWeight: '600' }]}>{undoLabel}</Text>
         </Pressable>
       </View>
     </Animated.View>

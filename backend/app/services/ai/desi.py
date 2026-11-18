@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-_WORD_RE = re.compile(r"[a-z0-9]+")
+_WORD_RE = re.compile(r"[^\W_]+")
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,10 +47,12 @@ DESI_DISHES: tuple[DesiDish, ...] = (
     # variant below. Each one defaults to the commonest, most unremarkable
     # version of the dish, with a range wide enough to span its own named
     # variants' own ranges and still sit inside the category range.
-    DesiDish("biryani", ("biriyani", "briyani", "birayani"), "biryani", 600, 900, "plate", 1),
-    DesiDish("karahi", ("qorma",), "karahi", 550, 900, "serving", 1),
-    DesiDish("paratha", ("parantha",), "paratha", 280, 480, "piece", 1),
-    DesiDish("nihari", ("nihaari",), "nihari", 600, 980, "plate", 1),
+    DesiDish(
+        "biryani", ("biriyani", "briyani", "birayani", "بریانی"), "biryani", 600, 900, "plate", 1
+    ),
+    DesiDish("karahi", ("qorma", "کڑاہی", "قورمہ"), "karahi", 550, 900, "serving", 1),
+    DesiDish("paratha", ("parantha", "پراٹھا"), "paratha", 280, 480, "piece", 1),
+    DesiDish("nihari", ("nihaari", "نہاری"), "nihari", 600, 980, "plate", 1),
     DesiDish("chicken biryani", ("murgh biryani",), "biryani", 650, 850, "plate", 1),
     DesiDish("beef biryani", ("gosht biryani",), "biryani", 700, 900, "plate", 1),
     DesiDish("sindhi biryani", (), "biryani", 700, 900, "plate", 1),
@@ -66,7 +68,7 @@ DESI_DISHES: tuple[DesiDish, ...] = (
     DesiDish("nalli nihari", (), "nihari", 700, 980, "plate", 1),
     DesiDish("chicken nihari", ("murgh nihari",), "nihari", 600, 850, "plate", 1),
     DesiDish("maghaz nihari", (), "nihari", 650, 950, "plate", 1),
-    DesiDish("haleem", ("daleem",), "haleem", 500, 700, "katori", 1),
+    DesiDish("haleem", ("daleem", "حلیم"), "haleem", 500, 700, "katori", 1),
     DesiDish("chicken haleem", ("murgh haleem",), "haleem", 480, 680, "katori", 1),
     DesiDish("harees", (), "haleem", 450, 650, "katori", 1),
     DesiDish("seekh kebab", ("sikh kabab",), "bbq_tikka", 450, 650, "piece", 4),
@@ -81,21 +83,29 @@ DESI_DISHES: tuple[DesiDish, ...] = (
     DesiDish("lachha paratha", ("laccha paratha",), "paratha", 320, 420, "piece", 1),
     DesiDish("aloo paratha", ("potato paratha",), "paratha", 350, 480, "piece", 1),
     DesiDish("keema paratha", ("qeema paratha",), "paratha", 380, 480, "piece", 1),
-    DesiDish("roti", ("chapati", "phulka"), "paratha", 280, 380, "roti", 2),
+    DesiDish("roti", ("chapati", "phulka", "روٹی", "چپاتی"), "paratha", 280, 380, "roti", 2),
     DesiDish("tandoori roti", (), "paratha", 300, 400, "roti", 2),
-    DesiDish("naan", ("plain naan",), "paratha", 300, 420, "piece", 1),
+    DesiDish("naan", ("plain naan", "نان"), "paratha", 300, 420, "piece", 1),
     DesiDish("garlic naan", ("lehsun naan",), "paratha", 340, 460, "piece", 1),
     DesiDish("chana chaat", ("chickpea chaat",), "chaat", 280, 400, "katori", 1),
     DesiDish("dahi bhalla", ("dahi baray", "dahi baira"), "chaat", 300, 430, "plate", 1),
     DesiDish("papri chaat", (), "chaat", 280, 400, "plate", 1),
     DesiDish("fruit chaat", (), "chaat", 250, 350, "katori", 1),
-    DesiDish("samosa", ("aloo samosa", "chicken samosa"), "samosa_pakora", 300, 420, "piece", 2),
+    DesiDish(
+        "samosa",
+        ("aloo samosa", "chicken samosa", "سموسہ"),
+        "samosa_pakora",
+        300,
+        420,
+        "piece",
+        2,
+    ),
     DesiDish("pakora", ("mixed pakora", "veg pakora"), "samosa_pakora", 320, 480, "plate", 1),
-    DesiDish("daal chawal", ("daal rice",), "daal_chawal", 400, 550, "plate", 1),
+    DesiDish("daal chawal", ("daal rice", "دال چاول"), "daal_chawal", 400, 550, "plate", 1),
     DesiDish("chana daal chawal", (), "daal_chawal", 400, 550, "plate", 1),
     DesiDish("masoor daal chawal", (), "daal_chawal", 380, 520, "plate", 1),
     DesiDish("daal maash", ("maash daal",), "daal_chawal", 400, 550, "plate", 1),
-    DesiDish("halwa puri", (), "halwa_puri", 750, 1050, "plate", 1),
+    DesiDish("halwa puri", ("حلوہ پوری",), "halwa_puri", 750, 1050, "plate", 1),
     DesiDish("puri channa", ("channa puri",), "halwa_puri", 750, 1050, "plate", 1),
     DesiDish("gulab jamun", (), "dessert", 380, 520, "piece", 2),
     DesiDish("jalebi", (), "dessert", 400, 550, "serving", 3),
@@ -104,7 +114,15 @@ DESI_DISHES: tuple[DesiDish, ...] = (
     DesiDish("gajar halwa", ("carrot halwa",), "dessert", 420, 580, "katori", 1),
     DesiDish("ras malai", ("rasmalai",), "dessert", 400, 560, "piece", 2),
     DesiDish("sohan halwa", (), "dessert", 400, 550, "katori", 1),
-    DesiDish("chai", ("doodh patti", "karak chai", "chai patti"), "tea_coffee", 90, 140, "cup", 1),
+    DesiDish(
+        "chai",
+        ("doodh patti", "karak chai", "chai patti", "چائے", "دودھ پتی"),
+        "tea_coffee",
+        90,
+        140,
+        "cup",
+        1,
+    ),
     DesiDish("doodh patti chai", (), "tea_coffee", 100, 150, "cup", 1),
     DesiDish("green tea", ("sabz chai",), "tea_coffee", 90, 100, "cup", 1),
     DesiDish("lassi", ("sweet lassi", "namkeen lassi"), "beverage", 200, 300, "glass", 1),
@@ -130,12 +148,13 @@ DESI_DISHES: tuple[DesiDish, ...] = (
     DesiDish("chicken roll", ("chicken frankie",), "sandwich", 450, 650, "piece", 1),
     DesiDish("pulao", ("palao", "pilaf"), "rice", 420, 580, "plate", 1),
     DesiDish("chicken corn soup", (), "soup", 160, 230, "cup", 1),
+    DesiDish("chai paratha", ("چائے پراٹھا",), "breakfast", 450, 700, "serving", 1),
 )
 
 
 def _normalise(text: str) -> str:
     """Lowercase, punctuation stripped, whitespace collapsed to single spaces."""
-    return " ".join(_WORD_RE.findall(text.lower()))
+    return " ".join(_WORD_RE.findall(text.casefold()))
 
 
 # Every alias (and the dish's own name counts as one) maps back to its dish,

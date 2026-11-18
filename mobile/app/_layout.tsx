@@ -12,7 +12,7 @@ import Constants, { AppOwnership, ExecutionEnvironment } from 'expo-constants';
 import { Stack, usePathname, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -21,6 +21,7 @@ import { CrashView } from '../components/CrashView';
 import { AuthProvider, useAuth } from '../hooks/useAuth';
 import { RamadanProvider } from '../hooks/useRamadan';
 import { queryClient } from '../lib/queryClient';
+import { initializeLanguage } from '../lib/language';
 import { ThemeProvider, useTheme } from '../theme';
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
@@ -200,6 +201,31 @@ function RootLayout() {
     Figtree_500Medium,
     Figtree_600SemiBold,
   });
+  const [languageReady, setLanguageReady] = useState(false);
+  const [languageError, setLanguageError] = useState<Error | null>(null);
+  const [languageRetry, setLanguageRetry] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    void initializeLanguage().then(
+      () => {
+        if (active) {
+          setLanguageError(null);
+          setLanguageReady(true);
+        }
+      },
+      (error: unknown) => {
+        if (active) {
+          setLanguageError(
+            error instanceof Error ? error : new Error('Could not load language preferences.'),
+          );
+        }
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [languageRetry]);
 
   // A font that fails to load is not a reason to show nothing forever: the
   // scale falls back to the platform face, which is what shipped before this.
@@ -210,6 +236,21 @@ function RootLayout() {
   }, [ready]);
 
   if (!ready) return null;
+  if (languageError) {
+    return (
+      <View style={{ flex: 1 }} onLayout={onReady}>
+        <CrashView
+          error={languageError}
+          retry={() => {
+            setLanguageReady(false);
+            setLanguageError(null);
+            setLanguageRetry((attempt) => attempt + 1);
+          }}
+        />
+      </View>
+    );
+  }
+  if (!languageReady) return null;
 
   return (
     // As high as it can be, per the library's own requirement: anything

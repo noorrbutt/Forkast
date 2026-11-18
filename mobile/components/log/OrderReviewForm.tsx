@@ -1,4 +1,5 @@
 import { Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { Button, Checkbox, Field, FormError } from '../ui';
 import { describeError } from '../../lib/api';
@@ -9,9 +10,9 @@ import type { LogForm } from './useLogForm';
 
 /** What the review sheet says about how much to trust one line item. */
 const CONFIDENCE_LABEL: Record<'high' | 'medium' | 'low', string> = {
-  high: 'Clearly read off the order.',
-  medium: 'A decent guess, worth a glance.',
-  low: 'Hard to read. Check this one.',
+  high: 'confidenceHigh',
+  medium: 'confidenceMedium',
+  low: 'confidenceLow',
 };
 
 /**
@@ -25,6 +26,7 @@ const CONFIDENCE_LABEL: Record<'high' | 'medium' | 'low', string> = {
  * still an estimate the same way every other logged meal's is.
  */
 export function OrderReviewForm({ form }: { form: LogForm }) {
+  const { t } = useTranslation();
   const { colors, spacing, type } = useTheme();
   const { group } = useLogFormStyles();
   const {
@@ -48,14 +50,14 @@ export function OrderReviewForm({ form }: { form: LogForm }) {
     return (
       <View style={{ gap: spacing.lg }}>
         <Text style={[type.display, { color: colors.text }]}>
-          {orderLoggedCount === 1 ? 'Logged 1 item' : `Logged ${orderLoggedCount} items`}
+          {t('log.loggedItems', { count: orderLoggedCount })}
         </Text>
         <Text style={[type.body, { color: colors.muted }]}>
-          Each one is in your diary as its own meal, saved as an estimate.
+          {t('log.orderSavedBody')}
         </Text>
         <View style={{ gap: spacing.sm }}>
           <Button
-            label="Log another"
+            label={t('log.logAnother')}
             icon="log"
             size="lg"
             full
@@ -64,7 +66,7 @@ export function OrderReviewForm({ form }: { form: LogForm }) {
             }}
           />
           <Button
-            label="See the diary"
+            label={t('log.seeDiary')}
             variant="secondary"
             size="lg"
             full
@@ -78,11 +80,13 @@ export function OrderReviewForm({ form }: { form: LogForm }) {
   return (
     <>
       <View style={{ gap: spacing.sm, paddingBottom: spacing.sm }}>
-        <Text style={[type.display, { color: colors.text }]}>What was on the order?</Text>
+        <Text style={[type.display, { color: colors.text }]}>{t('log.orderTitle')}</Text>
         <Text style={[type.body, { color: colors.muted }]}>
-          {orderRestaurantName ? `From ${orderRestaurantName}. ` : ''}
-          Uncheck anything that is not food, fix a name, and adjust the quantity -- these are
-          estimates, the same as every other logged meal.
+          {t('log.orderIntro', {
+            restaurant: orderRestaurantName
+              ? t('log.orderFrom', { restaurant: orderRestaurantName })
+              : '',
+          })}
         </Text>
       </View>
 
@@ -93,14 +97,13 @@ export function OrderReviewForm({ form }: { form: LogForm }) {
           every row, since it is a fact about the read as a whole. */}
       {orderTruncated ? (
         <Text style={[type.caption, { color: colors.muted }]}>
-          Read the first {orderRows.length} items. Add the rest by hand.
+          {t('log.orderTruncated', { count: orderRows.length })}
         </Text>
       ) : null}
 
       {orderRows.length === 0 ? (
         <Text style={[type.body, { color: colors.muted }]}>
-          Nothing on that screenshot looked like a food order. Try another one, or type this meal
-          in instead.
+          {t('log.orderNoFood')}
         </Text>
       ) : (
         <View style={group}>
@@ -112,10 +115,10 @@ export function OrderReviewForm({ form }: { form: LogForm }) {
               <Checkbox
                 checked={row.selected}
                 onChange={() => toggleOrderRow(index)}
-                label={`${row.name}${row.categoryId === null ? ' (no category match)' : ''}`}
+                label={`${row.name}${row.categoryId === null ? t('log.noCategoryMatch') : ''}`}
               />
               <Field
-                label="Name"
+                label={t('log.name')}
                 value={row.name}
                 onChangeText={(value) => setOrderRowName(index, value)}
               />
@@ -127,7 +130,9 @@ export function OrderReviewForm({ form }: { form: LogForm }) {
                   disabled={!row.selected}
                   onPress={() => setOrderRowQty(index, row.qty - 1)}
                 />
-                <Text style={[type.body, { color: colors.text }]}>Qty {row.qty}</Text>
+                <Text style={[type.body, { color: colors.text }]}>
+                  {t('log.quantity', { quantity: row.qty })}
+                </Text>
                 <Button
                   label="+"
                   variant="secondary"
@@ -137,8 +142,11 @@ export function OrderReviewForm({ form }: { form: LogForm }) {
                 />
               </View>
               <Text style={[type.caption, { color: colors.muted }]}>
-                About {formatNumber(Math.round(row.kcalMin))} to{' '}
-                {formatNumber(Math.round(row.kcalMax))} kcal. {CONFIDENCE_LABEL[row.confidence]}
+                {t('log.rangeAndConfidence', {
+                  minimum: formatNumber(Math.round(row.kcalMin)),
+                  maximum: formatNumber(Math.round(row.kcalMax)),
+                  confidence: t(`log.${CONFIDENCE_LABEL[row.confidence]}`),
+                })}
               </Text>
             </View>
           ))}
@@ -149,14 +157,14 @@ export function OrderReviewForm({ form }: { form: LogForm }) {
 
       <View style={{ gap: spacing.sm }}>
         <Button
-          label={selectedCount === 1 ? 'Log 1 item' : `Log ${selectedCount} items`}
+          label={t('log.logItems', { count: selectedCount })}
           size="lg"
           full
           disabled={selectedCount === 0}
           onPress={logOrderItems}
         />
         <Button
-          label="Type it in instead"
+          label={t('log.typeOrderInstead')}
           variant="ghost"
           size="lg"
           full

@@ -242,7 +242,7 @@ describe('icons name a destination, never a heading', () => {
     // Section 10's original offence. A ControlLabel labels content you are
     // already looking at and it is not tappable, so nothing goes beside it.
     const source = code('components/MealPhoto.tsx');
-    const heading = /<ControlLabel>Photo<\/ControlLabel>/.exec(source);
+    const heading = /<ControlLabel>\{props\.copy\?\.label \?\? 'Photo'\}<\/ControlLabel>/.exec(source);
 
     expect(heading).not.toBeNull();
     expect(source).not.toMatch(/<Icon[^>]*\/>\s*<ControlLabel>/);
@@ -255,7 +255,9 @@ describe('icons name a destination, never a heading', () => {
     // ways. Neither may reintroduce a local label to do it.
     for (const screen of ['app/(tabs)/log.tsx', 'app/logs/[id].tsx']) {
       const source = code(screen);
-      expect(source).toMatch(/<ControlLabel>Serving size<\/ControlLabel>/);
+      expect(source).toMatch(
+        /<ControlLabel>(?:\{t\('log\.servingSize'\)\}|Serving size)<\/ControlLabel>/,
+      );
       expect(source).not.toMatch(/function ControlLabel/);
     }
   });
@@ -416,7 +418,7 @@ describe('logging a meal from a photo in a browser', () => {
   it('keeps a library button on the capture screen, not only a camera one', () => {
     const log = code('app/(tabs)/log.tsx');
 
-    expect(log).toMatch(/label="Choose from library"/);
+    expect(log).toMatch(/label=\{t\('log\.chooseLibrary'\)\}/);
     expect(log).toMatch(/captureAndEstimate\(false\)/);
     expect(code('lib/pickImage.ts')).toMatch(/launchImageLibraryAsync\(/);
   });

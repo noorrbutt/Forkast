@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { Button, Card, EstimateSourceLabel, Hero, Loading } from '../ui';
@@ -34,6 +35,7 @@ export function LogSaved({
   onLogAnother: () => void;
   onSeeDashboard: () => void;
 }) {
+  const { t } = useTranslation();
   const { colors, spacing, type } = useTheme();
 
   // The one entrance this screen ever plays. Keyed on the saved log rather
@@ -65,23 +67,38 @@ export function LogSaved({
       >
         <Hero
           value={formatNumber(saved.estimated_calories)}
-          caption={`kcal for ${displayDish(saved.dish_name)}${saved.restaurant ? ` at ${saved.restaurant.name}` : ''
-            }`}
+          caption={t('log.savedCaption', {
+            calories: formatNumber(saved.estimated_calories),
+            dish: displayDish(saved.dish_name),
+            restaurant: saved.restaurant
+              ? t('log.savedAtRestaurant', { restaurant: saved.restaurant.name })
+              : '',
+          })}
           align="center"
         />
-        <EstimateSourceLabel source={estimatorSource} />
+        <EstimateSourceLabel
+          source={estimatorSource}
+          labels={{ ai: t('log.estimateAI'), local: t('log.estimateLocal') }}
+        />
       </Animated.View>
 
-      <Text style={[type.body, { color: colors.text }]}>{saveReaction(saved.category)}</Text>
-
-      <Text style={[type.body, { color: colors.muted }]}>
-        Your dashboard and your streak have already moved.
+      <Text style={[type.body, { color: colors.text }]}>
+        {saveReaction(saved.category, {
+          default: t('log.savedReactionDefault'),
+          light: (category) => t('log.savedReactionLight', { category }),
+          junk: t('log.savedReactionJunk'),
+          ordinary: (category) => t('log.savedReactionOrdinary', { category }),
+        })}
       </Text>
 
-      {photoStatus === 'uploading' ? <Loading label="Attaching your photo" /> : null}
+      <Text style={[type.body, { color: colors.muted }]}>
+        {t('log.savedDashboardMoved')}
+      </Text>
+
+      {photoStatus === 'uploading' ? <Loading label={t('log.attachingPhoto')} /> : null}
 
       {photoStatus === 'attached' ? (
-        <Text style={[type.caption, { color: colors.muted }]}>Your photo went up with it.</Text>
+        <Text style={[type.caption, { color: colors.muted }]}>{t('log.photoAttached')}</Text>
       ) : null}
 
       {photoStatus === 'failed' ? (
@@ -90,21 +107,20 @@ export function LogSaved({
         <Card>
           <View style={{ gap: spacing.md, alignItems: 'flex-start' }}>
             <Text style={[type.subtitle, { color: colors.text }]}>
-              The photo did not attach
+              {t('log.photoFailedTitle')}
             </Text>
             <Text style={[type.caption, { color: colors.muted }]}>
-              The meal itself is saved. Send the picture again, or add it later from the meal in
-              your diary.
+              {t('log.photoFailedBody')}
             </Text>
-            <Button label="Try the photo again" variant="secondary" onPress={onRetryPhoto} />
+            <Button label={t('log.tryPhotoAgain')} variant="secondary" onPress={onRetryPhoto} />
           </View>
         </Card>
       ) : null}
 
       <View style={{ gap: spacing.md }}>
-        <Button label="Log another" icon="log" size="lg" full onPress={onLogAnother} />
+        <Button label={t('log.logAnother')} icon="log" size="lg" full onPress={onLogAnother} />
         <Button
-          label="See the dashboard"
+          label={t('log.seeDashboard')}
           icon="dashboard"
           variant="secondary"
           size="lg"

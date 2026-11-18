@@ -1,6 +1,7 @@
 import { Tabs, type BottomTabBarProps } from 'expo-router/js-tabs';
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { CrashView } from '../../components/CrashView';
@@ -128,6 +129,7 @@ export function FloatingTabBar({
   insets,
   ...navigationProps
 }: FloatingTabBarProps) {
+  const { t } = useTranslation();
   const { colors, layout, radius, spacing, type } = useTheme();
   // The raised button only ever hides on the Log screen itself -- there it
   // could only navigate to where you already are. Everywhere else, Home
@@ -254,8 +256,8 @@ export function FloatingTabBar({
             key={route.key}
             onPress={() => go(route, focused)}
             accessibilityRole="button"
-            accessibilityLabel="Log a meal"
-            accessibilityHint="Record something you ate"
+            accessibilityLabel={t('log.logMealA11y')}
+            accessibilityHint={t('log.recordMealHint')}
             accessibilityState={{ selected: focused }}
             style={({ pressed }) => ({
               position: 'absolute',
@@ -281,6 +283,7 @@ export function FloatingTabBar({
 }
 
 export default function TabsLayout() {
+  const { t } = useTranslation();
   const { colors } = useTheme();
 
   return (
@@ -298,9 +301,9 @@ export default function TabsLayout() {
           titled "Your diary" and "You" led to one titled "Profile", which is
           the one-name-per-destination rule the guide states outright and which
           this app had already got wrong once with Sign up. */}
-      <Tabs.Screen name="index" options={{ title: 'Home' }} />
+      <Tabs.Screen name="index" options={{ title: t('home.tab') }} />
       <Tabs.Screen name="history" options={{ title: 'Diary' }} />
-      <Tabs.Screen name="log" options={{ title: 'Log' }} />
+      <Tabs.Screen name="log" options={{ title: t('log.tab') }} />
       <Tabs.Screen name="streaks" options={{ title: 'Streaks' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
       {/* Still a route, just not a tab. */}

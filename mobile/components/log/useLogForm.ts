@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as Crypto from 'expo-crypto';
+import { useTranslation } from 'react-i18next';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { SelectOption } from '../ui';
@@ -75,6 +76,7 @@ export type PhotoStatus = 'none' | 'uploading' | 'attached' | 'failed';
  * moving from confirm to manual keeps every answer already given.
  */
 export function useLogForm() {
+  const { t } = useTranslation();
   const estimatorSource = useEstimatorSource();
 
   const [cuisineId, setCuisineId] = useState<RefId | null>(null);
@@ -124,6 +126,7 @@ export function useLogForm() {
   const [orderRows, setOrderRows] = useState<OrderRow[]>([]);
   const [orderNotice, setOrderNotice] = useState<string | null>(null);
   const [orderLoggedCount, setOrderLoggedCount] = useState<number | null>(null);
+  const orderSubmitInFlight = useRef(false);
   // True when the vision reply was cut off before the model finished, so
   // orderRows is a salvaged prefix rather than the model's complete read of
   // the order -- there may be more on it than what is shown.
@@ -186,7 +189,7 @@ export function useLogForm() {
 
   const cuisineOptions = useMemo<SelectOption[]>(
     () => [
-      { value: ANY_CUISINE, label: 'Any cuisine', hint: 'Search every category' },
+      { value: ANY_CUISINE, label: t('log.anyCuisine'), hint: t('log.searchEveryCategory') },
       // No colour dot. Cuisine identity is the emoji plus the name: the ten
       // generated cuisine colours failed the palette validator on three of six
       // checks, worst adjacent pair 9.3 against a normal vision floor of 15 and
@@ -198,7 +201,7 @@ export function useLogForm() {
         emoji: cuisine.emoji ?? undefined,
       })),
     ],
-    [cuisines.data],
+    [cuisines.data, t],
   );
 
   const cuisineById = useMemo(
@@ -293,7 +296,7 @@ export function useLogForm() {
       onError: (error) => {
         haptics.error();
         if (axios.isAxiosError(error) && error.response?.status === 429) {
-          setEstimateNotice("You've hit the photo-scan limit for now, try typing this one in.");
+          setEstimateNotice(t('log.photoScanLimit'));
           setMode('manual');
           return;
         }
@@ -388,7 +391,7 @@ export function useLogForm() {
       onError: (error) => {
         haptics.error();
         if (axios.isAxiosError(error) && error.response?.status === 429) {
-          setOrderNotice("You've hit the order-scan limit for now, try typing these in.");
+          setOrderNotice(t('log.orderScanLimit'));
           setMode('manual');
           return;
         }
@@ -435,28 +438,53 @@ export function useLogForm() {
    * any other log -- a retried create_log call is deduped by client_id, so
    * two attempts at the same row can never become two meals.
    */
-  const logOrderItems = () => {
+  const logOrderItems = async () => {
+    if (orderSubmitInFlight.current) return;
     const selected = orderRows.filter((row) => row.selected && row.name.trim().length > 0);
-    for (const row of selected) {
-      const categoryId = row.categoryId ?? fallbackCategoryId;
-      if (categoryId === null) continue;
-      const midpoint = (row.kcalMin + row.kcalMax) / 2;
-      const scaled = Math.round(midpoint * (row.qty / row.baseQty));
-      const input: LogInput = {
-        dish_name: row.name.trim(),
-        category_id: categoryId,
-        // No per-item rating control on the review sheet (checkbox, qty
-        // stepper and name only, per the brief); 4 matches the form's own
-        // default for a log nobody has rated.
-        rating: 4,
-        serving_size: nearestServingSize(scaled / midpoint),
-        estimated_calories: scaled,
-        client_id: Crypto.randomUUID(),
-      };
-      if (orderRestaurantName) input.restaurant_name = orderRestaurantName;
-      createLog.mutate(input);
+    if (selected.length === 0) return;
+
+    orderSubmitInFlight.current = true;
+    setOrderNotice(null);
+    try {
+      let resolvedFallbackCategoryId = fallbackCategoryId;
+      if (resolvedFallbackCategoryId === null && selected.some((row) => row.categoryId === null)) {
+        const result = await categories.refetch();
+        resolvedFallbackCategoryId =
+          result.data?.find((category) => category.slug === 'beverage')?.id ?? null;
+        if (resolvedFallbackCategoryId === null) {
+          setOrderNotice(
+            result.error ? describeError(result.error) : t('log.defaultCategoryUnavailable'),
+          );
+          return;
+        }
+      }
+
+      for (const row of selected) {
+        const categoryId = row.categoryId ?? resolvedFallbackCategoryId;
+        if (categoryId === null) {
+          setOrderNotice(t('log.defaultCategoryUnavailable'));
+          return;
+        }
+        const midpoint = (row.kcalMin + row.kcalMax) / 2;
+        const scaled = Math.round(midpoint * (row.qty / row.baseQty));
+        const input: LogInput = {
+          dish_name: row.name.trim(),
+          category_id: categoryId,
+          // No per-item rating control on the review sheet (checkbox, qty
+          // stepper and name only, per the brief); 4 matches the form's own
+          // default for a log nobody has rated.
+          rating: 4,
+          serving_size: nearestServingSize(scaled / midpoint),
+          estimated_calories: scaled,
+          client_id: Crypto.randomUUID(),
+        };
+        if (orderRestaurantName) input.restaurant_name = orderRestaurantName;
+        createLog.mutate(input);
+      }
+      setOrderLoggedCount(selected.length);
+    } finally {
+      orderSubmitInFlight.current = false;
     }
-    setOrderLoggedCount(selected.length);
   };
 
   const pickCuisine = (next: RefId | null) => {
@@ -517,11 +545,12 @@ export function useLogForm() {
    * without first pressing a control to find out.
    */
   const gaps = [
-    dishName.trim().length === 0 ? 'a dish name' : null,
-    categoryId === null ? 'a category' : null,
+    dishName.trim().length === 0 ? t('log.needsDish') : null,
+    categoryId === null ? t('log.needsCategory') : null,
   ].filter((gap): gap is string => gap !== null);
 
-  const outstanding = gaps.length === 0 ? null : `Still needs ${gaps.join(' and ')}.`;
+  const outstanding =
+    gaps.length === 0 ? null : t('log.stillNeeds', { needs: gaps.join(` ${t('log.and')} `) });
 
   /**
    * Send the held photo, now that the meal has an id to hang it on.

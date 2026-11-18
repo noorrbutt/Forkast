@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { Icon } from '../ui';
 import { useTheme } from '../../theme';
@@ -17,6 +18,7 @@ export function RamadanEndedBanner({
   onDismiss: () => void;
   onOpenProfile: () => void;
 }) {
+  const { t } = useTranslation();
   const { colors, spacing, type } = useTheme();
 
   return (
@@ -35,16 +37,16 @@ export function RamadanEndedBanner({
         onPress={onOpenProfile}
         style={{ flex: 1 }}
         accessibilityRole="button"
-        accessibilityLabel="Turn off Ramadan mode"
+        accessibilityLabel={t('home.turnOffRamadan')}
       >
         <Text style={[type.caption, { color: colors.text }]}>
-          Ramadan has ended. Turn Ramadan mode off in Profile to go back to the usual meal slots.
+          {t('home.ramadanEnded')}
         </Text>
       </Pressable>
       <Pressable
         onPress={onDismiss}
         accessibilityRole="button"
-        accessibilityLabel="Dismiss"
+        accessibilityLabel={t('home.dismiss')}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
         <Icon name="close" size={18} color={colors.muted} />

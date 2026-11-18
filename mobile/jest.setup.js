@@ -51,6 +51,11 @@ jest.mock('@sentry/react-native', () => ({
 require('react-native-gesture-handler/jestSetup');
 
 // Test setup for the Expo app.
+jest.mock('expo-localization', () => ({
+  getLocales: () => [{ languageTag: 'en-US', languageCode: 'en' }],
+}));
+
+require('./lib/i18n');
 
 // Reanimated 4 cannot load in a test runner: it reaches for native worklets at
 // import time. It ships a mock that replaces the whole module with inert

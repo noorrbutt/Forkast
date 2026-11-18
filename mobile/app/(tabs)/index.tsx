@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { RefreshControl, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { BurnDialog } from '../../components/BurnDialog';
 import { FastingCard } from '../../components/home/FastingCard';
@@ -34,6 +35,7 @@ import { useLayout, useTheme } from '../../theme';
  */
 
 export default function DashboardScreen() {
+  const { t } = useTranslation();
   // Burned is asked for, never parked on the screen as a form.
   const [burnOpen, setBurnOpen] = useState(false);
   const { colors, layout, spacing } = useTheme();
@@ -102,7 +104,7 @@ export default function DashboardScreen() {
 
         {dashboard.isError && !data ? (
           <ErrorState
-            title="Dashboard unavailable"
+            title={t('home.dashboardUnavailable')}
             message={describeError(dashboard.error)}
             onRetry={() => void dashboard.refetch()}
           />

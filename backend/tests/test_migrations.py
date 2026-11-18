@@ -88,6 +88,13 @@ async def test_reference_data_is_present_after_upgrade() -> None:
         async with engine.connect() as connection:
             cuisines = await connection.scalar(text("SELECT count(*) FROM cuisines"))
             categories = await connection.scalar(text("SELECT count(*) FROM food_categories"))
+            synonyms = await connection.scalar(text("SELECT count(*) FROM dish_synonyms"))
+            localized_synonyms = await connection.scalar(
+                text(
+                    "SELECT count(*) FROM dish_synonyms "
+                    "WHERE alias IN ('نہاری', 'حلیم', 'چائے پراٹھا')"
+                )
+            )
             orphans = await connection.scalar(
                 text(
                     "SELECT count(*) FROM food_categories fc "
@@ -102,6 +109,8 @@ async def test_reference_data_is_present_after_upgrade() -> None:
 
     assert cuisines >= 8
     assert categories >= 30
+    assert synonyms >= 18
+    assert localized_synonyms == 3
     assert orphans == 0
     assert trgm == 1
 

@@ -1,6 +1,8 @@
 import Constants from 'expo-constants';
 import { useEffect, useState, type ComponentProps } from 'react';
 import { ActivityIndicator, Switch, Text, View } from 'react-native';
+import { setAppLanguage } from '../../lib/language';
+import type { AppLanguage } from '../../lib/i18n';
 
 import { ChangePassword } from '../../components/ChangePassword';
 import { DeleteAccount } from '../../components/DeleteAccount';
@@ -17,6 +19,7 @@ import { describeError } from '../../lib/api';
 import { GOAL_BLURBS, GOAL_LABELS, MAX_TARGET, MIN_TARGET, formatDate, formatNumber, fullName } from '../../lib/format';
 import { deviceTimezone } from '../../lib/deviceTimezone';
 import { haptics } from '../../lib/haptics';
+import i18n from '../../lib/i18n';
 import { OFFSET_MAX, OFFSET_MIN, clampOffset } from '../../lib/ramadanStore';
 import { GOALS, type Goal } from '../../lib/types';
 import { useTheme } from '../../theme';
@@ -158,6 +161,64 @@ function GoalRow({ goal, last }: { goal: Goal | null; last?: boolean }) {
       </Dialog>
     </>
   );
+}
+
+function LanguageSection() {
+  const { colors, spacing, type } = useTheme();
+  const [language, setLanguage] = useState<AppLanguage>(
+    i18nLanguage(),
+  );
+  const [saving, setSaving] = useState(false);
+  const [restartRequired, setRestartRequired] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const chooseLanguage = async (next: AppLanguage) => {
+    if (saving || language === next) return;
+    setSaving(true);
+    setError(null);
+    try {
+      setRestartRequired(await setAppLanguage(next));
+      setLanguage(next);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not save the language preference.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ListGroup title="Language">
+      <View style={{ gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md }}>
+        <Text style={[type.caption, { color: colors.muted }]}>
+          Choose a language. Restart the app to apply the right-to-left layout. / زبان منتخب کریں۔ دائیں سے بائیں ترتیب کے لیے ایپ دوبارہ کھولیں۔
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+          <Chip
+            label="English"
+            selected={language === 'en'}
+            disabled={saving}
+            onPress={() => void chooseLanguage('en')}
+          />
+          <Chip
+            label="اردو"
+            selected={language === 'ur'}
+            disabled={saving}
+            onPress={() => void chooseLanguage('ur')}
+          />
+        </View>
+        {restartRequired ? (
+          <Text style={[type.caption, { color: colors.muted }]}>
+            Close and reopen Forkast to apply the new layout direction.
+          </Text>
+        ) : null}
+        {error ? <FormError>{error}</FormError> : null}
+      </View>
+    </ListGroup>
+  );
+}
+
+function i18nLanguage(): AppLanguage {
+  return i18n.resolvedLanguage?.startsWith('ur') ? 'ur' : 'en';
 }
 
 /**
@@ -918,6 +979,8 @@ export default function ProfileScreen() {
               joined={formatDate(user.created_at)}
               picture={hasAvatar(user)}
             />
+
+            <LanguageSection />
 
             <ListGroup title="Your day">
               <GoalRow goal={user.goal ?? null} />

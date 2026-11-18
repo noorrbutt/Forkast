@@ -1,9 +1,10 @@
 import { Pressable, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { Icon } from '../ui';
 import { useTheme } from '../../theme';
 import type { TileSize } from './MealTile';
-import { SLOT_LABELS, type Slot } from './todayMeals';
+import type { Slot } from './todayMeals';
 
 /**
  * A slot nothing has been logged in yet, as a tile you can tap to fill.
@@ -27,16 +28,19 @@ export function GhostSlotTile({
   size: TileSize;
   onPress: (slot: Slot | null) => void;
 }) {
+  const { t } = useTranslation();
   const { colors, radius, spacing, type } = useTheme();
-  const label = slot ? SLOT_LABELS[slot] : 'Another meal';
+  const label = slot ? t(`home.slots.${slot}`) : t('home.anotherMeal');
 
   return (
     <Pressable
       testID={`today-ghost-${slot ?? 'any'}`}
       onPress={() => onPress(slot)}
       accessibilityRole="button"
-      accessibilityLabel={slot ? `Log ${label.toLowerCase()}` : 'Log a meal'}
-      accessibilityHint="Opens Log"
+      accessibilityLabel={
+        slot ? t('home.logSlotA11y', { slot: label.toLowerCase() }) : t('home.logMealA11y')
+      }
+      accessibilityHint={t('home.opensLog')}
       style={({ pressed }) => ({
         width: size.width,
         height: size.height,

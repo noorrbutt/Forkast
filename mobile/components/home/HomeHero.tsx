@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 import { Button, Hero, HeroWash, Ring } from '../ui';
 import { formatNumber } from '../../lib/format';
@@ -25,7 +26,19 @@ export const HERO_RING_SIZE = 96;
  * Everything the hero says, worked out in one place, so the figure, the line
  * under it and the ring's spoken label can never disagree.
  */
-export function readToday(today: Today) {
+export function readToday(
+  today: Today,
+  copy?: {
+    noTarget: string;
+    measured: (value: string, target: string) => string;
+    noTargetAccessibility: (net: string) => string;
+    overAccessibility: (amount: string, net: string, target: string) => string;
+    leftAccessibility: (amount: string, net: string, target: string) => string;
+    today: string;
+    over: string;
+    left: string;
+  },
+) {
   // A non-positive target is no target: there is nothing to be a fraction of.
   const target =
     today.target !== null && Number.isFinite(today.target) && today.target > 0
@@ -41,15 +54,27 @@ export function readToday(today: Today) {
   const measured = today.burned > 0 ? `${formatNumber(today.net)} net` : formatNumber(today.net);
   const measures =
     target === null
-      ? 'No daily target yet, so there is nothing to measure this against.'
-      : `${measured} of ${formatNumber(target)} kcal`;
+      ? copy?.noTarget ?? 'No daily target yet, so there is nothing to measure this against.'
+      : copy?.measured(measured, formatNumber(target)) ??
+        `${measured} of ${formatNumber(target)} kcal`;
 
   const accessibilityLabel =
     target === null
-      ? `${formatNumber(today.net)} kcal today. No daily target set.`
+      ? copy?.noTargetAccessibility(formatNumber(today.net)) ??
+        `${formatNumber(today.net)} kcal today. No daily target set.`
       : over
-        ? `Over by ${formatNumber(Math.abs(remaining ?? 0))} kcal. ${formatNumber(today.net)} net of ${formatNumber(target)} kcal target.`
-        : `${formatNumber(remaining)} kcal left. ${formatNumber(today.net)} net of ${formatNumber(target)} kcal target.`;
+        ? copy?.overAccessibility(
+            formatNumber(Math.abs(remaining ?? 0)),
+            formatNumber(today.net),
+            formatNumber(target),
+          ) ??
+          `Over by ${formatNumber(Math.abs(remaining ?? 0))} kcal. ${formatNumber(today.net)} net of ${formatNumber(target)} kcal target.`
+        : copy?.leftAccessibility(
+            formatNumber(remaining),
+            formatNumber(today.net),
+            formatNumber(target),
+          ) ??
+          `${formatNumber(remaining)} kcal left. ${formatNumber(today.net)} net of ${formatNumber(target)} kcal target.`;
 
   return {
     target,
@@ -57,7 +82,11 @@ export function readToday(today: Today) {
     measures,
     accessibilityLabel,
     figure: remaining === null ? formatNumber(today.net) : formatNumber(Math.abs(remaining)),
-    caption: remaining === null ? 'kcal today' : over ? 'kcal over' : 'kcal left',
+    caption: remaining === null
+      ? copy?.today ?? 'kcal today'
+      : over
+        ? copy?.over ?? 'kcal over'
+        : copy?.left ?? 'kcal left',
   };
 }
 
@@ -70,9 +99,19 @@ export function HomeHero({
   onSetTarget: () => void;
   onEditBurn: () => void;
 }) {
+  const { t } = useTranslation();
   const { colors, spacing, type } = useTheme();
   const insets = useSafeAreaInsets();
-  const reading = readToday(today);
+  const reading = readToday(today, {
+    noTarget: t('home.noTargetMeasure'),
+    measured: (measured, target) => t('home.measuredOfTarget', { measured, target }),
+    noTargetAccessibility: (net) => t('home.noTargetAccessibility', { net }),
+    overAccessibility: (amount, net, target) => t('home.overBy', { amount, net, target }),
+    leftAccessibility: (amount, net, target) => t('home.caloriesLeft', { amount, net, target }),
+    today: t('home.kcalToday'),
+    over: t('home.kcalOver'),
+    left: t('home.kcalLeft'),
+  });
   const burnedNothing = today.burned === 0;
 
   return (
@@ -111,7 +150,7 @@ export function HomeHero({
 
         {reading.target === null ? (
           <View style={{ alignSelf: 'flex-start' }}>
-            <Button label="Set a daily target" variant="secondary" onPress={onSetTarget} />
+            <Button label={t('home.setDailyTarget')} variant="secondary" onPress={onSetTarget} />
           </View>
         ) : null}
 
@@ -120,7 +159,7 @@ export function HomeHero({
             it has not earned; it stays legible, since it is still the way in. */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
           <Text style={[type.body, { color: colors.text, fontVariant: ['tabular-nums'] }]}>
-            {`${formatNumber(today.consumed)} eaten`}
+            {t('home.eaten', { calories: formatNumber(today.consumed) })}
           </Text>
           <Text style={[type.body, { color: colors.muted }]} importantForAccessibility="no">
             ·
@@ -128,8 +167,10 @@ export function HomeHero({
           <Pressable
             onPress={onEditBurn}
             accessibilityRole="button"
-            accessibilityLabel={`${formatNumber(today.burned)} kcal burned`}
-            accessibilityHint="Opens a box to change what you burned today"
+            accessibilityLabel={t('home.burnedA11y', {
+              calories: formatNumber(today.burned),
+            })}
+            accessibilityHint={t('home.editBurnHint')}
             hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }}
             style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           >
@@ -144,7 +185,7 @@ export function HomeHero({
                 },
               ]}
             >
-              {`${formatNumber(today.burned)} burned`}
+              {t('home.burned', { calories: formatNumber(today.burned) })}
             </Text>
           </Pressable>
         </View>

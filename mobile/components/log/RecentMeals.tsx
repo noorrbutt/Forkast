@@ -1,4 +1,5 @@
 import { Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { ListGroup, ListRow } from '../ui';
 import { formatNumber } from '../../lib/format';
@@ -24,20 +25,21 @@ export function RecentMeals({
   pending: string | null;
   onRepeat: (log: FoodLog) => void;
 }) {
+  const { t } = useTranslation();
   const { spacing, type, colors } = useTheme();
 
   if (logs.length === 0) return null;
 
   return (
     <View style={{ gap: spacing.sm }}>
-      <Text style={[type.title, { color: colors.text }]}>Recent</Text>
+      <Text style={[type.title, { color: colors.text }]}>{t('log.recent')}</Text>
       <ListGroup>
         {logs.map((log, index) => (
           <ListRow
             key={log.id}
             icon="repeat"
             label={log.dish_name}
-            value={`${formatNumber(log.estimated_calories)} kcal`}
+            value={t('log.calories', { calories: formatNumber(log.estimated_calories) })}
             disabled={pending === log.id}
             onPress={() => onRepeat(log)}
             last={index === logs.length - 1}

@@ -208,6 +208,7 @@ const config = {
         "expo-router",
         "expo-status-bar",
         "expo-secure-store",
+        "expo-localization",
         // Shares the Ramadan summary card's captured image via the OS share
         // sheet. No extra permission on either platform for a plain image
         // share, so no config object is needed beyond listing the plugin.
@@ -249,6 +250,7 @@ const config = {
           }
         ]
       ],
+      "supportsRTL": true,
       "scheme": "forkast"
     };
 

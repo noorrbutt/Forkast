@@ -4,6 +4,7 @@ from app.models.ai_plan import AIPlan
 from app.models.base import Base
 from app.models.burn_log import BurnLog
 from app.models.circuit_breaker import CircuitBreaker
+from app.models.dish_synonym import DishSynonym
 from app.models.enums import FriendScale, Goal, ServingSize
 from app.models.food_log import FoodLog
 from app.models.job import Job
@@ -29,6 +30,7 @@ __all__ = [
     "BurnLog",
     "CircuitBreaker",
     "Cuisine",
+    "DishSynonym",
     "EmailVerificationToken",
     "FoodCategory",
     "FoodLog",

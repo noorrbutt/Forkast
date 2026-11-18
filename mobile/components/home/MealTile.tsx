@@ -1,6 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState, type ReactNode } from 'react';
 import { Image, Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { categoryTileTone } from '../diary/CompactMealRow';
 import { Icon } from '../ui';
@@ -9,7 +10,7 @@ import { displayDish, formatNumber } from '../../lib/format';
 import type { FoodLog, Uuid } from '../../lib/types';
 import { useTheme } from '../../theme';
 import { photoScrim } from '../../theme/tokens';
-import { slotLabelOf } from './todayMeals';
+import { slotLabelOf, slotOf } from './todayMeals';
 
 /**
  * One meal in Home's Today strip, as a tile.
@@ -69,14 +70,21 @@ export function TileFrame({
   testID,
   children,
 }: TileProps & { testID: string; children: ReactNode }) {
+  const { t } = useTranslation();
   const { colors, radius } = useTheme();
+  const slot = slotOf(new Date(log.created_at));
+  const slotLabel = t(`home.slots.${slot ?? 'unknown'}`);
   return (
     <Pressable
       testID={testID}
       onPress={() => onOpen(log.id)}
       accessibilityRole="button"
-      accessibilityLabel={tileLabel(log)}
-      accessibilityHint="Opens this meal"
+      accessibilityLabel={t('home.mealTileA11y', {
+        slot: slotLabel,
+        dish: displayDish(log.dish_name),
+        calories: formatNumber(log.estimated_calories),
+      })}
+      accessibilityHint={t('home.opensMeal')}
       style={({ pressed }) => ({
         width: size.width,
         height: size.height,

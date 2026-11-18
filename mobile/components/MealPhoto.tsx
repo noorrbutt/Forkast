@@ -37,6 +37,24 @@ type HeldProps = {
   onPhotoChange: (photo: PickedPhoto | null) => void;
 };
 
+type MealPhotoCopy = {
+  label?: string;
+  mealPhotoLabel?: string;
+  removePhotoHint?: string;
+  pendingHint?: string;
+  attachedHint?: string;
+  removeTitle?: string;
+  removeMessage?: string;
+  removeAction?: string;
+  keepAction?: string;
+  actions?: {
+    takePhoto: string;
+    retake: string;
+    choose: string;
+    remove: string;
+  };
+};
+
 /**
  * The picture on a meal.
  *
@@ -44,7 +62,7 @@ type HeldProps = {
  * diary feel like one. Everything here is optional: a meal without a photo is
  * complete, and nothing nags about it.
  */
-export function MealPhoto(props: AttachedProps | HeldProps) {
+export function MealPhoto(props: (AttachedProps | HeldProps) & { copy?: MealPhotoCopy }) {
   const { colors, radius, spacing, type } = useTheme();
 
   // The two modes are told apart once, here, so the markup below can ask which
@@ -144,14 +162,14 @@ export function MealPhoto(props: AttachedProps | HeldProps) {
 
   return (
     <View style={{ gap: spacing.lg }}>
-      <ControlLabel>Photo</ControlLabel>
+      <ControlLabel>{props.copy?.label ?? 'Photo'}</ControlLabel>
 
       {thumbnail && attached ? (
         <Pressable
           onPress={drop}
           accessibilityRole="imagebutton"
-          accessibilityLabel="Meal photo"
-          accessibilityHint="Opens the option to remove this photo"
+          accessibilityLabel={props.copy?.mealPhotoLabel ?? 'Meal photo'}
+          accessibilityHint={props.copy?.removePhotoHint ?? 'Opens the option to remove this photo'}
           disabled={busy}
           style={frame}
         >
@@ -174,7 +192,11 @@ export function MealPhoto(props: AttachedProps | HeldProps) {
       {/* Held mode leaves the picture inert: a stray tap on it must not throw
           away the photo when the Remove button is right below. */}
       {thumbnail && pending ? (
-        <View accessible accessibilityLabel="Meal photo" style={frame}>
+        <View
+          accessible
+          accessibilityLabel={props.copy?.mealPhotoLabel ?? 'Meal photo'}
+          style={frame}
+        >
           {preview}
         </View>
       ) : null}
@@ -182,8 +204,10 @@ export function MealPhoto(props: AttachedProps | HeldProps) {
       {thumbnail ? null : (
         <Text style={[type.caption, { color: colors.muted }]}>
           {pending
-            ? 'Optional. Pick it now and Forkast attaches it the moment the meal is saved.'
-            : 'Optional. A picture turns a list of dishes into something worth looking back at.'}
+            ? props.copy?.pendingHint ??
+              'Optional. Pick it now and Forkast attaches it the moment the meal is saved.'
+            : props.copy?.attachedHint ??
+              'Optional. A picture turns a list of dishes into something worth looking back at.'}
         </Text>
       )}
 
@@ -198,6 +222,7 @@ export function MealPhoto(props: AttachedProps | HeldProps) {
         removing={remove.isPending}
         onAttach={(fromCamera) => void attach(fromCamera)}
         onRemove={drop}
+        labels={props.copy?.actions}
       />
 
       {error ? (
@@ -207,18 +232,18 @@ export function MealPhoto(props: AttachedProps | HeldProps) {
       <Dialog
         visible={confirming}
         onDismiss={() => !busy && setConfirming(false)}
-        title="Remove this photo?"
-        message="The meal itself stays in your diary."
+        title={props.copy?.removeTitle ?? 'Remove this photo?'}
+        message={props.copy?.removeMessage ?? 'The meal itself stays in your diary.'}
         actions={[
           {
-            label: 'Remove',
+            label: props.copy?.removeAction ?? 'Remove',
             variant: 'danger',
             onPress: confirmRemove,
             disabled: busy,
             loading: remove.isPending,
           },
           {
-            label: 'Keep it',
+            label: props.copy?.keepAction ?? 'Keep it',
             variant: 'secondary',
             onPress: () => setConfirming(false),
             disabled: busy,

@@ -27,6 +27,12 @@ type SelectProps = {
   /** Below this many options the search field is pointless and is hidden. */
   searchThreshold?: number;
   emptyText?: string;
+  copy?: {
+    closeLabel?: string;
+    searchPlaceholder?: string;
+    clearSearchLabel?: string;
+    opensSearchableListHint?: string;
+  };
 };
 
 /**
@@ -52,6 +58,7 @@ export function Select({
   disabled = false,
   searchThreshold = 8,
   emptyText = 'Nothing matches that.',
+  copy,
 }: SelectProps) {
   const { fonts, colors, radius, spacing, type } = useTheme();
   const [open, setOpen] = useState(false);
@@ -84,7 +91,7 @@ export function Select({
         accessibilityRole="button"
         accessibilityLabel={label}
         accessibilityValue={{ text: selected?.label ?? placeholder }}
-        accessibilityHint="Opens a searchable list"
+        accessibilityHint={copy?.opensSearchableListHint ?? 'Opens a searchable list'}
         style={({ pressed }) => ({
           flexDirection: 'row',
           alignItems: 'center',
@@ -146,7 +153,7 @@ export function Select({
               <Pressable
                 onPress={close}
                 accessibilityRole="button"
-                accessibilityLabel="Close"
+                accessibilityLabel={copy?.closeLabel ?? 'Close'}
                 // A real box, not hitSlop, which react-native-web drops.
                 style={({ pressed }) => ({
                   opacity: pressed ? 0.6 : 1,
@@ -177,7 +184,7 @@ export function Select({
                 <TextInput
                   value={query}
                   onChangeText={setQuery}
-                  placeholder="Search"
+                  placeholder={copy?.searchPlaceholder ?? 'Search'}
                   placeholderTextColor={colors.muted}
                   autoCorrect={false}
                   autoFocus
@@ -187,7 +194,7 @@ export function Select({
                   <Pressable
                     onPress={() => setQuery('')}
                     accessibilityRole="button"
-                    accessibilityLabel="Clear search"
+                    accessibilityLabel={copy?.clearSearchLabel ?? 'Clear search'}
                     // A 16pt icon with no box at all in a browser, which was
                     // the smallest target in the app.
                     style={{
