@@ -10,26 +10,54 @@ import axios from 'axios';
 
 import { API_ORIGIN, REQUEST_TIMEOUT_MS, describeError } from '../lib/api';
 
+const devDescriptor = Object.getOwnPropertyDescriptor(globalThis, '__DEV__');
+
 function axiosError(code: string, response?: unknown) {
   const error = new axios.AxiosError('boom', code);
   if (response) error.response = response as never;
   return error;
 }
 
+function setDevMode(enabled: boolean): void {
+  Object.defineProperty(globalThis, '__DEV__', { configurable: true, value: enabled });
+}
+
+afterEach(() => {
+  if (devDescriptor) {
+    Object.defineProperty(globalThis, '__DEV__', devDescriptor);
+  } else {
+    Reflect.deleteProperty(globalThis, '__DEV__');
+  }
+});
+
 describe('when the server cannot be reached', () => {
-  it('names the address rather than only saying it timed out', () => {
+  it('shows detailed connection diagnostics in development', () => {
+    setDevMode(true);
     const message = describeError(axiosError('ECONNABORTED'));
 
     expect(message).toContain(API_ORIGIN);
+    expect(message).toContain('Check the API is running');
     expect(message).toContain(String(Math.round(REQUEST_TIMEOUT_MS / 1000)));
   });
 
-  it('treats a low level timeout the same way', () => {
-    expect(describeError(axiosError('ETIMEDOUT'))).toContain(API_ORIGIN);
+  it('uses a distinct timeout message in release without exposing the API origin', () => {
+    setDevMode(false);
+
+    const message = describeError(axiosError('ETIMEDOUT'));
+
+    expect(message).toBe('Connection timed out. Check your internet and try again.');
+    expect(message).not.toContain(API_ORIGIN);
+    expect(message).not.toContain('Check the API is running');
   });
 
-  it('names the address for a refused connection too', () => {
-    expect(describeError(axiosError('ECONNREFUSED'))).toContain(API_ORIGIN);
+  it('uses user-facing copy for other release connection failures', () => {
+    setDevMode(false);
+
+    const message = describeError(axiosError('ECONNREFUSED'));
+
+    expect(message).toBe("Can't connect. Check your internet and try again.");
+    expect(message).not.toContain(API_ORIGIN);
+    expect(message).not.toContain('Check the API is running');
   });
 });
 
@@ -62,7 +90,7 @@ describe('when the server did answer', () => {
   it('does not claim the server was unreachable when it clearly answered', () => {
     const message = describeError(axiosError('ERR_BAD_RESPONSE', { status: 500, data: {} }));
 
-    expect(message).not.toContain('Could not reach');
+    expect(message).toContain('500');
   });
 });
 

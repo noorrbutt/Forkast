@@ -15,9 +15,8 @@ const DEFAULT_BASE_URL = 'http://localhost:8010';
  *
  * Generous on purpose: this runs on a phone, sometimes on a slow connection,
  * and a request that would have succeeded in eight seconds should not be
- * abandoned at three. The cost is that an unreachable server takes this long to
- * report itself, which is why the message below names the address rather than
- * saying only that something timed out.
+ * abandoned at three. The detailed connection diagnostic is only useful during
+ * development; release builds use user-facing connectivity copy.
  */
 export const REQUEST_TIMEOUT_MS = 15000;
 
@@ -232,13 +231,14 @@ export function describeError(error: unknown): string {
       const first = detail[0] as { msg?: unknown };
       if (typeof first?.msg === 'string') return first.msg;
     }
-    // A timeout with no response is a "could not reach it" case, so say which
-    // address was not reached. On a phone the cause is almost always a stale
-    // LAN address, a server that is not running, or a firewall in between, and
-    // a bare "the request timed out" points at none of them.
     if (!error.response) {
       const seconds = Math.round(REQUEST_TIMEOUT_MS / 1000);
       const timedOut = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT';
+      if (!__DEV__) {
+        return timedOut
+          ? 'Connection timed out. Check your internet and try again.'
+          : "Can't connect. Check your internet and try again.";
+      }
       return timedOut
         ? `Could not reach ${API_ORIGIN} within ${seconds}s. Check the API is running and that this device can reach that address.`
         : `Could not reach the server at ${API_ORIGIN}.`;
