@@ -60,9 +60,7 @@ async def test_search_matches_urdu_dish_synonyms(auth_client: AsyncClient) -> No
         ("حلیم", "haleem", "haleem"),
         ("چائے پراٹھا", "chai paratha", "breakfast"),
     ]:
-        results = (
-            await auth_client.get("/api/v1/search", params={"q": term})
-        ).json()
+        results = (await auth_client.get("/api/v1/search", params={"q": term})).json()
 
         assert {
             "dish_name": dish_name,

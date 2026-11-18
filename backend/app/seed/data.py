@@ -570,8 +570,7 @@ def validate() -> None:
             f"canonical dish name must be lowercase and trimmed: {synonym.dish_name!r}"
         )
         assert synonym.category_slug in category_slugs, (
-            f"dish synonym {synonym.alias!r} points at unknown category "
-            f"{synonym.category_slug!r}"
+            f"dish synonym {synonym.alias!r} points at unknown category {synonym.category_slug!r}"
         )
         synonym_keys.add(key)
 

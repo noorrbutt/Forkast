@@ -432,9 +432,7 @@ async def list_logs(
             )
         )
 
-    total = await session.scalar(
-        select(func.count()).select_from(FoodLog).where(*filters)
-    )
+    total = await session.scalar(select(func.count()).select_from(FoodLog).where(*filters))
     rows = await session.scalars(
         select(FoodLog)
         .where(*filters)

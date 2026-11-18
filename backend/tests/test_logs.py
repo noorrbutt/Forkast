@@ -249,18 +249,15 @@ async def test_listing_logs_filters_dish_restaurant_and_category_with_user_scope
     assert [item["dish_name"] for item in restaurant_matches["items"]] == ["Pulao"]
 
     category_matches = (
-        await client.get(
-            LOGS, headers=owner_headers, params={"category": categories["rice"]["id"]}
-        )
+        await client.get(LOGS, headers=owner_headers, params={"category": categories["rice"]["id"]})
     ).json()
     assert [item["dish_name"] for item in category_matches["items"]] == ["Pulao"]
 
-    assert (
-        await client.get(LOGS, headers=owner_headers, params={"q": "Secret"})
-    ).json() == {"items": [], "total": 0}
-    other_matches = (
-        await client.get(LOGS, headers=other_headers, params={"q": "Secret"})
-    ).json()
+    assert (await client.get(LOGS, headers=owner_headers, params={"q": "Secret"})).json() == {
+        "items": [],
+        "total": 0,
+    }
+    other_matches = (await client.get(LOGS, headers=other_headers, params={"q": "Secret"})).json()
     assert [item["dish_name"] for item in other_matches["items"]] == ["Secret Biryani"]
 
 
