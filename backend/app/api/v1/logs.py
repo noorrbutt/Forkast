@@ -28,6 +28,7 @@ from app.api.deps import CurrentUser, RateLimiterDep, SessionDep
 from app.config import get_settings
 from app.db import get_session_factory
 from app.models import MAX_PHOTO_BYTES, FoodLog
+from app.schemas.catalog import SMALLINT_MAX
 from app.schemas.insights import TrendOut
 from app.schemas.logs import (
     FoodLogCreate,
@@ -37,6 +38,7 @@ from app.schemas.logs import (
     OrderEstimateOut,
     PhotoEstimateOut,
 )
+from app.schemas.text import optional_text_field
 from app.services import jobs
 from app.services import logs as logs_service
 from app.services.ai.base import AIService
@@ -211,8 +213,12 @@ async def list_logs(
     estimate_source: EstimateSourceDep,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    q: Annotated[optional_text_field(max_length=100), Query()] = None,
+    category: int | None = Query(default=None, ge=1, le=SMALLINT_MAX),
 ) -> FoodLogPage:
-    rows, total = await logs_service.list_logs(session, user, limit=limit, offset=offset)
+    rows, total = await logs_service.list_logs(
+        session, user, limit=limit, offset=offset, q=q, category=category
+    )
     return FoodLogPage(items=[_food_log_out(row, estimate_source) for row in rows], total=total)
 
 

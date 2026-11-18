@@ -1,6 +1,6 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, RefreshControl, Text, View } from 'react-native';
+import { FlatList, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import { DayGroup } from '../../components/diary/DayGroup';
 import { groupByDay, type DiaryDay } from '../../components/diary/diaryDays';
@@ -8,13 +8,15 @@ import { DeleteMealDialog, MealActionMenu, RepeatMealDialog } from '../../compon
 import { DiaryDaySkeleton } from '../../components/diary/DiaryDaySkeleton';
 import { DiaryViewToggle, type DiaryView } from '../../components/diary/DiaryViewToggle';
 import { MapScreen } from '../../components/MapScreen';
-import { Empty, ErrorState, Loading, Screen, UndoSnackbar, useScreenInsets } from '../../components/ui';
+import { Chip, Empty, ErrorState, Field, Loading, Screen, UndoSnackbar, useScreenInsets } from '../../components/ui';
+import { useCategories } from '../../hooks/useCatalog';
+import { useDebounced } from '../../hooks/useDebounced';
 import { useDeleteLog, useInfiniteLogs, useRepeatLog } from '../../hooks/useLogs';
 import { useSoftDelete } from '../../hooks/useSoftDelete';
 import { describeError } from '../../lib/api';
 import { formatNumber } from '../../lib/format';
 import { haptics } from '../../lib/haptics';
-import type { FoodLog, Uuid } from '../../lib/types';
+import type { Category, FoodLog, RefId, Uuid } from '../../lib/types';
 import { useLayout, useTheme } from '../../theme';
 
 /**
@@ -29,7 +31,8 @@ import { useLayout, useTheme } from '../../theme';
  * The header's List / Map switch shows the same diary as places instead of
  * days. The map used to be its own destination, reached from a row on Home;
  * it is a view of these meals, so it lives here. /map still resolves, and
- * lands on this screen with the map showing (?view=map).
+ * lands on this screen with the map showing (?view=map). The list can be
+ * searched by dish or restaurant and filtered to a category.
  */
 
 /** How long the confirmation stays on a row before the row goes quiet again. */
@@ -59,6 +62,8 @@ function DiaryList({
   onAskDelete,
   onLongPress,
   onLogFirst,
+  filtersActive,
+  onClearFilters,
 }: {
   days: DiaryDay[];
   logs: ReturnType<typeof useInfiniteLogs>;
@@ -72,6 +77,8 @@ function DiaryList({
   onAskDelete: (id: Uuid) => void;
   onLongPress: (id: Uuid) => void;
   onLogFirst: () => void;
+  filtersActive: boolean;
+  onClearFilters: () => void;
 }) {
   const { colors, layout, spacing, type } = useTheme();
   const screenInsets = useScreenInsets();
@@ -105,7 +112,7 @@ function DiaryList({
       width: '100%',
       maxWidth: isExpanded ? layout.contentWidth * 1.6 : layout.contentWidth,
       alignSelf: 'center',
-      paddingTop: screenInsets.top,
+      paddingTop: 0,
       paddingHorizontal: layout.screenPadding,
       paddingBottom: layout.scrollBottomInset + screenInsets.bottom,
       gap: spacing.lg,
@@ -135,14 +142,25 @@ function DiaryList({
     }
     ListEmptyComponent={
       logs.data && items.length === 0 ? (
-        <Empty
-          icon="empty"
-          title="Your diary is empty"
-          message="Every meal you log lands here, newest first, with its photo and its calories. Tap one to fix a typo or delete it."
-          actionLabel="Log your first meal"
-          actionIcon="log"
-          onAction={onLogFirst}
-        />
+        filtersActive ? (
+          <Empty
+            icon="empty"
+            title="No meals found"
+            message="Try a different search or category."
+            actionLabel="Clear filters"
+            actionVariant="secondary"
+            onAction={onClearFilters}
+          />
+        ) : (
+          <Empty
+            icon="empty"
+            title="Your diary is empty"
+            message="Every meal you log lands here, newest first, with its photo and its calories. Tap one to fix a typo or delete it."
+            actionLabel="Log your first meal"
+            actionIcon="log"
+            onAction={onLogFirst}
+          />
+        )
       ) : null
     }
     ListFooterComponent={
@@ -180,6 +198,85 @@ function DiaryList({
   );
 }
 
+function DiaryFilters({
+  search,
+  onSearchChange,
+  categories,
+  categoriesError,
+  onRetryCategories,
+  selectedCategory,
+  onSelectCategory,
+}: {
+  search: string;
+  onSearchChange: (value: string) => void;
+  categories: Category[];
+  categoriesError?: unknown;
+  onRetryCategories: () => void;
+  selectedCategory: RefId | null;
+  onSelectCategory: (category: RefId | null) => void;
+}) {
+  const { layout, spacing } = useTheme();
+  const screenInsets = useScreenInsets();
+
+  return (
+    <View style={{ paddingTop: screenInsets.top, paddingBottom: spacing.md, gap: spacing.md }}>
+      <View
+        style={{
+          width: '100%',
+          maxWidth: layout.contentWidth,
+          alignSelf: 'center',
+          paddingHorizontal: layout.screenPadding,
+        }}
+      >
+        <Field
+          label="Search meals and restaurants"
+          accessibilityLabel="Search meals and restaurants"
+          testID="history-search"
+          placeholder="Dish or restaurant"
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          value={search}
+          onChangeText={onSearchChange}
+        />
+      </View>
+
+      {categoriesError ? (
+        <View style={{ paddingHorizontal: layout.screenPadding }}>
+          <ErrorState
+            title="Categories unavailable"
+            message={describeError(categoriesError)}
+            onRetry={onRetryCategories}
+          />
+        </View>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: layout.screenPadding }}
+        >
+          <Chip
+            label="All"
+            selected={selectedCategory === null}
+            showCheck
+            onPress={() => onSelectCategory(null)}
+          />
+          {categories.map((category) => (
+            <Chip
+              key={category.id}
+              label={category.name}
+              selected={selectedCategory === category.id}
+              showCheck
+              onPress={() => onSelectCategory(category.id)}
+            />
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
 export default function HistoryScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ view?: string }>();
@@ -189,7 +286,11 @@ export default function HistoryScreen() {
   useEffect(() => {
     if (params.view === 'map' || params.view === 'list') setView(params.view);
   }, [params.view]);
-  const logs = useInfiniteLogs();
+  const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<RefId | null>(null);
+  const settledSearch = useDebounced(search.trim());
+  const categories = useCategories();
+  const logs = useInfiniteLogs(undefined, settledSearch, selectedCategory);
   const repeat = useRepeatLog();
   const deleteLog = useDeleteLog();
 
@@ -381,6 +482,16 @@ export default function HistoryScreen() {
       eyebrow={eyebrow}
       headerRight={toggle}
     >
+      <DiaryFilters
+        search={search}
+        onSearchChange={setSearch}
+        categories={categories.data ?? []}
+        categoriesError={categories.isError ? categories.error : undefined}
+        onRetryCategories={() => void categories.refetch()}
+        selectedCategory={selectedCategory}
+        onSelectCategory={setSelectedCategory}
+      />
+
       <DiaryList
         days={days}
         logs={logs}
@@ -394,6 +505,11 @@ export default function HistoryScreen() {
         onAskDelete={askToDelete}
         onLongPress={askMenu}
         onLogFirst={() => router.navigate('/log')}
+        filtersActive={Boolean(settledSearch) || selectedCategory !== null}
+        onClearFilters={() => {
+          setSearch('');
+          setSelectedCategory(null);
+        }}
       />
 
       {snackbar}

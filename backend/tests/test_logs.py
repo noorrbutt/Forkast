@@ -188,6 +188,82 @@ async def test_listing_logs_is_newest_first_and_paginated(auth_client: AsyncClie
     assert timestamps == sorted(timestamps, reverse=True)
 
 
+async def test_listing_logs_filters_dish_restaurant_and_category_with_user_scope(
+    client: AsyncClient,
+) -> None:
+    async def register(email: str) -> dict[str, str]:
+        response = await client.post(
+            "/api/v1/auth/register",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": email,
+                "password": "password123",
+            },
+        )
+        assert response.status_code == 201, response.text
+        return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+    owner_headers = await register("history-filter-owner@forkast.app")
+    other_headers = await register("history-filter-other@forkast.app")
+    categories = {
+        category["slug"]: category
+        for category in (await client.get("/api/v1/categories", headers=owner_headers)).json()
+    }
+
+    async def create_log(
+        headers: dict[str, str], dish: str, category_slug: str, restaurant: str
+    ) -> None:
+        response = await client.post(
+            LOGS,
+            headers=headers,
+            json={
+                "dish_name": dish,
+                "category_id": categories[category_slug]["id"],
+                "restaurant_name": restaurant,
+                "area": "Clifton",
+                "rating": 4,
+                "serving_size": "medium",
+            },
+        )
+        assert response.status_code == 201, response.text
+
+    await create_log(owner_headers, "Chicken Biryani", "biryani", "Cafe One")
+    await create_log(owner_headers, "Pulao", "rice", "Kolachi")
+    await create_log(other_headers, "Secret Biryani", "biryani", "Secret Kitchen")
+
+    dish_matches = (
+        await client.get(LOGS, headers=owner_headers, params={"q": "biriani", "limit": 1})
+    ).json()
+    assert dish_matches["total"] == 1
+    assert [item["dish_name"] for item in dish_matches["items"]] == ["Chicken Biryani"]
+    assert (
+        await client.get(
+            LOGS, headers=owner_headers, params={"q": "biriani", "limit": 1, "offset": 1}
+        )
+    ).json() == {"items": [], "total": 1}
+
+    restaurant_matches = (
+        await client.get(LOGS, headers=owner_headers, params={"q": "Kloachi"})
+    ).json()
+    assert [item["dish_name"] for item in restaurant_matches["items"]] == ["Pulao"]
+
+    category_matches = (
+        await client.get(
+            LOGS, headers=owner_headers, params={"category": categories["rice"]["id"]}
+        )
+    ).json()
+    assert [item["dish_name"] for item in category_matches["items"]] == ["Pulao"]
+
+    assert (
+        await client.get(LOGS, headers=owner_headers, params={"q": "Secret"})
+    ).json() == {"items": [], "total": 0}
+    other_matches = (
+        await client.get(LOGS, headers=other_headers, params={"q": "Secret"})
+    ).json()
+    assert [item["dish_name"] for item in other_matches["items"]] == ["Secret Biryani"]
+
+
 async def test_editing_the_serving_size_recalculates_the_estimate(
     auth_client: AsyncClient,
 ) -> None:

@@ -208,6 +208,45 @@ describe('the diary while it is still loading', () => {
 });
 
 describe('the diary', () => {
+  it('narrows meals after the search input is debounced', async () => {
+    mockedApi.get.mockImplementation(
+      async (url: string, config?: { params?: { q?: string } }) => {
+        if (url === '/logs') {
+          const items = config?.params?.q ? [BIRYANI] : [NIHARI, BIRYANI, HALEEM];
+          return { data: { items, total: items.length } };
+        }
+        if (url === '/me') {
+          return {
+            data: {
+              id: 'user-1',
+              email: 'noor@example.com',
+              timezone: 'Asia/Karachi',
+              goal: 'maintain',
+              daily_calorie_target: 2200,
+              created_at: '2026-01-04T09:00:00Z',
+            },
+          };
+        }
+        if (url === '/categories') return { data: [] };
+        return { data: null };
+      },
+    );
+
+    const screen = render(<HistoryScreen />, { wrapper });
+    await waitFor(() => expect(screen.getByText('Nihari')).toBeTruthy());
+
+    fireEvent.changeText(screen.getByTestId('history-search'), 'Biryani');
+
+    await waitFor(() => {
+      expect(screen.queryByText('Nihari')).toBeNull();
+      expect(screen.getByText('Chicken Biryani')).toBeTruthy();
+    });
+    expect(mockedApi.get).toHaveBeenCalledWith(
+      '/logs',
+      expect.objectContaining({ params: expect.objectContaining({ q: 'Biryani' }) }),
+    );
+  });
+
   it('gathers a day into one heading carrying that day’s total', async () => {
     const { getAllByText, getByText } = render(<HistoryScreen />, { wrapper });
 

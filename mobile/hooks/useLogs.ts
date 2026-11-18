@@ -8,7 +8,7 @@ import {
 
 import { api } from '../lib/api';
 import { useAuth } from './useAuth';
-import type { FoodLog, LogInput, LogPage, LogPatch, Uuid } from '../lib/types';
+import type { FoodLog, LogInput, LogPage, LogPatch, RefId, Uuid } from '../lib/types';
 
 export function useLogs(limit = 20, offset = 0) {
   const { signedIn } = useAuth();
@@ -38,15 +38,21 @@ export const DIARY_PAGE = 30;
  * The page key deliberately stays under ['logs'], so every mutation that
  * already invalidates that key keeps working without knowing this exists.
  */
-export function useInfiniteLogs(limit = DIARY_PAGE) {
+export function useInfiniteLogs(limit = DIARY_PAGE, q = '', category: RefId | null = null) {
   const { signedIn } = useAuth();
+  const query = q.trim();
   return useInfiniteQuery({
-    queryKey: ['logs', 'infinite', limit],
+    queryKey: ['logs', 'infinite', limit, query, category],
     enabled: signedIn,
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {
       const response = await api.get<LogPage>('/logs', {
-        params: { limit, offset: pageParam },
+        params: {
+          limit,
+          offset: pageParam,
+          ...(query ? { q: query } : {}),
+          ...(category !== null ? { category } : {}),
+        },
       });
       return response.data;
     },

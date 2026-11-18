@@ -12,12 +12,18 @@ import logging
 import uuid
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.catalog import upsert_restaurant
+from app.api.v1.catalog import (
+    _LIKE_ESCAPE,
+    _apply_similarity_threshold,
+    _contains,
+    _fuzzy,
+    upsert_restaurant,
+)
 from app.config import get_settings
 from app.models import FoodCategory, FoodLog, FoodLogPhoto, Restaurant, User
 from app.models.enums import ServingSize
@@ -399,14 +405,39 @@ async def create_log(
 
 
 async def list_logs(
-    session: AsyncSession, user: User, *, limit: int, offset: int
+    session: AsyncSession,
+    user: User,
+    *,
+    limit: int,
+    offset: int,
+    q: str | None = None,
+    category: int | None = None,
 ) -> tuple[list[FoodLog], int]:
+    filters = [FoodLog.user_id == user.id]
+    if category is not None:
+        filters.append(FoodLog.category_id == category)
+    if q:
+        await _apply_similarity_threshold(session)
+        pattern = _contains(q)
+        filters.append(
+            or_(
+                FoodLog.dish_name.ilike(pattern, escape=_LIKE_ESCAPE),
+                _fuzzy(FoodLog.dish_name, q),
+                FoodLog.restaurant.has(
+                    or_(
+                        Restaurant.name.ilike(pattern, escape=_LIKE_ESCAPE),
+                        _fuzzy(Restaurant.name, q),
+                    )
+                ),
+            )
+        )
+
     total = await session.scalar(
-        select(func.count()).select_from(FoodLog).where(FoodLog.user_id == user.id)
+        select(func.count()).select_from(FoodLog).where(*filters)
     )
     rows = await session.scalars(
         select(FoodLog)
-        .where(FoodLog.user_id == user.id)
+        .where(*filters)
         .order_by(FoodLog.created_at.desc())
         .limit(limit)
         .offset(offset)
