@@ -14,13 +14,15 @@ import type { ReactNode } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+let mockParams: { slot?: string } = {};
+
 jest.mock('expo-router', () => ({
   // A no-op is enough for every test here: nothing exercises what happens
   // when a screen loses focus, only that rendering a screen using the real
   // hook does not throw.
   useFocusEffect: jest.fn(),
   useRouter: () => ({ push: jest.fn(), navigate: jest.fn(), back: jest.fn(), canGoBack: () => true }),
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => mockParams,
 }));
 
 jest.mock('../lib/api', () => {
@@ -152,6 +154,7 @@ const CAMERA_SHOT = {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockParams = {};
   mockedHydrate.mockResolvedValue({ access_token: 'a', refresh_token: 'r' });
   mockedApi.get.mockImplementation(async (url: string) => {
     if (url.endsWith('/health')) return { data: { status: 'ok', ai_provider: 'fake' } };
@@ -185,10 +188,20 @@ describe('the capture screen', () => {
   it('is the first thing the log screen shows', () => {
     const screen = openLogScreen();
 
+    expect(screen.getByText('What did you eat?')).toBeTruthy();
     expect(screen.getByText('Take a photo')).toBeTruthy();
     expect(screen.getByText('Choose from library')).toBeTruthy();
     expect(screen.getByText('Type it in instead')).toBeTruthy();
     // The manual form is not mounted yet at all.
+    expect(screen.queryByPlaceholderText('Chicken karahi')).toBeNull();
+  });
+
+  it('uses the meal slot supplied by a reminder without leaving the camera-first screen', () => {
+    mockParams = { slot: 'lunch' };
+    const screen = openLogScreen();
+
+    expect(screen.getByText('What did you have for lunch?')).toBeTruthy();
+    expect(screen.getByText('Take a photo')).toBeTruthy();
     expect(screen.queryByPlaceholderText('Chicken karahi')).toBeNull();
   });
 

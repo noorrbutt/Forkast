@@ -68,6 +68,7 @@ function nearestServingSize(ratio: number): ServingSize {
 
 /** Where the photo has got to, given it can only be sent once the log exists. */
 export type PhotoStatus = 'none' | 'uploading' | 'attached' | 'failed';
+export type MealSlot = 'breakfast' | 'lunch' | 'dinner';
 
 /**
  * Everything the log screen knows: the form's answers, the photo and its
@@ -75,7 +76,7 @@ export type PhotoStatus = 'none' | 'uploading' | 'attached' | 'failed';
  * capture, confirm and manual steps all read and write the same state --
  * moving from confirm to manual keeps every answer already given.
  */
-export function useLogForm() {
+export function useLogForm(slot: MealSlot | null = null) {
   const { t } = useTranslation();
   const estimatorSource = useEstimatorSource();
 
@@ -621,6 +622,7 @@ export function useLogForm() {
   };
 
   return {
+    slot,
     estimatorSource,
     cuisineId,
     setCuisineId,

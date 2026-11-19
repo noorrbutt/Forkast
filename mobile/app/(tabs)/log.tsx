@@ -61,7 +61,7 @@ export default function LogScreen() {
   const router = useRouter();
   const { slot } = useLocalSearchParams<{ slot?: string }>();
   const slotName = slot === 'breakfast' || slot === 'lunch' || slot === 'dinner' ? slot : null;
-  const form = useLogForm();
+  const form = useLogForm(slotName);
   const {
     saved,
     setSaved,
@@ -158,9 +158,9 @@ export default function LogScreen() {
                 The slot itself is read off the time the meal is saved, which
                 is why Home only offers slots whose hours have not passed. */}
             <Text style={[type.display, { color: colors.text }]}>
-              {slotName
+              {form.slot
                 ? t('log.captureSlotTitle', {
-                    slot: t(`home.slots.${slotName}`).toLocaleLowerCase(),
+                    slot: t(`home.slots.${form.slot}`).toLocaleLowerCase(),
                   })
                 : t('log.captureTitle')}
             </Text>
