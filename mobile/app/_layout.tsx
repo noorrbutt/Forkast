@@ -19,6 +19,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { CrashView } from '../components/CrashView';
 import { AuthProvider, useAuth } from '../hooks/useAuth';
+import { useNotificationRouting } from '../hooks/useNotificationRouting';
 import { RamadanProvider } from '../hooks/useRamadan';
 import { queryClient } from '../lib/queryClient';
 import { initializeLanguage } from '../lib/language';
@@ -93,6 +94,7 @@ function Bootstrapping() {
 }
 
 function RootNavigator() {
+  useNotificationRouting();
   const { ready, signedIn, needsSetup, needsOnboarding } = useAuth();
   const { colors, isDark } = useTheme();
   const segments = useSegments();

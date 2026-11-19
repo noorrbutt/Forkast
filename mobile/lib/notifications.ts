@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import type { ReminderSignal, WeeklyDigest } from './types';
 
 type NotificationsModule = typeof import('expo-notifications');
+type NotificationResponse = import('expo-notifications').NotificationResponse;
 
 /**
  * Local reminders: nudge after a quiet stretch, and protect a live streak.
@@ -63,6 +64,32 @@ function load(): NotificationsModule | null {
     return cached;
   } catch {
     return null;
+  }
+}
+
+export function addNotificationResponseListener(
+  listener: (response: NotificationResponse) => void,
+): { remove: () => void } | null {
+  try {
+    return load()?.addNotificationResponseReceivedListener(listener) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getLastNotificationResponse(): Promise<NotificationResponse | null> {
+  try {
+    return (await load()?.getLastNotificationResponseAsync()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearLastNotificationResponse(): Promise<void> {
+  try {
+    await load()?.clearLastNotificationResponseAsync();
+  } catch {
+    // Clearing a response is best-effort; routing must not take the app down.
   }
 }
 
