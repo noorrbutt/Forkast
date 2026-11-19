@@ -67,6 +67,24 @@ async def test_a_photo_can_be_attached_and_read_back(auth_client: AsyncClient) -
     assert fetched.status_code == 200
     assert fetched.content == PNG
     assert fetched.headers["content-type"].startswith("image/png")
+    assert fetched.headers["etag"]
+    assert fetched.headers["cache-control"] == "private, max-age=86400"
+
+
+async def test_a_photo_returns_not_modified_for_a_matching_etag(auth_client: AsyncClient) -> None:
+    log_id = await _log(auth_client)
+    await auth_client.put(f"{LOGS}/{log_id}/photo", files=_upload(PNG))
+
+    fetched = await auth_client.get(f"{LOGS}/{log_id}/photo")
+    unchanged = await auth_client.get(
+        f"{LOGS}/{log_id}/photo",
+        headers={"If-None-Match": fetched.headers["etag"]},
+    )
+
+    assert unchanged.status_code == 304
+    assert unchanged.content == b""
+    assert unchanged.headers["etag"] == fetched.headers["etag"]
+    assert unchanged.headers["cache-control"] == "private, max-age=86400"
 
 
 async def test_a_log_says_whether_it_has_one(auth_client: AsyncClient) -> None:
@@ -237,7 +255,13 @@ async def test_one_persons_photo_is_not_visible_to_another(client: AsyncClient) 
     await client.put(f"{LOGS}/{log_id}/photo", headers=mine_h, files=_upload(PNG))
 
     # 404 rather than 403, so the id is not confirmed to exist.
-    assert (await client.get(f"{LOGS}/{log_id}/photo", headers=theirs_h)).status_code == 404
+    own_photo = await client.get(f"{LOGS}/{log_id}/photo", headers=mine_h)
+    assert (
+        await client.get(
+            f"{LOGS}/{log_id}/photo",
+            headers={**theirs_h, "If-None-Match": own_photo.headers["etag"]},
+        )
+    ).status_code == 404
     assert (
         await client.put(f"{LOGS}/{log_id}/photo", headers=theirs_h, files=_upload(JPEG))
     ).status_code == 404

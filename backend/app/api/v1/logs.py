@@ -17,6 +17,7 @@ from fastapi import (
     Depends,
     File,
     Query,
+    Request,
     Response,
     UploadFile,
     status,
@@ -25,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import CurrentUser, RateLimiterDep, SessionDep
+from app.api.etag import content_etag, if_none_match_matches
 from app.config import get_settings
 from app.db import get_session_factory
 from app.models import MAX_PHOTO_BYTES, FoodLog
@@ -302,6 +304,7 @@ async def get_photo(
     log_id: uuid.UUID,
     session: SessionDep,
     user: CurrentUser,
+    request: Request,
     w: int | None = Query(default=None, ge=MIN_THUMBNAIL_EDGE, le=MAX_THUMBNAIL_EDGE),
 ) -> Response:
     """The image bytes.
@@ -323,13 +326,19 @@ async def get_photo(
         resized = await run_in_threadpool(thumbnail, photo.data, w)
         if resized is not None:
             content, media_type = resized
+    etag = content_etag(content)
+    cache_control = "private, max-age=86400"
+    headers = {
+        "ETag": etag,
+        "Cache-Control": cache_control,
+    }
+    if if_none_match_matches(request.headers.get("if-none-match"), etag):
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
     return Response(
         content=content,
         media_type=media_type,
         headers={
-            # The bytes for a given photo never change; a replacement is a new
-            # row with a new id, so this is safe to hold onto.
-            "Cache-Control": "private, max-age=86400",
+            **headers,
             "Content-Length": str(len(content)),
         },
     )

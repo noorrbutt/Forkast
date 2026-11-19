@@ -22,6 +22,7 @@ from fastapi import (
     File,
     HTTPException,
     Query,
+    Request,
     Response,
     UploadFile,
     status,
@@ -30,6 +31,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from starlette.responses import StreamingResponse
 
 from app.api.deps import CurrentUser, RateLimiterDep, SessionDep, bearer_scheme
+from app.api.etag import content_etag, if_none_match_matches
 
 # Re-verification on an email change is the same mechanism registration
 # already uses -- issue a token, send the link -- so the sender is reused
@@ -229,7 +231,7 @@ async def set_avatar(
 
 
 @router.get("/me/avatar")
-async def get_avatar(session: SessionDep, user: CurrentUser) -> Response:
+async def get_avatar(session: SessionDep, user: CurrentUser, request: Request) -> Response:
     """The image bytes.
 
     Only ever your own. No route addresses somebody else's picture, so one
@@ -240,14 +242,16 @@ async def get_avatar(session: SessionDep, user: CurrentUser) -> Response:
     here, and no client changes.
     """
     avatar = await profile_service.get_avatar(session, user)
+    etag = content_etag(avatar.data)
+    cache_control = "private, max-age=0, must-revalidate"
+    headers = {"ETag": etag, "Cache-Control": cache_control}
+    if if_none_match_matches(request.headers.get("if-none-match"), etag):
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
     return Response(
         content=avatar.data,
         media_type=avatar.content_type,
         headers={
-            # Unlike a meal photo, this address is stable while its contents are
-            # not: replacing the picture reuses the same URL. Held for a day it
-            # would keep showing the old face, so it is revalidated every time.
-            "Cache-Control": "private, no-cache",
+            **headers,
             "Content-Length": str(avatar.byte_size),
         },
     )

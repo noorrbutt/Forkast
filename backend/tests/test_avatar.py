@@ -61,6 +61,20 @@ async def test_a_picture_can_be_uploaded_and_read_back(auth_client: AsyncClient)
     assert fetched.status_code == 200
     assert fetched.content == PNG
     assert fetched.headers["content-type"].startswith("image/png")
+    assert fetched.headers["etag"]
+    assert fetched.headers["cache-control"] == "private, max-age=0, must-revalidate"
+
+
+async def test_an_avatar_returns_not_modified_for_a_matching_etag(auth_client: AsyncClient) -> None:
+    await auth_client.put(AVATAR, files=_upload(PNG))
+
+    fetched = await auth_client.get(AVATAR)
+    unchanged = await auth_client.get(AVATAR, headers={"If-None-Match": fetched.headers["etag"]})
+
+    assert unchanged.status_code == 304
+    assert unchanged.content == b""
+    assert unchanged.headers["etag"] == fetched.headers["etag"]
+    assert unchanged.headers["cache-control"] == "private, max-age=0, must-revalidate"
 
 
 async def test_the_profile_says_whether_there_is_one(auth_client: AsyncClient) -> None:
@@ -163,7 +177,10 @@ async def test_one_persons_picture_is_not_reachable_by_another(client: AsyncClie
 
     await client.put(AVATAR, headers=mine, files=_upload(PNG))
 
-    assert (await client.get(AVATAR, headers=theirs)).status_code == 404
+    own_avatar = await client.get(AVATAR, headers=mine)
+    assert (
+        await client.get(AVATAR, headers={**theirs, "If-None-Match": own_avatar.headers["etag"]})
+    ).status_code == 404
     assert (await client.get(ME, headers=theirs)).json()["has_avatar"] is False
 
     # Their own upload, and their own delete, leave mine exactly where it was.
