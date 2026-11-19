@@ -100,6 +100,10 @@ jest.mock('expo-notifications', () => ({
   setNotificationChannelAsync: jest.fn().mockResolvedValue(undefined),
   getPermissionsAsync: jest.fn().mockResolvedValue({ granted: true, canAskAgain: true }),
   requestPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+  setNotificationCategoryAsync: jest.fn().mockImplementation(async (identifier, actions) => ({
+    identifier,
+    actions,
+  })),
   addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
   getLastNotificationResponseAsync: jest.fn().mockResolvedValue(null),
   clearLastNotificationResponseAsync: jest.fn().mockResolvedValue(undefined),

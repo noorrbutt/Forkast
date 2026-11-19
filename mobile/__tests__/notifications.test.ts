@@ -38,6 +38,27 @@ beforeEach(() => {
 });
 
 describe('scheduling', () => {
+  it('registers the Log it action and attaches its category to reminders', async () => {
+    await syncReminders({ lastLoggedAt: new Date().toISOString(), currentStreak: 1 });
+
+    expect(mocked.setNotificationCategoryAsync).toHaveBeenCalledWith('forkast.reminder', [
+      {
+        identifier: 'log_it',
+        buttonTitle: 'Log it',
+        options: { opensAppToForeground: true },
+      },
+    ]);
+    expect(scheduledWithId('forkast.inactivity')?.content.categoryIdentifier).toBe(
+      'forkast.reminder',
+    );
+    expect(scheduledWithId('forkast.streak')?.content.categoryIdentifier).toBe(
+      'forkast.reminder',
+    );
+    expect(scheduledWithId('forkast.weekly-digest')?.content.categoryIdentifier).toBe(
+      'forkast.reminder',
+    );
+  });
+
   it('uses the existing generic copy when the signal is unavailable', async () => {
     await syncReminders({ lastLoggedAt: new Date().toISOString(), currentStreak: 0 });
 
@@ -173,6 +194,12 @@ describe('Ramadan reminders', () => {
       route: '/log',
       slot: 'dinner',
     });
+    expect(scheduledWithId('forkast.ramadan.sehri.0')?.content.categoryIdentifier).toBe(
+      'forkast.reminder',
+    );
+    expect(scheduledWithId('forkast.ramadan.iftar.0')?.content.categoryIdentifier).toBe(
+      'forkast.reminder',
+    );
   });
 
   it('sehri fires 60 minutes before fajr, iftar 10 minutes before maghrib', async () => {

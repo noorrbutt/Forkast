@@ -83,6 +83,24 @@ describe('notification routing', () => {
     expect(mocked.clearLastNotificationResponseAsync).toHaveBeenCalled();
   });
 
+  it('routes the Log it action through the same reminder route', async () => {
+    render(<RouterHarness />);
+    await waitFor(() => expect(mocked.addNotificationResponseReceivedListener).toHaveBeenCalled());
+
+    const listener = mocked.addNotificationResponseReceivedListener.mock.calls[0][0];
+    act(() => {
+      listener({
+        ...response({ route: '/log', slot: 'dinner' }),
+        actionIdentifier: 'log_it',
+      });
+    });
+
+    expect(mockNavigate).toHaveBeenCalledWith({
+      pathname: '/log',
+      params: { slot: 'dinner' },
+    });
+  });
+
   it('ignores unknown routes', async () => {
     render(<RouterHarness />);
     await waitFor(() => expect(mocked.addNotificationResponseReceivedListener).toHaveBeenCalled());

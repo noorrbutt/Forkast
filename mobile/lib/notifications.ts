@@ -96,6 +96,7 @@ export async function clearLastNotificationResponse(): Promise<void> {
 const INACTIVITY_ID = 'forkast.inactivity';
 const STREAK_ID = 'forkast.streak';
 const DIGEST_ID = 'forkast.weekly-digest';
+const REMINDER_CATEGORY_ID = 'forkast.reminder';
 
 /** How long a gap counts as "you have stopped logging". */
 const INACTIVITY_HOURS = 30;
@@ -125,6 +126,24 @@ function installHandler(): void {
       shouldSetBadge: false,
     }),
   });
+}
+
+async function installReminderCategory(
+  Notifications: NotificationsModule,
+): Promise<boolean> {
+  try {
+    await Notifications.setNotificationCategoryAsync(REMINDER_CATEGORY_ID, [
+      {
+        identifier: 'log_it',
+        buttonTitle: 'Log it',
+        options: { opensAppToForeground: true },
+      },
+    ]);
+    return true;
+  } catch {
+    // Keep reminders working on platforms that cannot register notification actions.
+    return false;
+  }
 }
 
 /**
@@ -233,6 +252,7 @@ export async function scheduleRamadanReminders(
     const Notifications = load();
     if (!Notifications) return;
     installHandler();
+    const categoryRegistered = await installReminderCategory(Notifications);
     await cancelRamadanReminders();
 
     const channelId = Platform.OS === 'android' ? 'reminders' : undefined;
@@ -250,6 +270,7 @@ export async function scheduleRamadanReminders(
             title: 'Sehri',
             body: 'An hour left before fajr.',
             data: { route: '/log', slot: 'breakfast' },
+            ...(categoryRegistered ? { categoryIdentifier: REMINDER_CATEGORY_ID } : {}),
           },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
@@ -266,6 +287,7 @@ export async function scheduleRamadanReminders(
             title: 'Iftar soon',
             body: 'Maghrib is ten minutes away.',
             data: { route: '/log', slot: 'dinner' },
+            ...(categoryRegistered ? { categoryIdentifier: REMINDER_CATEGORY_ID } : {}),
           },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
@@ -330,6 +352,7 @@ export async function syncReminders(state: ReminderState): Promise<void> {
     const Notifications = load();
     if (!Notifications) return;
     installHandler();
+    const categoryRegistered = await installReminderCategory(Notifications);
     await cancelAllReminders();
 
     const channelId = Platform.OS === 'android' ? 'reminders' : undefined;
@@ -346,6 +369,7 @@ export async function syncReminders(state: ReminderState): Promise<void> {
         title: 'What did you eat?',
         body: inactivityCopy(state.signal),
         data: { route: '/log', slot: 'dinner' },
+        ...(categoryRegistered ? { categoryIdentifier: REMINDER_CATEGORY_ID } : {}),
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
@@ -364,6 +388,7 @@ export async function syncReminders(state: ReminderState): Promise<void> {
           title: `${state.currentStreak} clean ${state.currentStreak === 1 ? 'day' : 'days'}`,
           body: state.signal?.is_on_junk_streak ? 'A junk streak is on today. Want to break it?' : FALLBACK_STREAK_COPY,
           data: { route: '/log', slot: 'dinner' },
+          ...(categoryRegistered ? { categoryIdentifier: REMINDER_CATEGORY_ID } : {}),
         },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.DAILY,
@@ -380,6 +405,7 @@ export async function syncReminders(state: ReminderState): Promise<void> {
         title: 'Your week, at a glance',
         body: digestCopy(state.digest),
         data: { route: '/log', slot: 'dinner' },
+        ...(categoryRegistered ? { categoryIdentifier: REMINDER_CATEGORY_ID } : {}),
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
