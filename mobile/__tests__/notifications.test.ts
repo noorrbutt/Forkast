@@ -41,9 +41,11 @@ describe('scheduling', () => {
   it('uses the existing generic copy when the signal is unavailable', async () => {
     await syncReminders({ lastLoggedAt: new Date().toISOString(), currentStreak: 0 });
 
-    expect(scheduledWithId('forkast.inactivity')?.content.body).toBe(
+    const request = scheduledWithId('forkast.inactivity');
+    expect(request?.content.body).toBe(
       'It has been a while. A quick log keeps your estimates honest.',
     );
+    expect(request?.content.data).toEqual({ route: '/log', slot: 'dinner' });
   });
 
   it('uses the breakfast gap from the backend signal', async () => {
@@ -123,6 +125,16 @@ describe('scheduling', () => {
     expect(request).toBeDefined();
     expect(request?.trigger).toMatchObject({ hour: 20, minute: 30 });
     expect(request?.content.title).toContain('5');
+    expect(request?.content.data).toEqual({ route: '/log', slot: 'dinner' });
+  });
+
+  it('adds the log route to the weekly digest reminder', async () => {
+    await syncReminders({ lastLoggedAt: new Date().toISOString(), currentStreak: 0 });
+
+    expect(scheduledWithId('forkast.weekly-digest')?.content.data).toEqual({
+      route: '/log',
+      slot: 'dinner',
+    });
   });
 
   it('reads as singular on the first clean day', async () => {
@@ -153,6 +165,14 @@ describe('Ramadan reminders', () => {
       expect(scheduledWithId(`forkast.ramadan.sehri.${day}`)).toBeTruthy();
       expect(scheduledWithId(`forkast.ramadan.iftar.${day}`)).toBeTruthy();
     }
+    expect(scheduledWithId('forkast.ramadan.sehri.0')?.content.data).toEqual({
+      route: '/log',
+      slot: 'breakfast',
+    });
+    expect(scheduledWithId('forkast.ramadan.iftar.0')?.content.data).toEqual({
+      route: '/log',
+      slot: 'dinner',
+    });
   });
 
   it('sehri fires 60 minutes before fajr, iftar 10 minutes before maghrib', async () => {

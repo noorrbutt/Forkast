@@ -219,7 +219,11 @@ export async function scheduleRamadanReminders(
       if (sehriAt > now) {
         await Notifications.scheduleNotificationAsync({
           identifier: ramadanId('sehri', day),
-          content: { title: 'Sehri', body: 'An hour left before fajr.' },
+          content: {
+            title: 'Sehri',
+            body: 'An hour left before fajr.',
+            data: { route: '/log', slot: 'breakfast' },
+          },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
             seconds: Math.round((sehriAt - now) / 1000),
@@ -231,7 +235,11 @@ export async function scheduleRamadanReminders(
       if (iftarAt > now) {
         await Notifications.scheduleNotificationAsync({
           identifier: ramadanId('iftar', day),
-          content: { title: 'Iftar soon', body: 'Maghrib is ten minutes away.' },
+          content: {
+            title: 'Iftar soon',
+            body: 'Maghrib is ten minutes away.',
+            data: { route: '/log', slot: 'dinner' },
+          },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
             seconds: Math.round((iftarAt - now) / 1000),
@@ -310,6 +318,7 @@ export async function syncReminders(state: ReminderState): Promise<void> {
       content: {
         title: 'What did you eat?',
         body: inactivityCopy(state.signal),
+        data: { route: '/log', slot: 'dinner' },
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
@@ -327,6 +336,7 @@ export async function syncReminders(state: ReminderState): Promise<void> {
         content: {
           title: `${state.currentStreak} clean ${state.currentStreak === 1 ? 'day' : 'days'}`,
           body: state.signal?.is_on_junk_streak ? 'A junk streak is on today. Want to break it?' : FALLBACK_STREAK_COPY,
+          data: { route: '/log', slot: 'dinner' },
         },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.DAILY,
@@ -342,6 +352,7 @@ export async function syncReminders(state: ReminderState): Promise<void> {
       content: {
         title: 'Your week, at a glance',
         body: digestCopy(state.digest),
+        data: { route: '/log', slot: 'dinner' },
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
