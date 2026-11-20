@@ -126,7 +126,7 @@ const TREND = {
   },
 };
 
-function signedInWith(today: Today) {
+function signedInWith(today: Today, logCount = 12) {
   mockedHydrate.mockResolvedValue({ access_token: 'a', refresh_token: 'r' });
   mockedApi.get.mockImplementation(async (url: string) => {
     if (url === '/me') {
@@ -141,7 +141,7 @@ function signedInWith(today: Today) {
         },
       };
     }
-    if (url === '/dashboard') return { data: dashboard(today) };
+    if (url === '/dashboard') return { data: dashboard(today, logCount) };
     if (url === '/trend') return { data: TREND };
     return { data: null };
   });
@@ -151,10 +151,12 @@ function flat(style: unknown): { fontSize?: number } {
   return (StyleSheet.flatten(style as never) ?? {}) as { fontSize?: number };
 }
 
-async function open(today: Today) {
-  signedInWith(today);
+async function open(today: Today, logCount = 12) {
+  signedInWith(today, logCount);
   const screen = render(<TrendsRoute />, { wrapper });
-  await waitFor(() => expect(screen.getByText('Calories by day')).toBeTruthy());
+  await waitFor(() =>
+    expect(screen.getByText(logCount === 0 ? 'No trends yet' : 'Calories by day')).toBeTruthy(),
+  );
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
@@ -166,6 +168,36 @@ beforeEach(() => {
 });
 
 describe('the screen', () => {
+  it('explains what trends will show and gives the day-one hint without rendering zero data', async () => {
+    const screen = await open(UNDER, 0);
+
+    expect(
+      screen.getByText(
+        'What this will tell you: how your calories and junk-meal patterns change over time.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Log your first meal to start your streak and build your weekly digest.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText('Calories by day')).toBeNull();
+    expect(screen.queryByText('1,530')).toBeNull();
+    expect(screen.queryByText('September against August')).toBeNull();
+  });
+
+  it('shows real insight data and no day-one hint once logs exist', async () => {
+    const screen = await open(UNDER, 12);
+
+    expect(screen.getByText('Calories by day')).toBeTruthy();
+    expect(screen.getByText('September against August')).toBeTruthy();
+    expect(
+      screen.queryByText(
+        'Log your first meal to start your streak and build your weekly digest.',
+      ),
+    ).toBeNull();
+  });
+
   it('is headed Trends and has no hero', async () => {
     const screen = await open(UNDER);
 

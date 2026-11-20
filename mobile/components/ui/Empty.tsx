@@ -7,6 +7,7 @@ import { Icon, type IconName } from './Icon';
 type EmptyProps = {
   title: string;
   message?: string;
+  hint?: string;
   /**
    * From the shared vocabulary. It takes its colour from the theme, so it reads
    * the same weight in both palettes, which an emoji cannot: an emoji is a
@@ -36,6 +37,7 @@ type EmptyProps = {
 export function Empty({
   title,
   message,
+  hint,
   icon,
   actionLabel,
   actionIcon,
@@ -74,6 +76,9 @@ export function Empty({
       <Text style={[type.subtitle, { color: colors.text, textAlign: 'center' }]}>{title}</Text>
       {message ? (
         <Text style={[type.caption, { color: colors.muted, textAlign: 'center' }]}>{message}</Text>
+      ) : null}
+      {hint ? (
+        <Text style={[type.caption, { color: colors.text, textAlign: 'center' }]}>{hint}</Text>
       ) : null}
       {actionLabel && onAction ? (
         <Button

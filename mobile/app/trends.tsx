@@ -5,7 +5,8 @@ import { CalorieBars } from '../components/CalorieBars';
 import { RamadanShareRow } from '../components/trends/RamadanShareRow';
 import { RamadanSummaryCard } from '../components/trends/RamadanSummaryCard';
 import { TrendCard } from '../components/trends/TrendCard';
-import { Card, ErrorState, Screen, SkeletonCard } from '../components/ui';
+import { Card, Empty, ErrorState, Screen, SkeletonCard } from '../components/ui';
+import { unlockHint } from '../components/home/unlockHints';
 import { useDashboard, useTrend } from '../hooks/useInsights';
 import { useRamadan } from '../hooks/useRamadan';
 import { describeError } from '../lib/api';
@@ -62,7 +63,13 @@ export default function TrendsRoute() {
           />
         ) : null}
 
-        {data ? (
+        {data?.logs_count === 0 ? (
+          <Empty
+            title="No trends yet"
+            message="What this will tell you: how your calories and junk-meal patterns change over time."
+            hint={unlockHint(data.logs_count) ?? undefined}
+          />
+        ) : data ? (
           <Card>
             <View style={{ gap: spacing.lg }}>
               <Text style={[type.title, { color: colors.text }]}>Calories by day</Text>
@@ -71,7 +78,7 @@ export default function TrendsRoute() {
           </Card>
         ) : null}
 
-        <TrendCard trend={trend} />
+        {data?.logs_count === 0 ? null : <TrendCard trend={trend} />}
 
         {ramadan.enabled ? (
           <>
