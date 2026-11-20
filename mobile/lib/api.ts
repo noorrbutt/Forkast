@@ -1,6 +1,11 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
-import { readStoredTokens, removeStoredTokens, writeStoredTokens } from './tokenStore';
+import {
+  readStoredTokens,
+  removeStoredTokens,
+  writeStoredTokens,
+  type StoredTokens,
+} from './tokenStore';
 import type { TokenPair } from './types';
 
 const DEFAULT_BASE_URL = 'http://localhost:8010';
@@ -82,7 +87,7 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
-export async function hydrateTokens(): Promise<TokenPair | null> {
+export async function hydrateTokens(): Promise<StoredTokens | null> {
   const stored = await readStoredTokens();
   accessToken = stored?.access_token ?? null;
   refreshToken = stored?.refresh_token ?? null;
@@ -91,6 +96,8 @@ export async function hydrateTokens(): Promise<TokenPair | null> {
 
 export async function setTokens(pair: TokenPair): Promise<void> {
   accessToken = pair.access_token;
+  // The store keeps the refresh token in memory on web and in secure storage
+  // natively; this module also needs it in memory for the refresh interceptor.
   refreshToken = pair.refresh_token;
   await writeStoredTokens(pair);
 }

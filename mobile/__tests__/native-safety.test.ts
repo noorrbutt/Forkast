@@ -75,14 +75,15 @@ describe('modules that cannot be loaded everywhere', () => {
 });
 
 describe('storing a session on every platform', () => {
-  it('does not lose the session on a web reload', () => {
+  it('restores a web access token without a persisted refresh token', () => {
     // expo-secure-store ships an empty object as its web implementation, so
-    // every call fails there and the in memory fallback catches it. That works
-    // and signs you out on every refresh, which on web is constant.
+    // every call fails there and the in memory fallback catches it. The access
+    // token can survive a reload; the refresh token cannot.
     const source = read('lib/tokenStore.ts');
 
     expect(source).toMatch(/sessionStorage/);
-    expect(source).toMatch(/Platform\.OS !== 'web'/);
+    expect(source).toMatch(/memory\.set\(REFRESH_KEY,\s*pair\.refresh_token\)/);
+    expect(source).toMatch(/web\.removeItem\(REFRESH_KEY\)/);
   });
 
   it('does not put a token anywhere that outlives the tab', () => {

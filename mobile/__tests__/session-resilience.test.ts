@@ -15,10 +15,35 @@ jest.mock('../lib/tokenStore', () => ({
   removeStoredTokens: jest.fn().mockResolvedValue(undefined),
 }));
 
-import { api, clearTokens, getAccessToken, getTokenGeneration, setTokens } from '../lib/api';
-import { removeStoredTokens } from '../lib/tokenStore';
+import {
+  api,
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  getTokenGeneration,
+  hydrateTokens,
+  setTokens,
+} from '../lib/api';
+import { readStoredTokens, removeStoredTokens, writeStoredTokens } from '../lib/tokenStore';
 
 const PAIR = { access_token: 'access-1', refresh_token: 'refresh-1', token_type: 'bearer' };
+
+describe('a web session restored without a persisted refresh token', () => {
+  it('uses the stored access token until it expires and leaves refresh unavailable', async () => {
+    (readStoredTokens as jest.Mock).mockResolvedValueOnce({
+      access_token: 'access-web',
+      refresh_token: null,
+      token_type: 'bearer',
+    });
+
+    const stored = await hydrateTokens();
+
+    expect(stored?.access_token).toBe('access-web');
+    expect(stored?.refresh_token).toBeNull();
+    expect(getAccessToken()).toBe('access-web');
+    expect(getRefreshToken()).toBeNull();
+  });
+});
 
 /** Drive the response interceptor directly with a failure it would see live. */
 async function failRequest(status: number | undefined, refreshOutcome: 'reject' | 'never') {
@@ -55,10 +80,14 @@ describe('a refresh that fails for reasons other than the token', () => {
     // A 429 from a shared rate-limit bucket, a 5xx, or a dropped connection.
     // Signing the user out for any of those throws away a refresh token that is
     // still perfectly valid, and behind a proxy it does it to everyone at once.
+    expect(getRefreshToken()).toBe(PAIR.refresh_token);
+    expect(writeStoredTokens).toHaveBeenCalledWith(PAIR);
+
     await failRequest(401, 'reject');
 
     expect(removeStoredTokens).not.toHaveBeenCalled();
     expect(getAccessToken()).toBe(PAIR.access_token);
+    expect(getRefreshToken()).toBe(PAIR.refresh_token);
   });
 
   it('still signs out when the server refuses the token itself', async () => {

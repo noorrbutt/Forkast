@@ -466,6 +466,15 @@ describe('the rest of the native only modules', () => {
     expect(code('lib/milestoneStore.ts')).toMatch(/Platform\.OS === 'web'/);
   });
 
+  it('keeps the web refresh token in memory and removes any persisted copy', () => {
+    const source = code('lib/tokenStore.ts');
+
+    expect(source).toMatch(/memory\.set\(REFRESH_KEY,\s*pair\.refresh_token\)/);
+    expect(source).toMatch(/web\.removeItem\(REFRESH_KEY\)/);
+    expect(source).not.toMatch(/web\.setItem\(REFRESH_KEY/);
+    expect(source).toMatch(/refresh_token:\s*refresh/);
+  });
+
   it('swaps the map for its list on web, and the map renders in one place', () => {
     // MapCanvas is the only module that imports react-native-maps, and
     // MapScreen is the only thing that imports MapCanvas, so one web twin

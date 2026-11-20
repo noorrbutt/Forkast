@@ -6,6 +6,12 @@ import type { TokenPair } from './types';
 const ACCESS_KEY = 'forkast.access_token';
 const REFRESH_KEY = 'forkast.refresh_token';
 
+export type StoredTokens = {
+  access_token: string;
+  refresh_token: string | null;
+  token_type: string;
+};
+
 /**
  * Last resort when nothing else will hold a value.
  *
@@ -15,18 +21,16 @@ const REFRESH_KEY = 'forkast.refresh_token';
 const memory = new Map<string, string>();
 
 /**
- * Where a token lives on web.
+ * Where the web access token lives.
  *
  * expo-secure-store ships an empty object as its web implementation, so every
- * call there fails and the memory map above catches it. That works, but it also
- * signs you out on every refresh, which on web is constant.
+ * call there fails and the memory map above catches it. That keeps the session
+ * alive for the tab, but not across a reload.
  *
- * sessionStorage rather than localStorage, deliberately. A token in
- * localStorage outlives the tab and is readable by any script that gets onto
- * the page; sessionStorage is gone the moment the tab closes, which keeps the
- * blast radius the same as the in memory version while surviving the reload
- * that makes web usable at all. It is still not a keystore, and web is a
- * preview surface here rather than the shipped product.
+ * The refresh token stays in memory only. The access token uses sessionStorage
+ * rather than localStorage: it survives a reload but not the tab closing.
+ * sessionStorage is still readable by scripts on the page, so it is not a
+ * keystore, and web is a preview surface here rather than the shipped product.
  */
 function webStore(): Storage | null {
   if (Platform.OS !== 'web') return null;
@@ -69,24 +73,45 @@ async function removeItem(key: string): Promise<void> {
   const web = webStore();
   if (web) {
     web.removeItem(key);
-    return;
-  }
-  try {
-    await SecureStore.deleteItemAsync(key);
-  } catch {
-    // Removing something that was never stored is the state the caller asked
-    // for, not a failure.
+  } else {
+    try {
+      await SecureStore.deleteItemAsync(key);
+    } catch {
+      // Removing something that was never stored is the state the caller asked
+      // for, not a failure.
+    }
   }
   memory.delete(key);
 }
 
-export async function readStoredTokens(): Promise<TokenPair | null> {
+export async function readStoredTokens(): Promise<StoredTokens | null> {
+  const web = webStore();
+  if (Platform.OS === 'web' && web) {
+    const access = web.getItem(ACCESS_KEY);
+    web.removeItem(REFRESH_KEY);
+    if (!access) return null;
+    const refresh = memory.get(REFRESH_KEY) ?? null;
+    return { access_token: access, refresh_token: refresh, token_type: 'bearer' };
+  }
+
   const [access, refresh] = await Promise.all([readItem(ACCESS_KEY), readItem(REFRESH_KEY)]);
   if (!access || !refresh) return null;
   return { access_token: access, refresh_token: refresh, token_type: 'bearer' };
 }
 
 export async function writeStoredTokens(pair: TokenPair): Promise<void> {
+  const web = webStore();
+  if (Platform.OS === 'web') {
+    memory.set(REFRESH_KEY, pair.refresh_token);
+    if (web) {
+      web.setItem(ACCESS_KEY, pair.access_token);
+      web.removeItem(REFRESH_KEY);
+      return;
+    }
+    memory.set(ACCESS_KEY, pair.access_token);
+    return;
+  }
+
   await Promise.all([
     writeItem(ACCESS_KEY, pair.access_token),
     writeItem(REFRESH_KEY, pair.refresh_token),

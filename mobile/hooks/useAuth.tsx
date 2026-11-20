@@ -77,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true;
 
     void (async () => {
-      let pair: TokenPair | null = null;
+      let pair: Awaited<ReturnType<typeof hydrateTokens>> = null;
       try {
         pair = await hydrateTokens();
       } catch {
