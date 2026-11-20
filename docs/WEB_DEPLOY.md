@@ -57,12 +57,26 @@ it is sent, with nothing in the app's error to say why.
 | --- | --- | --- |
 | Photo logging | `expo-image-picker` | Both "Take a photo" and "Choose from library" open the browser's file picker (a phone browser may offer its camera for the first). Permissions are not asked. The resize runs on a canvas and the upload converts the file to a Blob in `lib/upload.web.ts`. |
 | Map | `react-native-maps` | `components/MapCanvas.web.tsx` never imports it, so `/map` shows the area list instead. |
-| Sign in tokens | `expo-secure-store` | No web build. `lib/tokenStore.ts` uses `sessionStorage`, so a session survives a reload and ends with the tab. |
+| Sign in tokens | `expo-secure-store` | Access token in `sessionStorage`; refresh token in memory only. See “Web token lifecycle” below. |
 | Streak milestones seen | `expo-secure-store` | Kept in memory, so a celebration may replay after a reload. |
 | Google sign in | `@react-native-google-signin/google-signin` | Replaced by `lib/googleAuth.web.ts`; hidden when unconfigured. |
 | Haptics | `expo-haptics` | Vibrates where the browser can, otherwise nothing. Every failure is swallowed in `lib/haptics.ts`. |
 | Reminders | `expo-notifications` | Offered as unavailable. There is no scheduler in a browser. |
 | Pull to refresh | React Native's `RefreshControl` | Inert; data refreshes when the tab regains focus instead. |
+
+## Web token lifecycle
+
+The access token is in `sessionStorage`; the refresh token is memory-only. After
+a reload, the access token works until it expires (30 minutes by default). Since
+the refresh token did not survive the reload, expiry or rejection requires
+signing in again. Closing the tab clears both.
+
+An `HttpOnly` cookie flow needs coordinated client and API changes:
+- Set a `Secure; HttpOnly` refresh cookie with an appropriate `SameSite` value at
+  sign-in/register/Google; stop returning the refresh token in JSON.
+- Read/rotate it on refresh; revoke and clear it on logout.
+- Send credentialed requests and allow only explicit CORS origins with credentials enabled.
+- Add CSRF defenses (`SameSite` and `Origin` checks or a CSRF token) for cookie mutations.
 
 `__tests__/web-parity.test.ts` asserts each of these against the source, so a
 change that quietly reintroduces a native only path fails a test.
