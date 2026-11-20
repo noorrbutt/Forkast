@@ -8,9 +8,11 @@ import pytest
 from fastapi import HTTPException
 from PIL import Image
 
+import app.services.images as images
 from app.services.images import (
     JPEG_QUALITY,
     MAX_DIMENSION,
+    cached_thumbnail,
     check_upload,
     compress_for_estimation,
     thumbnail,
@@ -94,6 +96,27 @@ def test_thumbnail_bounds_the_longest_edge_of_a_portrait_photo() -> None:
     assert content_type == "image/jpeg"
     with Image.open(io.BytesIO(data)) as image:
         assert image.size == (200, 300)
+
+
+def test_cached_thumbnail_encodes_only_once_for_the_same_photo_and_edge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = _photo(600, 900)
+    original_thumbnail = images.thumbnail
+    calls = 0
+
+    def counting_thumbnail(source: bytes, max_edge: int) -> tuple[bytes, str] | None:
+        nonlocal calls
+        calls += 1
+        return original_thumbnail(source, max_edge)
+
+    monkeypatch.setattr(images, "thumbnail", counting_thumbnail)
+
+    first = cached_thumbnail("cache-test-photo", data, 300)
+    second = cached_thumbnail("cache-test-photo", data, 300)
+
+    assert first == second
+    assert calls == 1
 
 
 def test_thumbnail_declines_a_photo_already_inside_the_bound() -> None:

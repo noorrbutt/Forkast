@@ -11,6 +11,7 @@ import base64
 import io
 import uuid
 
+import pytest
 from httpx import AsyncClient
 from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -296,6 +297,55 @@ async def test_a_thumbnail_is_shrunk_to_the_asked_edge(auth_client: AsyncClient)
     assert fetched.headers["cache-control"] == "private, max-age=86400"
     with Image.open(io.BytesIO(fetched.content)) as result:
         assert result.size == (300, 200)
+
+
+async def test_a_thumbnail_is_not_reencoded_on_a_second_request(
+    auth_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.services.images as images
+
+    log_id = await _log(auth_client)
+    await auth_client.put(f"{LOGS}/{log_id}/photo", files=_upload(_large_png()))
+    original_thumbnail = images.thumbnail
+    calls = 0
+
+    def counting_thumbnail(data: bytes, max_edge: int) -> tuple[bytes, str] | None:
+        nonlocal calls
+        calls += 1
+        return original_thumbnail(data, max_edge)
+
+    monkeypatch.setattr(images, "thumbnail", counting_thumbnail)
+
+    first = await auth_client.get(f"{LOGS}/{log_id}/photo", params={"w": 300})
+    second = await auth_client.get(f"{LOGS}/{log_id}/photo", params={"w": 300})
+
+    assert first.content == second.content
+    assert calls == 1
+
+
+async def test_replacing_a_photo_invalidates_its_thumbnail_cache(
+    auth_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.services.images as images
+
+    log_id = await _log(auth_client)
+    await auth_client.put(f"{LOGS}/{log_id}/photo", files=_upload(_large_png()))
+    original_thumbnail = images.thumbnail
+    calls = 0
+
+    def counting_thumbnail(data: bytes, max_edge: int) -> tuple[bytes, str] | None:
+        nonlocal calls
+        calls += 1
+        return original_thumbnail(data, max_edge)
+
+    monkeypatch.setattr(images, "thumbnail", counting_thumbnail)
+    await auth_client.get(f"{LOGS}/{log_id}/photo", params={"w": 300})
+    await auth_client.put(f"{LOGS}/{log_id}/photo", files=_upload(_large_png(800, 600)))
+    updated = await auth_client.get(f"{LOGS}/{log_id}/photo", params={"w": 300})
+
+    assert calls == 2
+    assert updated.status_code == 200
+    assert updated.headers["etag"]
 
 
 async def test_without_w_the_original_is_served_untouched(auth_client: AsyncClient) -> None:

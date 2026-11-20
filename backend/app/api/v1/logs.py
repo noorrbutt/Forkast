@@ -48,8 +48,8 @@ from app.services.ai.deps import EstimateSource, get_ai_service, get_estimate_so
 from app.services.images import (
     MAX_THUMBNAIL_EDGE,
     MIN_THUMBNAIL_EDGE,
+    cached_thumbnail,
     check_upload,
-    thumbnail,
 )
 from app.services.insights import build_trend
 from app.services.rate_limit import account_identity
@@ -323,7 +323,7 @@ async def get_photo(
     photo = await logs_service.get_photo(session, user, log_id)
     content, media_type = photo.data, photo.content_type
     if w is not None:
-        resized = await run_in_threadpool(thumbnail, photo.data, w)
+        resized = await run_in_threadpool(cached_thumbnail, str(photo.food_log_id), photo.data, w)
         if resized is not None:
             content, media_type = resized
     etag = content_etag(content)

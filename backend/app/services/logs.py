@@ -39,7 +39,7 @@ from app.services.ai.schemas import (
     PhotoCalorieEstimate,
 )
 from app.services.calories import clamp_photo_estimate, clamp_to_range, finalise_estimate
-from app.services.images import compress_for_estimation
+from app.services.images import compress_for_estimation, invalidate_thumbnail_cache
 from app.services.jobs import REFINE_CALORIE_ESTIMATE, enqueue
 from app.services.rate_limit import RateLimiter, account_identity
 
@@ -817,6 +817,7 @@ async def set_photo(session: AsyncSession, log: FoodLog, data: bytes, content_ty
         existing.byte_size = len(data)
         existing.data = data
     await session.commit()
+    invalidate_thumbnail_cache(str(log.id))
 
 
 async def get_photo(session: AsyncSession, user: User, log_id: uuid.UUID) -> FoodLogPhoto:
@@ -838,3 +839,4 @@ async def delete_photo(session: AsyncSession, user: User, log_id: uuid.UUID) -> 
     if photo is not None:
         await session.delete(photo)
         await session.commit()
+        invalidate_thumbnail_cache(str(log_id))

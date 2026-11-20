@@ -15,7 +15,10 @@ meaningfully hurting the model's ability to identify a dish and its portion.
 
 from __future__ import annotations
 
+import hashlib
 import io
+import threading
+from collections import OrderedDict
 
 from fastapi import HTTPException, status
 from PIL import Image, ImageOps
@@ -142,6 +145,14 @@ def compress_for_estimation(data: bytes) -> bytes:
 MIN_THUMBNAIL_EDGE = 64
 MAX_THUMBNAIL_EDGE = MAX_DIMENSION
 
+_THUMBNAIL_CACHE_MAX_ENTRIES = 128
+_THUMBNAIL_CACHE_MAX_BYTES = 16 * 1024 * 1024
+_thumbnail_cache: OrderedDict[tuple[str, int], tuple[bytes, tuple[bytes, str] | None]] = (
+    OrderedDict()
+)
+_thumbnail_cache_bytes = 0
+_thumbnail_cache_lock = threading.Lock()
+
 
 def thumbnail(data: bytes, max_edge: int) -> tuple[bytes, str] | None:
     """`data` re-encoded as a JPEG whose longest edge is at most `max_edge`.
@@ -176,3 +187,50 @@ def thumbnail(data: bytes, max_edge: int) -> tuple[bytes, str] | None:
         ValueError,
     ):
         return None
+
+
+def cached_thumbnail(photo_id: str, data: bytes, max_edge: int) -> tuple[bytes, str] | None:
+    """Return a cached thumbnail for this photo version and edge.
+
+    The content digest prevents stale results if a different worker replaces
+    the photo, while explicit invalidation below promptly frees this process's
+    entries after a local upload or deletion.
+    """
+    global _thumbnail_cache_bytes
+
+    key = (photo_id, max_edge)
+    fingerprint = hashlib.sha256(data).digest()
+    with _thumbnail_cache_lock:
+        cached = _thumbnail_cache.get(key)
+        if cached is not None and cached[0] == fingerprint:
+            _thumbnail_cache.move_to_end(key)
+            return cached[1]
+
+        if cached is not None:
+            _thumbnail_cache_bytes -= len(cached[1][0]) if cached[1] is not None else 0
+            del _thumbnail_cache[key]
+
+        result = thumbnail(data, max_edge)
+        result_size = len(result[0]) if result is not None else 0
+        if result_size > _THUMBNAIL_CACHE_MAX_BYTES:
+            return result
+
+        _thumbnail_cache[key] = (fingerprint, result)
+        _thumbnail_cache_bytes += result_size
+        while (
+            len(_thumbnail_cache) > _THUMBNAIL_CACHE_MAX_ENTRIES
+            or _thumbnail_cache_bytes > _THUMBNAIL_CACHE_MAX_BYTES
+        ):
+            _, (_, evicted) = _thumbnail_cache.popitem(last=False)
+            _thumbnail_cache_bytes -= len(evicted[0]) if evicted is not None else 0
+        return result
+
+
+def invalidate_thumbnail_cache(photo_id: str) -> None:
+    """Remove all cached edges for a photo that has changed or been deleted."""
+    global _thumbnail_cache_bytes
+
+    with _thumbnail_cache_lock:
+        for key in [key for key in _thumbnail_cache if key[0] == photo_id]:
+            _, result = _thumbnail_cache.pop(key)
+            _thumbnail_cache_bytes -= len(result[0]) if result is not None else 0
