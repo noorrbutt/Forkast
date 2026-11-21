@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import io
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from fastapi import HTTPException
@@ -134,6 +136,33 @@ def test_cached_thumbnail_does_not_hold_cache_lock_while_encoding(
     monkeypatch.setattr(images, "thumbnail", checking_thumbnail)
 
     assert cached_thumbnail("lock-test-photo", data, 300) is not None
+
+
+def test_cached_thumbnail_encodes_different_photos_concurrently(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = _photo(600, 900)
+    original_thumbnail = images.thumbnail
+    barrier = threading.Barrier(2)
+
+    def synchronized_thumbnail(source: bytes, max_edge: int) -> tuple[bytes, str] | None:
+        try:
+            barrier.wait(timeout=5)
+        except threading.BrokenBarrierError as exc:
+            raise AssertionError("thumbnail encoding calls were serialized") from exc
+        return original_thumbnail(source, max_edge)
+
+    monkeypatch.setattr(images, "thumbnail", synchronized_thumbnail)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(
+            executor.map(
+                lambda photo_id: cached_thumbnail(photo_id, data, 300),
+                ("parallel-photo-one", "parallel-photo-two"),
+            )
+        )
+
+    assert all(result is not None for result in results)
 
 
 def test_thumbnail_declines_a_photo_already_inside_the_bound() -> None:
