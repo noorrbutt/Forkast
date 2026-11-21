@@ -84,7 +84,10 @@ def _scrub_sentry_breadcrumb(breadcrumb: dict[str, Any], _hint: Any) -> dict[str
     return breadcrumb
 
 
-if settings.sentry_dsn:
+def _init_sentry() -> None:
+    if not settings.sentry_dsn:
+        return
+
     import sentry_sdk
     from sentry_sdk.integrations.fastapi import FastApiIntegration
 
@@ -93,10 +96,14 @@ if settings.sentry_dsn:
         environment=settings.environment.value,
         integrations=[FastApiIntegration()],
         send_default_pii=False,
+        include_local_variables=False,
         max_request_body_size="never",
         before_send=_scrub_sentry_event,
         before_breadcrumb=_scrub_sentry_breadcrumb,
     )
+
+
+_init_sentry()
 
 
 # Whether the configured Groq models answered the startup probe, text and
