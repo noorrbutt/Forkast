@@ -119,6 +119,23 @@ def test_cached_thumbnail_encodes_only_once_for_the_same_photo_and_edge(
     assert calls == 1
 
 
+def test_cached_thumbnail_does_not_hold_cache_lock_while_encoding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = _photo(600, 900)
+    original_thumbnail = images.thumbnail
+
+    def checking_thumbnail(source: bytes, max_edge: int) -> tuple[bytes, str] | None:
+        acquired = images._thumbnail_cache_lock.acquire(blocking=False)
+        assert acquired
+        images._thumbnail_cache_lock.release()
+        return original_thumbnail(source, max_edge)
+
+    monkeypatch.setattr(images, "thumbnail", checking_thumbnail)
+
+    assert cached_thumbnail("lock-test-photo", data, 300) is not None
+
+
 def test_thumbnail_declines_a_photo_already_inside_the_bound() -> None:
     assert thumbnail(_photo(200, 100), 300) is None
 

@@ -151,6 +151,7 @@ _thumbnail_cache: OrderedDict[tuple[str, int], tuple[bytes, tuple[bytes, str] | 
     OrderedDict()
 )
 _thumbnail_cache_bytes = 0
+_thumbnail_cache_generation = 0
 _thumbnail_cache_lock = threading.Lock()
 
 
@@ -205,14 +206,20 @@ def cached_thumbnail(photo_id: str, data: bytes, max_edge: int) -> tuple[bytes, 
         if cached is not None and cached[0] == fingerprint:
             _thumbnail_cache.move_to_end(key)
             return cached[1]
+        generation = _thumbnail_cache_generation
 
+    result = thumbnail(data, max_edge)
+    result_size = len(result[0]) if result is not None else 0
+
+    with _thumbnail_cache_lock:
+        cached = _thumbnail_cache.get(key)
+        if cached is not None and cached[0] == fingerprint:
+            _thumbnail_cache.move_to_end(key)
+            return cached[1]
         if cached is not None:
             _thumbnail_cache_bytes -= len(cached[1][0]) if cached[1] is not None else 0
             del _thumbnail_cache[key]
-
-        result = thumbnail(data, max_edge)
-        result_size = len(result[0]) if result is not None else 0
-        if result_size > _THUMBNAIL_CACHE_MAX_BYTES:
+        if generation != _thumbnail_cache_generation or result_size > _THUMBNAIL_CACHE_MAX_BYTES:
             return result
 
         _thumbnail_cache[key] = (fingerprint, result)
@@ -228,9 +235,10 @@ def cached_thumbnail(photo_id: str, data: bytes, max_edge: int) -> tuple[bytes, 
 
 def invalidate_thumbnail_cache(photo_id: str) -> None:
     """Remove all cached edges for a photo that has changed or been deleted."""
-    global _thumbnail_cache_bytes
+    global _thumbnail_cache_bytes, _thumbnail_cache_generation
 
     with _thumbnail_cache_lock:
+        _thumbnail_cache_generation += 1
         for key in [key for key in _thumbnail_cache if key[0] == photo_id]:
             _, result = _thumbnail_cache.pop(key)
             _thumbnail_cache_bytes -= len(result[0]) if result is not None else 0
