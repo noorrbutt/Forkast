@@ -140,6 +140,26 @@ jobs:
       - name: Audit backend requirements
         run: pip-audit -r backend/requirements.txt
 
+  npm-audit:
+    name: Mobile dependency audit
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13'
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Audit production dependencies
+        working-directory: mobile
+        run: npm audit --omit=dev --audit-level=high
+
   mobile:
     name: Mobile (tsc + jest)
     runs-on: ubuntu-latest
