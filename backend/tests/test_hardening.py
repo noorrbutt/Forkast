@@ -439,6 +439,34 @@ def test_wildcard_cors_is_rejected_for_a_nonlocal_database() -> None:
         )
 
 
+def test_wildcard_cors_is_rejected_in_production_with_a_local_database() -> None:
+    with pytest.raises(ValidationError, match="CORS_ORIGINS"):
+        Settings(
+            _env_file=None,
+            ENVIRONMENT="production",
+            DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/forkast",
+            TEST_DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/forkast_test",
+            JWT_SECRET="a-very-long-secret-that-is-matching-the-required-minimum",
+            CORS_ORIGINS="*",
+            TRUST_PROXY_HEADERS=True,
+            AI_PROVIDER="fake",
+        )
+
+
+def test_wildcard_cors_still_loads_in_development_with_a_local_database() -> None:
+    settings = Settings(
+        _env_file=None,
+        ENVIRONMENT="dev",
+        DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/forkast",
+        TEST_DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/forkast_test",
+        JWT_SECRET="a-very-long-secret-that-is-matching-the-required-minimum",
+        CORS_ORIGINS="*",
+        AI_PROVIDER="fake",
+    )
+
+    assert settings.cors_origin_list == ["*"]
+
+
 async def test_refresh_allows_more_than_the_login_peer_window(client: AsyncClient) -> None:
     """Refresh calls are a different bucket from login attempts, because a CGNAT
     or a corporate proxy can share one peer across many users."""

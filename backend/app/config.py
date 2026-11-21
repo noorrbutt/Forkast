@@ -363,13 +363,14 @@ class Settings(BaseSettings):
                 "forkast:// links that no mail client will open."
             )
 
-        if self.cors_origin_list == ["*"] and urlsplit(self.database_url).hostname not in {
-            "localhost",
-            "127.0.0.1",
-        }:
+        wildcard_cors = "*" in self.cors_origin_list
+        nonlocal_database = urlsplit(self.database_url).hostname not in {"localhost", "127.0.0.1"}
+        if (self.environment is Environment.production and wildcard_cors) or (
+            self.cors_origin_list == ["*"] and nonlocal_database
+        ):
             raise ValueError(
-                "CORS_ORIGINS cannot be '*' when DATABASE_URL points to a non-local database. "
-                "Set CORS_ORIGINS to explicit origins."
+                "CORS_ORIGINS cannot include '*' in production or use a wildcard with a "
+                "non-local DATABASE_URL. Set CORS_ORIGINS to explicit origins."
             )
 
         if self.environment is Environment.production:
@@ -379,12 +380,6 @@ class Settings(BaseSettings):
                     "Set it to true only when a trusted reverse proxy rewrites "
                     "X-Forwarded-For; leaving it unset makes the app misidentify "
                     "shared CGNAT or proxy peers as one client."
-                )
-            if "*" in self.cors_origin_list:
-                raise ValueError(
-                    "CORS_ORIGINS must name real origins in production, not '*'. "
-                    "A wildcard lets any site on the internet call this API with "
-                    "a token it has phished."
                 )
             if self.database_url.startswith("postgresql+asyncpg://postgres:postgres@"):
                 raise ValueError(
