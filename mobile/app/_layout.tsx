@@ -48,13 +48,23 @@ function scrubSentryBreadcrumb(breadcrumb: Sentry.Breadcrumb): Sentry.Breadcrumb
   return breadcrumb;
 }
 
-function scrubSentryEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
+function scrubSentryFrames(stacktrace?: { frames?: { vars?: Record<string, unknown> }[] }): void {
+  stacktrace?.frames?.forEach((frame) => {
+    delete frame.vars;
+  });
+}
+
+export function scrubSentryEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
   if (event.request) {
     event.request = {
       ...(event.request.method ? { method: event.request.method } : {}),
     };
   }
   event.breadcrumbs?.forEach(scrubSentryBreadcrumb);
+  delete event.extra;
+  delete event.contexts;
+  event.exception?.values?.forEach((exception) => scrubSentryFrames(exception.stacktrace));
+  event.threads?.values.forEach((thread) => scrubSentryFrames(thread.stacktrace));
   return event;
 }
 
