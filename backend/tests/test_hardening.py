@@ -420,6 +420,7 @@ def test_production_requires_an_explicit_trust_proxy_flag(monkeypatch: pytest.Mo
     monkeypatch.setenv(
         "TEST_DATABASE_URL", "postgresql+asyncpg://user:pass@localhost:5432/forkast_test"
     )
+    monkeypatch.setenv("CORS_ORIGINS", "https://api.example.com")
     monkeypatch.setenv("JWT_SECRET", "a-very-long-secret-that-is-matching-the-required-minimum")
 
     with pytest.raises(ValueError, match="TRUST_PROXY_HEADERS"):
