@@ -17,6 +17,7 @@ function log(overrides: Partial<FoodLog> & { created_at: string; is_junk?: boole
     fun_scale: null,
     friend_scale: null,
     serving_size: 'medium',
+    portion_multiplier: 1,
     estimated_calories: 500,
     estimate_source: 'local',
     calorie_source: 'category',

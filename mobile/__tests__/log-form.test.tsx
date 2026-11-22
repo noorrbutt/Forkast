@@ -127,6 +127,7 @@ const SAVED = {
   fun_scale: null,
   friend_scale: null,
   serving_size: 'medium',
+  portion_multiplier: 1,
   estimated_calories: 820,
   estimate_source: 'local',
   created_at: '2026-09-17T19:00:00Z',
@@ -145,6 +146,7 @@ const recentMeal = (id: string, dishName: string, createdAt: string, calories = 
   fun_scale: null,
   friend_scale: null,
   serving_size: 'medium',
+  portion_multiplier: 1,
   estimated_calories: calories,
   estimate_source: 'local',
   created_at: createdAt,
@@ -171,6 +173,19 @@ const REPEATED = { ...RECENT_LOGS[0], id: 'log-fresh', created_at: '2026-09-21T1
 const CAMERA_SHOT = {
   canceled: false,
   assets: [{ uri: 'file:///DCIM/pizza.jpg', width: 4032, height: 3024 }],
+};
+
+const PHOTO_ESTIMATE = {
+  dish_guess: 'Margherita',
+  calories: 500,
+  macros: { protein_g: 20, carbs_g: 60, fat_g: 18 },
+  confidence: 'high' as const,
+  portion_ambiguous: false,
+  portion_options: [],
+  portion_unit: null,
+  portion_qty: null,
+  reasoning: null,
+  estimate_source: 'local' as const,
 };
 
 beforeEach(() => {
@@ -384,6 +399,37 @@ describe('desi dish hint chips and the portion stepper', () => {
 });
 
 describe('a photo picked before there is a meal to put it on', () => {
+  it('updates the live calorie preview and sends the selected portion multiplier', async () => {
+    mockedApi.post.mockImplementation(async (url: string) => ({
+      data: url === '/logs/estimate-photo' ? PHOTO_ESTIMATE : SAVED,
+    }));
+
+    const screen = render(<LogScreen />, { wrapper });
+    fireEvent.press(screen.getByText('Take a photo'));
+    await waitFor(() => expect(screen.getByText('Is this right?')).toBeTruthy());
+
+    expect(screen.getByText('About 500 kcal')).toBeTruthy();
+    fireEvent.press(screen.getByText('Large 1.4'));
+    expect(screen.getByText('About 700 kcal')).toBeTruthy();
+
+    await openCategories(screen);
+    fireEvent.press(screen.getByText('Pizza'));
+    fireEvent.press(screen.getByText('Log it'));
+
+    await waitFor(() =>
+      expect(mockedApi.post).toHaveBeenCalledWith(
+        '/logs',
+        expect.objectContaining({
+          portion_multiplier: 1.4,
+          estimated_calories: 500,
+          protein_g: 20,
+          carbs_g: 60,
+          fat_g: 18,
+        }),
+      ),
+    );
+  });
+
   it('waits for the log id and then uploads against it', async () => {
     let releaseLog: ((value: { data: typeof SAVED }) => void) | undefined;
     mockedApi.post.mockImplementation(

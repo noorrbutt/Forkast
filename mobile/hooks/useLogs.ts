@@ -89,6 +89,7 @@ export function useLog(id: Uuid | null) {
  * `pending` is what explains to the reader rather than leaving unstated.
  */
 function optimisticLogFrom(input: LogInput): FoodLog {
+  const portionMultiplier = input.portion_multiplier;
   return {
     has_photo: false,
     id: input.client_id ?? `pending-${Date.now()}`,
@@ -100,15 +101,20 @@ function optimisticLogFrom(input: LogInput): FoodLog {
     fun_scale: input.fun_scale ?? null,
     friend_scale: input.friend_scale ?? null,
     serving_size: input.serving_size,
+    portion_multiplier: input.portion_multiplier,
     // The photo flow's own figure when there is one, same reasoning as
     // create_log's calorie_source: showing 0 until sync would read as an
     // empty meal rather than an unsettled one.
-    estimated_calories: input.estimated_calories ?? 0,
+    estimated_calories:
+      input.estimated_calories === undefined
+        ? 0
+        : Math.round(input.estimated_calories * portionMultiplier),
     estimate_source: 'local',
     calorie_source: input.estimated_calories !== undefined ? 'photo' : null,
-    protein_g: input.protein_g ?? null,
-    carbs_g: input.carbs_g ?? null,
-    fat_g: input.fat_g ?? null,
+    protein_g:
+      input.protein_g === undefined ? null : input.protein_g * portionMultiplier,
+    carbs_g: input.carbs_g === undefined ? null : input.carbs_g * portionMultiplier,
+    fat_g: input.fat_g === undefined ? null : input.fat_g * portionMultiplier,
     refined: false,
     created_at: new Date().toISOString(),
     category: null,
@@ -210,8 +216,8 @@ export function useUpdateLog() {
     },
     onSuccess: (log) => {
       queryClient.setQueryData(['log', log.id], log);
-      // Editing the dish, category or serving size makes the server recompute
-      // the estimate, so the totals and the streak can both move.
+      // Editing the dish, category, serving size or portion multiplier makes
+      // the server recompute the estimate, so totals and streaks can move.
       void queryClient.invalidateQueries({ queryKey: ['logs'] });
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       void queryClient.invalidateQueries({ queryKey: ['streaks'] });

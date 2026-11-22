@@ -86,6 +86,7 @@ const INPUT: LogInput = {
   category_id: 4,
   rating: 4,
   serving_size: 'medium',
+  portion_multiplier: 1,
   client_id: 'client-late-biryani',
 };
 
@@ -100,6 +101,7 @@ const SAVED: FoodLog = {
   fun_scale: null,
   friend_scale: null,
   serving_size: 'medium',
+  portion_multiplier: 1,
   estimated_calories: 810,
   estimate_source: 'local',
   calorie_source: 'category',

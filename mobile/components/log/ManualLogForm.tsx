@@ -14,6 +14,7 @@ import { FRIEND_SCALES } from '../../lib/types';
 import { useTheme } from '../../theme';
 import { useLogFormStyles } from './formStyles';
 import { LogItButton } from './LogItButton';
+import { PortionMultiplierControl } from './PortionMultiplierControl';
 import type { LogForm } from './useLogForm';
 
 /** A plain "s" plural is close enough for every unit the desi dish table
@@ -345,6 +346,10 @@ export function ManualLogForm({
         ) : null}
 
         {servingSizeQuestion}
+        <PortionMultiplierControl
+          value={form.portionMultiplier}
+          onChange={form.setPortionMultiplier}
+        />
       </View>
 
       <View style={group}>

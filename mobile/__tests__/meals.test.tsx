@@ -127,6 +127,7 @@ const meal = (
   fun_scale: 3,
   friend_scale: 'solo',
   serving_size: 'medium',
+  portion_multiplier: 1,
   estimated_calories: 820,
   created_at: '2026-09-15T09:00:00Z',
   category: { id: 4, name: 'Karahi', is_junk: false, base_calorie_min: 600, base_calorie_max: 900 },
@@ -711,6 +712,23 @@ describe('the meal', () => {
     // Live, and it answers. The old screen disabled itself and said nothing.
     await waitFor(() => expect(getByText(/needs a dish name/)).toBeTruthy());
     expect(mockedApi.patch).not.toHaveBeenCalled();
+  });
+
+  it('updates the live calorie figure and saves the selected portion multiplier', async () => {
+    const { getByText } = render(<MealScreen />, { wrapper });
+
+    await waitFor(() => expect(getByText('Save changes')).toBeTruthy());
+    fireEvent.press(getByText('Large 1.4'));
+
+    expect(getByText('1,148')).toBeTruthy();
+    fireEvent.press(getByText('Save changes'));
+
+    await waitFor(() =>
+      expect(mockedApi.patch).toHaveBeenCalledWith(
+        `/logs/${mockDetailId}`,
+        expect.objectContaining({ portion_multiplier: 1.4 }),
+      ),
+    );
   });
 
   it('confirms a delete in a dialog on the page, not on one tap', async () => {

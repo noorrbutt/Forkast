@@ -32,6 +32,7 @@ const LOG = {
   fun_scale: null,
   friend_scale: null,
   serving_size: 'medium',
+  portion_multiplier: 1,
   estimated_calories: 750,
   estimate_source: 'local',
   calorie_source: null,

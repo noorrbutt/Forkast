@@ -48,6 +48,7 @@ function meal(overrides: Partial<FoodLog> = {}): FoodLog {
     fun_scale: null,
     friend_scale: null,
     serving_size: 'medium',
+    portion_multiplier: 1,
     estimated_calories: 640,
     estimate_source: 'ai',
     calorie_source: 'category',

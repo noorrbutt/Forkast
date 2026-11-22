@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Text, View } from 'react-native';
 
 import { StarRating } from '../../components/StarRating';
+import { PortionMultiplierControl } from '../../components/log/PortionMultiplierControl';
 import { Button, Chip, ControlLabel, Dialog, ErrorState, EstimateSourceLabel, Field, FormError, Hero, HeroWash, Loading, Screen, Select, type SelectOption } from '../../components/ui';
 import { useCategories, useCuisines } from '../../hooks/useCatalog';
 import { useEstimatorSource } from '../../hooks/useHealth';
@@ -14,6 +15,7 @@ import {
   useSetPhoto,
 } from '../../hooks/usePhoto';
 import { MealPhotoActions } from '../../components/MealPhotoActions';
+import { roundCalories } from '../../components/log/photoEstimate';
 import { describeError } from '../../lib/api';
 import {
   FRIEND_LABELS,
@@ -106,6 +108,7 @@ export default function MealScreen() {
   const [funScale, setFunScale] = useState<number | null>(null);
   const [friendScale, setFriendScale] = useState<FriendScale | null>(null);
   const [servingSize, setServingSize] = useState<ServingSize>('medium');
+  const [portionMultiplier, setPortionMultiplier] = useState(1);
 
   /** What the form is still missing, said in words when Save is pressed. */
   const [missing, setMissing] = useState<string | null>(null);
@@ -123,6 +126,7 @@ export default function MealScreen() {
     setFunScale(log.data.fun_scale);
     setFriendScale(log.data.friend_scale);
     setServingSize(log.data.serving_size);
+    setPortionMultiplier(log.data.portion_multiplier);
     // Keyed on the id alone, deliberately. Adding log.data would re-seed on
     // every background refetch, wiping whatever the user had half-typed. The
     // cost is that an edit made on another device is not pulled into a form
@@ -195,6 +199,9 @@ export default function MealScreen() {
       if (categoryId !== original.category_id) patch.category_id = categoryId;
       if (rating !== original.rating) patch.rating = rating;
       if (servingSize !== original.serving_size) patch.serving_size = servingSize;
+      if (portionMultiplier !== original.portion_multiplier) {
+        patch.portion_multiplier = portionMultiplier;
+      }
       if (funScale !== original.fun_scale) patch.fun_scale = funScale;
       if (friendScale !== original.friend_scale) patch.friend_scale = friendScale;
 
@@ -295,7 +302,9 @@ export default function MealScreen() {
   const meal = log.data;
   const busy = updateLog.isPending || deleteLog.isPending || repeat.isPending;
   const hasPhoto = Boolean(meal.has_photo);
-  const calories = formatNumber(meal.estimated_calories);
+  const calories = formatNumber(
+    roundCalories(meal.estimated_calories * (portionMultiplier / meal.portion_multiplier)),
+  );
   const estimate = 'kcal, estimated from the dish and how much of it you had';
   const where = meal.restaurant?.name ?? (meal.area && meal.area.length > 0 ? meal.area : null);
   const when = [`Logged ${loggedAt(meal.created_at)}`, where].filter(Boolean).join(' · ');
@@ -502,6 +511,10 @@ export default function MealScreen() {
               ))}
             </View>
           </View>
+          <PortionMultiplierControl
+            value={portionMultiplier}
+            onChange={setPortionMultiplier}
+          />
 
           {/* Last, and not at the top where it used to be. Changing the picture
               is the rarest thing anyone does here, and these three controls at

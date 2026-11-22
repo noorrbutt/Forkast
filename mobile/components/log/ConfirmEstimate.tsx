@@ -10,7 +10,8 @@ import { useTheme } from '../../theme';
 import { elevation } from '../../theme/tokens';
 import { useLogFormStyles } from './formStyles';
 import { LogItButton } from './LogItButton';
-import { scaledPhotoEstimate } from './photoEstimate';
+import { PortionMultiplierControl } from './PortionMultiplierControl';
+import { roundCalories, scaledPhotoEstimate } from './photoEstimate';
 import type { LogForm } from './useLogForm';
 
 /** What the confirm screen says about how much to trust the guess. */
@@ -77,12 +78,14 @@ export function ConfirmEstimate({
 
   const photoBusy = estimatePhoto.isPending || photoPicker.preparing;
 
-  // The same scaling submit() sends, so what this screen shows is
-  // provably what gets saved rather than two copies of the same arithmetic
-  // that could quietly drift apart.
-  const scaledPreview = scaledPhotoEstimate(estimate, portionCalories ?? estimate.calories);
-  const previewCalories = scaledPreview.calories;
-  const previewMacros = scaledPreview;
+  // Use submit()'s base estimate, then apply the multiplier for this preview.
+  const photoPreview = scaledPhotoEstimate(estimate, portionCalories ?? estimate.calories);
+  const previewCalories = roundCalories(photoPreview.calories) * form.portionMultiplier;
+  const previewMacros = {
+    protein_g: photoPreview.protein_g * form.portionMultiplier,
+    carbs_g: photoPreview.carbs_g * form.portionMultiplier,
+    fat_g: photoPreview.fat_g * form.portionMultiplier,
+  };
 
   return (
     <>
@@ -271,6 +274,10 @@ export function ConfirmEstimate({
         )}
 
         {servingSizeQuestion}
+        <PortionMultiplierControl
+          value={form.portionMultiplier}
+          onChange={form.setPortionMultiplier}
+        />
 
         {/* Shown instead of trusting a single guess when the photo gives
             no size reference to judge scale from -- a hand, a utensil, a
@@ -305,7 +312,7 @@ export function ConfirmEstimate({
 
         <View style={{ gap: spacing.xs }}>
           <Text style={[type.title, { color: colors.text }]}>
-            {t('log.aboutCalories', { calories: formatNumber(Math.round(previewCalories)) })}
+            {t('log.aboutCalories', { calories: formatNumber(roundCalories(previewCalories)) })}
           </Text>
           <Text style={[type.caption, { color: colors.muted }]}>
             {t('log.macros', {

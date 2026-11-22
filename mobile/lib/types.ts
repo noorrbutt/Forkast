@@ -195,6 +195,7 @@ export type FoodLog = {
   fun_scale: number | null;
   friend_scale: FriendScale | null;
   serving_size: ServingSize;
+  portion_multiplier: number;
   estimated_calories: number;
   estimate_source: EstimateSource;
   /**
@@ -238,13 +239,12 @@ export type LogInput = {
   fun_scale?: number;
   friend_scale?: FriendScale;
   serving_size: ServingSize;
+  /** Multiplies the calorie and macro values on the server. */
+  portion_multiplier: number;
   client_id?: Uuid;
   /**
-   * The figure the confirm screen actually showed, from a photo estimate.
-   * Absent means "price this from the category" exactly as before. Sending
-   * this is what makes the number someone confirmed the number that gets
-   * saved, rather than a second, category-derived number nobody approved --
-   * see create_log's own note on why it stopped silently re-pricing this.
+   * The photo estimate before the separate portion_multiplier is applied.
+   * Absent means "price this from the category" exactly as before.
    */
   estimated_calories?: number;
   protein_g?: number;
@@ -266,6 +266,7 @@ export type LogPatch = {
   fun_scale?: number | null;
   friend_scale?: FriendScale | null;
   serving_size?: ServingSize;
+  portion_multiplier?: number;
 };
 
 export type LogPage = {

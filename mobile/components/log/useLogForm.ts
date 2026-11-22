@@ -28,7 +28,7 @@ import type {
   ServingSize,
   Uuid,
 } from '../../lib/types';
-import { scaledPhotoEstimate } from './photoEstimate';
+import { roundCalories, scaledPhotoEstimate } from './photoEstimate';
 
 /** One row of the order review sheet: an OrderItem plus the editable state
  * the checkbox, the name field and the qty stepper each need, and the qty
@@ -90,6 +90,7 @@ export function useLogForm(slot: MealSlot | null = null) {
   const [funScale, setFunScale] = useState<number | null>(null);
   const [friendScale, setFriendScale] = useState<FriendScale | null>(null);
   const [servingSize, setServingSize] = useState<ServingSize>('medium');
+  const [portionMultiplier, setPortionMultiplier] = useState(1);
   // The desi dish hint behind the portion stepper, if one is selected, and
   // how many of its unit the stepper currently says. Null/null means no
   // stepper is showing and serving size is picked the ordinary way.
@@ -246,6 +247,7 @@ export function useLogForm(slot: MealSlot | null = null) {
     setFunScale(null);
     setFriendScale(null);
     setServingSize('medium');
+    setPortionMultiplier(1);
     setDishHint(null);
     setPortionQty(null);
     setPhoto(null);
@@ -476,6 +478,7 @@ export function useLogForm(slot: MealSlot | null = null) {
           // default for a log nobody has rated.
           rating: 4,
           serving_size: nearestServingSize(scaled / midpoint),
+          portion_multiplier: 1,
           estimated_calories: scaled,
           client_id: Crypto.randomUUID(),
         };
@@ -589,6 +592,7 @@ export function useLogForm(slot: MealSlot | null = null) {
       category_id: categoryId,
       rating,
       serving_size: servingSize,
+      portion_multiplier: portionMultiplier,
       client_id: ensureClientId(),
     };
     if (funScale !== null) input.fun_scale = funScale;
@@ -597,13 +601,12 @@ export function useLogForm(slot: MealSlot | null = null) {
     else if (restaurantName.trim().length > 0) input.restaurant_name = restaurantName.trim();
     if (area.trim().length > 0) input.area = area.trim();
 
-    // The number the confirm screen actually showed. Sent whenever a photo
-    // estimate exists in state at all, not only while still on the confirm
-    // screen, since switching to manual entry to fix a detail should not also
-    // throw away a calorie figure the photo already answered.
+    // The photo figure and selected ambiguous-portion option are sent as the
+    // base estimate; portion_multiplier is separate so the server applies it
+    // exactly once. Keep the photo figure when switching to manual entry.
     if (estimate) {
       const scaled = scaledPhotoEstimate(estimate, portionCalories ?? estimate.calories);
-      input.estimated_calories = Math.round(scaled.calories);
+      input.estimated_calories = roundCalories(scaled.calories);
       input.protein_g = scaled.protein_g;
       input.carbs_g = scaled.carbs_g;
       input.fat_g = scaled.fat_g;
@@ -644,6 +647,8 @@ export function useLogForm(slot: MealSlot | null = null) {
     setFriendScale,
     servingSize,
     setServingSize,
+    portionMultiplier,
+    setPortionMultiplier,
     dishHints,
     dishHint,
     portionQty,
