@@ -9,6 +9,7 @@ from decimal import Decimal
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Numeric,
@@ -56,6 +57,12 @@ class FoodLog(Base):
     serving_size: Mapped[ServingSize] = mapped_column(
         str_enum(ServingSize, "serving_size", length=16), nullable=False
     )
+    portion_multiplier: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=1.0,
+        server_default=text("1.0"),
+    )
     estimated_calories: Mapped[int] = mapped_column(nullable=False)
     client_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(
@@ -96,6 +103,10 @@ class FoodLog(Base):
         CheckConstraint("rating BETWEEN 1 AND 5", name="rating_range"),
         CheckConstraint("fun_scale IS NULL OR fun_scale BETWEEN 1 AND 5", name="fun_scale_range"),
         CheckConstraint("estimated_calories >= 0", name="calories_non_negative"),
+        CheckConstraint(
+            "portion_multiplier BETWEEN 0.25 AND 3.0",
+            name="portion_multiplier_range",
+        ),
         CheckConstraint(
             "calorie_source IS NULL OR calorie_source IN ('photo', 'category')",
             name="ck_food_logs_calorie_source",

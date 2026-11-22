@@ -116,8 +116,8 @@ async def test_reference_data_is_present_after_upgrade() -> None:
 
 
 @pytest.mark.slow
-async def test_closed_vocabularies_are_enforced_by_the_database() -> None:
-    """The varchar plus CHECK promise has to be real, not just declared.
+async def test_database_check_constraints_are_enforced() -> None:
+    """The CHECK constraints have to be real, not just declared.
 
     This cannot be left to `alembic check`. Alembic autogenerate does not detect
     CHECK constraints at all, so when these were missing it still reported no
@@ -130,6 +130,7 @@ async def test_closed_vocabularies_are_enforced_by_the_database() -> None:
     expected = {
         "ck_food_logs_serving_size",
         "ck_food_logs_friend_scale",
+        "ck_food_logs_portion_multiplier_range",
         "ck_users_goal",
         "ck_ai_plans_goal",
     }
@@ -177,9 +178,33 @@ async def test_closed_vocabularies_are_enforced_by_the_database() -> None:
             except IntegrityError:
                 rejected = True
             await connection.rollback()
+
+            await connection.execute(
+                text(
+                    "INSERT INTO users (email, password_hash) VALUES ('vocab-probe@forkast.app', 'x')"
+                )
+            )
+            user_id = await connection.scalar(
+                text("SELECT id FROM users WHERE email = 'vocab-probe@forkast.app'")
+            )
+            multiplier_rejected = False
+            try:
+                await connection.execute(
+                    text(
+                        "INSERT INTO food_logs "
+                        "(user_id, dish_name, category_id, rating, serving_size, "
+                        "estimated_calories, portion_multiplier) "
+                        "VALUES (:uid, 'probe', :cid, 3, 'medium', 100, 3.01)"
+                    ),
+                    {"uid": user_id, "cid": category_id},
+                )
+            except IntegrityError:
+                multiplier_rejected = True
+            await connection.rollback()
     finally:
         await engine.dispose()
 
     assert expected <= present, f"missing CHECK constraints: {sorted(expected - present)}"
     assert native_enums == 0, "a native PostgreSQL enum type was created, which breaks downgrades"
     assert rejected, "the database accepted an invalid serving_size"
+    assert multiplier_rejected, "the database accepted an out-of-range portion_multiplier"

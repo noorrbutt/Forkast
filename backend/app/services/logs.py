@@ -375,6 +375,7 @@ async def create_log(
         fun_scale=payload.fun_scale,
         friend_scale=payload.friend_scale,
         serving_size=payload.serving_size,
+        portion_multiplier=payload.portion_multiplier,
         estimated_calories=estimated,
         calorie_source=calorie_source,
         protein_g=payload.protein_g,
@@ -568,6 +569,7 @@ async def repeat_log(
         fun_scale=original.fun_scale,
         friend_scale=original.friend_scale,
         serving_size=original.serving_size,
+        portion_multiplier=original.portion_multiplier,
         # Copied, not re-estimated. The estimate is a function of dish name,
         # category range and serving size, and all three are carried over
         # unchanged, so asking again can only return the same number or, once a

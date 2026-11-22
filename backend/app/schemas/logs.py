@@ -30,6 +30,7 @@ class FoodLogCreate(BaseModel):
     fun_scale: int | None = Field(default=None, ge=1, le=5)
     friend_scale: FriendScale | None = None
     serving_size: ServingSize = ServingSize.medium
+    portion_multiplier: float = Field(default=1.0, ge=0.25, le=3.0)
     client_id: uuid.UUID | None = None
 
     # The number the confirm screen actually showed, from POST
@@ -101,7 +102,9 @@ MAX_BACKFILL = dt.timedelta(days=3650)
 # Columns the database declares NOT NULL. Omitting them in a PATCH means "leave
 # alone", but sending an explicit null is a client mistake and has to be a 422
 # rather than an integrity error surfacing as a 500.
-NON_NULLABLE_FIELDS = frozenset({"dish_name", "category_id", "rating", "serving_size"})
+NON_NULLABLE_FIELDS = frozenset(
+    {"dish_name", "category_id", "rating", "serving_size", "portion_multiplier"}
+)
 
 
 class FoodLogUpdate(BaseModel):
@@ -117,6 +120,7 @@ class FoodLogUpdate(BaseModel):
     fun_scale: int | None = Field(default=None, ge=1, le=5)
     friend_scale: FriendScale | None = None
     serving_size: ServingSize | None = None
+    portion_multiplier: float | None = Field(default=None, ge=0.25, le=3.0)
 
     @model_validator(mode="after")
     def _reject_explicit_nulls(self) -> FoodLogUpdate:
@@ -142,6 +146,7 @@ class FoodLogOut(BaseModel):
     fun_scale: int | None = None
     friend_scale: FriendScale | None = None
     serving_size: ServingSize
+    portion_multiplier: float
     estimated_calories: int
     estimate_source: EstimateSource = "local"
     # How THIS row's estimated_calories was priced, once, at creation --

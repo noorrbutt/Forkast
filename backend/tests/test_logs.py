@@ -37,6 +37,7 @@ async def test_creating_a_log_stores_it_and_estimates_calories(auth_client: Asyn
     body = response.json()
     assert body["dish_name"] == "chicken biryani"
     assert body["friend_scale"] == "squad"
+    assert body["portion_multiplier"] == 1.0
     assert body["estimate_source"] == "local"
     # A medium serving is a 1.0 multiplier, so the estimate must land inside the
     # category's own range.
@@ -66,6 +67,67 @@ async def test_serving_size_scales_the_estimate(auth_client: AsyncClient) -> Non
     # A large portion is allowed to exceed the category maximum: the clamp
     # applies to the AI's in-range figure, not to the scaled result.
     assert large["estimated_calories"] > category["base_calorie_max"] * 0.99
+
+
+async def test_portion_multiplier_is_saved_and_returned(auth_client: AsyncClient) -> None:
+    category = await _a_category(auth_client)
+    created = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "chicken biryani",
+            "category_id": category["id"],
+            "rating": 4,
+            "portion_multiplier": 1.4,
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["portion_multiplier"] == 1.4
+
+    updated = await auth_client.patch(
+        f"{LOGS}/{created.json()['id']}",
+        json={"portion_multiplier": 0.7},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["portion_multiplier"] == 0.7
+
+
+@pytest.mark.parametrize("portion_multiplier", [0.24, 3.01])
+async def test_out_of_range_portion_multiplier_is_rejected_on_create(
+    auth_client: AsyncClient, portion_multiplier: float
+) -> None:
+    category = await _a_category(auth_client)
+    response = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "chicken biryani",
+            "category_id": category["id"],
+            "rating": 4,
+            "portion_multiplier": portion_multiplier,
+        },
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("portion_multiplier", [0.24, 3.01])
+async def test_out_of_range_portion_multiplier_is_rejected_on_update(
+    auth_client: AsyncClient, portion_multiplier: float
+) -> None:
+    category = await _a_category(auth_client)
+    created = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "chicken biryani",
+            "category_id": category["id"],
+            "rating": 4,
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    response = await auth_client.patch(
+        f"{LOGS}/{created.json()['id']}",
+        json={"portion_multiplier": portion_multiplier},
+    )
+    assert response.status_code == 422
 
 
 async def test_the_estimate_is_deterministic(auth_client: AsyncClient) -> None:
@@ -439,7 +501,9 @@ async def test_an_unknown_restaurant_id_is_rejected(auth_client: AsyncClient) ->
     assert response.status_code == 422
 
 
-@pytest.mark.parametrize("field", ["dish_name", "category_id", "rating", "serving_size"])
+@pytest.mark.parametrize(
+    "field", ["dish_name", "category_id", "rating", "serving_size", "portion_multiplier"]
+)
 async def test_patching_a_non_nullable_field_to_null_is_a_client_error(
     auth_client: AsyncClient, field: str
 ) -> None:
