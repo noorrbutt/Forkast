@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { EstimateBadge, Icon } from '../ui';
 import { displayDish, formatNumber } from '../../lib/format';
@@ -47,9 +48,11 @@ export function categoryTileTone(
  * alignment does that job better than size would.
  */
 export function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDelete, onLongPress, sending, confirmed, error }: MealRowProps) {
+  const { t } = useTranslation();
   const { colors, radius, spacing, type } = useTheme();
   const justRefined = useJustRefined(log);
-  const meta = mealMeta(log);
+  const servingLabel = t(`log.serving${log.serving_size[0].toUpperCase()}${log.serving_size.slice(1)}`);
+  const meta = mealMeta(log, servingLabel);
 
   return (
     <SwipeToDelete
@@ -75,14 +78,17 @@ export function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDel
           accessibilityRole="button"
           accessibilityLabel={
             log.pending
-              ? `${log.dish_name}, saving`
-              : `${log.dish_name}, ${formatNumber(log.estimated_calories)} kcal`
+              ? t('diary.savingDish', { dish: log.dish_name })
+              : t('diary.mealCaloriesA11y', {
+                  dish: log.dish_name,
+                  calories: formatNumber(log.estimated_calories),
+                })
           }
-          accessibilityHint={log.pending ? undefined : 'Opens this meal'}
+          accessibilityHint={log.pending ? undefined : t('diary.opensMeal')}
           // The long press this row answers to is a shortcut; the custom action
           // is the same menu reached without a gesture at all, the way VoiceOver's
           // rotor and TalkBack's local context menu already expect one.
-          accessibilityActions={log.pending ? undefined : [{ name: 'longpress', label: 'Show actions' }]}
+          accessibilityActions={log.pending ? undefined : [{ name: 'longpress', label: t('diary.showActions') }]}
           onAccessibilityAction={(event) => {
             if (event.nativeEvent.actionName === 'longpress') onLongPress(log.id);
           }}
@@ -149,12 +155,17 @@ export function CompactMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDel
                 },
               ]}
             >
-              {`${formatNumber(log.estimated_calories)} kcal`}
+              {t('log.calories', { calories: formatNumber(log.estimated_calories) })}
             </Text>
             {/* Under the figure it qualifies, not beside it fighting the
                 dish name for room -- the whole reason this used to crowd
                 onto one line in the first place. */}
-            {!log.pending && log.estimate_source === 'local' ? <EstimateBadge /> : null}
+            {!log.pending && log.estimate_source === 'local' ? (
+              <EstimateBadge
+                label={t('diary.estimated')}
+                accessibilityLabel={t('diary.estimatedLocally')}
+              />
+            ) : null}
           </View>
 
           {/* The row is the way in to the meal, which nothing else here says

@@ -20,7 +20,7 @@ localized.
 | Dashboard (`/`) | Yes | 0 | Main copy is in translated shared components. |
 | Onboarding | Yes | 0 | Uses onboarding keys. |
 | Meal log | Yes | 0 | Capture, confirm, and manual forms use translations. |
-| Diary / history | No | 15 | Search, filters, and empty states are hardcoded. |
+| Diary / history | Yes | 0 | List and map UI copy uses diary keys. |
 | Plan | No | 10 | Headings, actions, and errors are hardcoded. |
 | Streaks | No | 11 | Screen copy and actions are hardcoded. |
 | Profile | No | 58 | Settings, account, and language section are mostly hardcoded. |
@@ -36,5 +36,5 @@ localized.
 | Reset password | No | 8 | Form copy is hardcoded. |
 | Reset confirmation | No | 1 | Confirmation action is hardcoded. |
 
-`*` The map route has no screen of its own. The shared tab bar also still has
-hardcoded labels for Diary, Plan, Streaks, and Profile.
+`*` The map route has no screen of its own. The shared tab bar's Plan, Streaks,
+and Profile labels remain hardcoded.

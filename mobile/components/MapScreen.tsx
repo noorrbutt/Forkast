@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import {
   MAPS_UNAVAILABLE,
@@ -18,8 +19,6 @@ import type { FoodLog, Restaurant } from '../lib/types';
 import { useTheme } from '../theme';
 import { Empty, ErrorState, Icon, ListGroup, ListRow, Loading } from './ui';
 
-const UNLISTED = 'Area not set';
-
 type Spot = {
   key: string;
   name: string;
@@ -36,7 +35,12 @@ function matchKey(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase();
 }
 
-function groupByArea(restaurants: Restaurant[], logs: FoodLog[]): AreaGroup[] {
+function groupByArea(
+  restaurants: Restaurant[],
+  logs: FoodLog[],
+  unlistedLabel: string,
+  unnamedSpotLabel: string,
+): AreaGroup[] {
   const countById = new Map<string, number>();
   const countByName = new Map<string, number>();
 
@@ -68,7 +72,7 @@ function groupByArea(restaurants: Restaurant[], logs: FoodLog[]): AreaGroup[] {
     const count = restaurant.visit_count ?? Math.max(byId, byName);
     seenNames.add(matchKey(restaurant.name));
 
-    const area = restaurant.area?.trim() || UNLISTED;
+    const area = restaurant.area?.trim() || unlistedLabel;
     const spots = areas.get(area) ?? [];
     spots.push({ key: String(restaurant.id), name: restaurant.name, count });
     areas.set(area, spots);
@@ -80,11 +84,11 @@ function groupByArea(restaurants: Restaurant[], logs: FoodLog[]): AreaGroup[] {
     if (name.length === 0 || seenNames.has(name)) continue;
     seenNames.add(name);
 
-    const area = log.area?.trim() || UNLISTED;
+    const area = log.area?.trim() || unlistedLabel;
     const spots = areas.get(area) ?? [];
     spots.push({
       key: `log-${name}`,
-      name: log.restaurant?.name ?? 'Unnamed spot',
+      name: log.restaurant?.name ?? unnamedSpotLabel,
       count: countByName.get(name) ?? 1,
     });
     areas.set(area, spots);
@@ -204,6 +208,7 @@ function ClusterBadge({ count }: { count: number }) {
  * map lives behind this component.
  */
 export function MapScreen() {
+  const { t } = useTranslation();
   const { colors, layout, radius, spacing, type } = useTheme();
   const [noticeDismissed, setNoticeDismissed] = useState(false);
   const restaurants = useVisitedRestaurants();
@@ -219,8 +224,14 @@ export function MapScreen() {
   const [focusedArea, setFocusedArea] = useState<string | null>(null);
 
   const groups = useMemo(
-    () => groupByArea(restaurants.data ?? [], logs.data?.items ?? []),
-    [restaurants.data, logs.data],
+    () =>
+      groupByArea(
+        restaurants.data ?? [],
+        logs.data?.items ?? [],
+        t('diary.areaNotSet'),
+        t('diary.unnamedSpot'),
+      ),
+    [restaurants.data, logs.data, t],
   );
   const pins = useMemo(
     () => toPins(restaurants.data ?? [], logs.data?.items ?? []),
@@ -243,12 +254,12 @@ export function MapScreen() {
   // both to fail would render a partial outage as an innocent empty state.
   const failed = restaurants.isError || logs.isError;
 
-  if (loading) return <Loading label="Finding your spots" />;
+  if (loading) return <Loading label={t('diary.findingSpots')} />;
 
   if (failed) {
     return (
       <ErrorState
-        title="Map unavailable"
+        title={t('diary.mapUnavailable')}
         message={describeError(restaurants.error ?? logs.error)}
         onRetry={() => {
           void restaurants.refetch();
@@ -262,8 +273,8 @@ export function MapScreen() {
     return (
       <Empty
         icon="map"
-        title="No places yet"
-        message="Log a meal with a restaurant name and your map starts filling in."
+        title={t('diary.noPlacesTitle')}
+        message={t('diary.noPlacesMessage')}
       />
     );
   }
@@ -312,7 +323,7 @@ export function MapScreen() {
                   <Marker
                     key={cluster.id}
                     coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
-                    title={`${cluster.count} places here`}
+                    title={t('diary.placesHere', { count: cluster.count })}
                     onPress={() => {
                       mapRef.current?.animateToRegion(regionForCluster(cluster), 300);
                     }}
@@ -329,7 +340,7 @@ export function MapScreen() {
                   coordinate={{ latitude: pin.latitude, longitude: pin.longitude }}
                   title={pin.name}
                   description={
-                    pin.count === 1 ? '1 meal logged here' : `${pin.count} meals logged here`
+                    t('diary.mealLoggedHere', { count: pin.count })
                   }
                   pinColor={colors.accent}
                   onPress={() => setFocusedArea(pin.area)}
@@ -359,11 +370,11 @@ export function MapScreen() {
             ellipsizeMode="tail"
             style={[type.caption, { color: colors.muted, flex: 1 }]}
           >
-            Pins and map are unavailable in this build on this device.
+            {t('diary.mapUnavailableNotice')}
           </Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Dismiss map availability notice"
+            accessibilityLabel={t('diary.dismissMapNotice')}
             onPress={() => setNoticeDismissed(true)}
             style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
           >
@@ -378,8 +389,8 @@ export function MapScreen() {
       {!MAPS_UNAVAILABLE || Platform.OS === 'web' ? (
         <Text style={[type.caption, { color: colors.muted }]}>
           {!MAPS_UNAVAILABLE
-            ? 'Overlapping places merge into one badge until you zoom in. Tap a single pin to see it below. Places without coordinates do not get a pin yet.'
-            : 'Grouped by area. The map itself is native only, so it does not draw in a browser.'}
+            ? t('diary.overlappingPlacesHint')
+            : t('diary.groupedMapWebNotice')}
         </Text>
       ) : null}
 
@@ -387,7 +398,7 @@ export function MapScreen() {
         <Pressable
           onPress={() => setFocusedArea(null)}
           accessibilityRole="button"
-          accessibilityLabel={`Show every area, not only ${focusedArea}`}
+          accessibilityLabel={t('diary.showEveryArea', { area: focusedArea })}
           style={({ pressed }) => ({
             flexDirection: 'row',
             alignItems: 'center',
@@ -397,7 +408,7 @@ export function MapScreen() {
         >
           <Icon name="close" size={14} color={colors.accent} />
           <Text style={[type.caption, { color: colors.accent, fontWeight: '600' }]}>
-            Showing {focusedArea} only -- show all areas
+            {t('diary.showingAreaOnly', { area: focusedArea })}
           </Text>
         </Pressable>
       ) : null}
@@ -413,15 +424,20 @@ export function MapScreen() {
       {visibleGroups.map((group) => (
         <ListGroup
           key={group.area}
-          title={`${group.area} · ${formatNumber(group.total)} ${
-            group.total === 1 ? 'meal' : 'meals'
-          }`}
+          title={t('diary.areaTotal', {
+            area: group.area,
+            count: group.total,
+            formattedCount: formatNumber(group.total),
+          })}
         >
           {group.spots.map((spot, index) => (
             <ListRow
               key={spot.key}
               label={spot.name}
-              value={`${formatNumber(spot.count)} ${spot.count === 1 ? 'visit' : 'visits'}`}
+              value={t('diary.visitCount', {
+                count: spot.count,
+                formattedCount: formatNumber(spot.count),
+              })}
               last={index === group.spots.length - 1}
             />
           ))}

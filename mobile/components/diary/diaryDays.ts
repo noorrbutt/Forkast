@@ -3,6 +3,7 @@ import type { FoodLog } from '../../lib/types';
 export type DiaryDay = {
   key: string;
   heading: string;
+  relativeDay?: 'today' | 'yesterday';
   total: number;
   meals: FoodLog[];
 };
@@ -18,13 +19,13 @@ function dayKey(date: Date): string {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
 
-function dayHeading(date: Date, now: Date): string {
+function dayHeading(date: Date, now: Date, locale: string): Pick<DiaryDay, 'heading' | 'relativeDay'> {
   const key = dayKey(date);
-  if (key === dayKey(now)) return 'Today';
+  if (key === dayKey(now)) return { heading: 'Today', relativeDay: 'today' };
 
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
-  if (key === dayKey(yesterday)) return 'Yesterday';
+  if (key === dayKey(yesterday)) return { heading: 'Yesterday', relativeDay: 'yesterday' };
 
   const options: Intl.DateTimeFormatOptions = {
     weekday: 'long',
@@ -33,7 +34,7 @@ function dayHeading(date: Date, now: Date): string {
   };
   // The year only earns its place once the meal is not from this one.
   if (date.getFullYear() !== now.getFullYear()) options.year = 'numeric';
-  return date.toLocaleDateString('en-US', options);
+  return { heading: date.toLocaleDateString(locale, options) };
 }
 
 /**
@@ -42,7 +43,7 @@ function dayHeading(date: Date, now: Date): string {
  * Encounter order is kept rather than sorted, so the server stays the one thing
  * deciding what order meals are read in.
  */
-export function groupByDay(items: FoodLog[], now: Date): DiaryDay[] {
+export function groupByDay(items: FoodLog[], now: Date, locale = 'en'): DiaryDay[] {
   const days: DiaryDay[] = [];
   const byKey = new Map<string, DiaryDay>();
 
@@ -55,9 +56,12 @@ export function groupByDay(items: FoodLog[], now: Date): DiaryDay[] {
 
     let day = byKey.get(key);
     if (!day) {
+      const heading = readable
+        ? dayHeading(parsed, now, locale)
+        : { heading: log.created_at };
       day = {
         key,
-        heading: readable ? dayHeading(parsed, now) : log.created_at,
+        ...heading,
         total: 0,
         meals: [],
       };

@@ -221,18 +221,21 @@ describe('what each tab is called', () => {
    * twice more: "Meals" opened a screen headed "Your diary", and "You" opened
    * one headed "Profile".
    */
-  const HEADINGS: Record<string, RegExp> = {
-    'app/(tabs)/history.tsx': /title="Your diary"/,
-    'app/(tabs)/profile.tsx': /<Screen title="Profile">/,
-    'app/(tabs)/streaks.tsx': /title="Streaks"/,
+  const HEADINGS: Record<string, { expression: RegExp; title: string }> = {
+    'app/(tabs)/history.tsx': {
+      expression: /title=\{t\('diary\.title'\)\}/,
+      title: 'Your diary',
+    },
+    'app/(tabs)/profile.tsx': { expression: /<Screen title="Profile">/, title: 'Profile' },
+    'app/(tabs)/streaks.tsx': { expression: /title="Streaks"/, title: 'Streaks' },
   };
 
   it.each(Object.entries(HEADINGS))('%s is headed with the word its tab uses', (file, heading) => {
     const source = readFileSync(join(__dirname, '..', file), 'utf8');
-    const match = heading.exec(source);
+    const match = heading.expression.exec(source);
     expect(match).not.toBeNull();
 
     const tab = TABS.find((entry) => file.includes(`/${entry.route}.tsx`))!;
-    expect(match![0].toLowerCase()).toContain(tab.title.toLowerCase());
+    expect(heading.title.toLowerCase()).toContain(tab.title.toLowerCase());
   });
 });

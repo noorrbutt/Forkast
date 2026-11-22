@@ -26,7 +26,15 @@ export function EstimateSourceLabel({
   );
 }
 
-export function EstimateBadge({ variant = 'default' }: { variant?: 'default' | 'overlay' } = {}) {
+export function EstimateBadge({
+  variant = 'default',
+  label = 'Estimated',
+  accessibilityLabel = 'Estimated locally',
+}: {
+  variant?: 'default' | 'overlay';
+  label?: string;
+  accessibilityLabel?: string;
+} = {}) {
   const { colors, radius, spacing, type } = useTheme();
 
   if (variant === 'overlay') {
@@ -34,7 +42,7 @@ export function EstimateBadge({ variant = 'default' }: { variant?: 'default' | '
       <View
         accessible
         accessibilityRole="text"
-        accessibilityLabel="Estimated locally"
+        accessibilityLabel={accessibilityLabel}
         style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -54,7 +62,7 @@ export function EstimateBadge({ variant = 'default' }: { variant?: 'default' | '
         }}
       >
         <Icon name="info" size={12} color="#FFFFFF" />
-        <Text style={[type.caption, { color: '#FFFFFF' }]}>Estimated</Text>
+        <Text style={[type.caption, { color: '#FFFFFF' }]}>{label}</Text>
       </View>
     );
   }
@@ -63,7 +71,7 @@ export function EstimateBadge({ variant = 'default' }: { variant?: 'default' | '
     <View
       accessible
       accessibilityRole="text"
-      accessibilityLabel="Estimated locally"
+      accessibilityLabel={accessibilityLabel}
       style={{
         alignSelf: 'flex-start',
         borderRadius: radius.pill,
@@ -72,7 +80,7 @@ export function EstimateBadge({ variant = 'default' }: { variant?: 'default' | '
         paddingVertical: spacing.xs,
       }}
     >
-      <Text style={[type.caption, { color: colors.accent }]}>Estimated</Text>
+      <Text style={[type.caption, { color: colors.accent }]}>{label}</Text>
     </View>
   );
 }

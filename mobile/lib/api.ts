@@ -7,6 +7,7 @@ import {
   type StoredTokens,
 } from './tokenStore';
 import type { TokenPair } from './types';
+import i18n from './i18n';
 
 const DEFAULT_BASE_URL = 'http://localhost:8010';
 
@@ -243,15 +244,15 @@ export function describeError(error: unknown): string {
       const timedOut = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT';
       if (!__DEV__) {
         return timedOut
-          ? 'Connection timed out. Check your internet and try again.'
-          : "Can't connect. Check your internet and try again.";
+          ? i18n.t('common.connectionTimeout')
+          : i18n.t('common.cannotConnect');
       }
       return timedOut
         ? `Could not reach ${API_ORIGIN} within ${seconds}s. Check the API is running and that this device can reach that address.`
         : `Could not reach the server at ${API_ORIGIN}.`;
     }
-    return `Request failed with status ${error.response.status}.`;
+    return i18n.t('common.requestStatus', { status: error.response.status });
   }
   if (error instanceof Error) return error.message;
-  return 'Something went wrong.';
+  return i18n.t('common.somethingWrong');
 }

@@ -7,10 +7,11 @@ import { categoryTileTone } from '../diary/CompactMealRow';
 import { Icon } from '../ui';
 import { TILE_PHOTO_EDGE, usePhotoSource } from '../../hooks/usePhoto';
 import { displayDish, formatNumber } from '../../lib/format';
+import i18n from '../../lib/i18n';
 import type { FoodLog, Uuid } from '../../lib/types';
 import { useTheme } from '../../theme';
 import { photoScrim } from '../../theme/tokens';
-import { slotLabelOf, slotOf } from './todayMeals';
+import { slotOf } from './todayMeals';
 
 /**
  * One meal in Home's Today strip, as a tile.
@@ -53,7 +54,12 @@ export function useTileSize(gap: number): TileSize {
 
 /** What a screen reader hears for a tile: "Lunch, Chicken Biryani, 640 kcal". */
 export function tileLabel(log: FoodLog): string {
-  return `${slotLabelOf(log)}, ${displayDish(log.dish_name)}, ${formatNumber(log.estimated_calories)} kcal`;
+  const slot = slotOf(new Date(log.created_at));
+  return i18n.t('home.mealTileA11y', {
+    slot: i18n.t(`home.slots.${slot ?? 'unknown'}`),
+    dish: displayDish(log.dish_name),
+    calories: formatNumber(log.estimated_calories),
+  });
 }
 
 type TileProps = {
@@ -103,6 +109,7 @@ export function TileFrame({
 
 /** The calorie figure as a small pill, the same place on both kinds of tile. */
 export function KcalPill({ calories, overPhoto }: { calories: number; overPhoto: boolean }) {
+  const { t } = useTranslation();
   const { colors, radius, spacing, type } = useTheme();
   return (
     <View
@@ -123,7 +130,7 @@ export function KcalPill({ calories, overPhoto }: { calories: number; overPhoto:
           { color: overPhoto ? '#FFFFFF' : colors.text, fontVariant: ['tabular-nums'] },
         ]}
       >
-        {`${formatNumber(calories)} kcal`}
+        {t('home.calories', { calories: formatNumber(calories) })}
       </Text>
     </View>
   );

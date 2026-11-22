@@ -28,12 +28,13 @@ export const HERO_RING_SIZE = 96;
  */
 export function readToday(
   today: Today,
-  copy?: {
+  copy: {
     noTarget: string;
     measured: (value: string, target: string) => string;
     noTargetAccessibility: (net: string) => string;
     overAccessibility: (amount: string, net: string, target: string) => string;
     leftAccessibility: (amount: string, net: string, target: string) => string;
+    net: string;
     today: string;
     over: string;
     left: string;
@@ -50,31 +51,27 @@ export function readToday(
 
   // Section 9: the meter says which number it measures. With nothing burned
   // net and eaten are the same number, so the plain "150 of 2,200" is true;
-  // once something is burned it says "net", because that is what moved.
-  const measured = today.burned > 0 ? `${formatNumber(today.net)} net` : formatNumber(today.net);
+  // once something is burned it names the net figure.
+  const measured = today.burned > 0 ? `${formatNumber(today.net)} ${copy.net}` : formatNumber(today.net);
   const measures =
     target === null
-      ? copy?.noTarget ?? 'No daily target yet, so there is nothing to measure this against.'
-      : copy?.measured(measured, formatNumber(target)) ??
-        `${measured} of ${formatNumber(target)} kcal`;
+      ? copy.noTarget
+      : copy.measured(measured, formatNumber(target));
 
   const accessibilityLabel =
     target === null
-      ? copy?.noTargetAccessibility(formatNumber(today.net)) ??
-        `${formatNumber(today.net)} kcal today. No daily target set.`
+      ? copy.noTargetAccessibility(formatNumber(today.net))
       : over
-        ? copy?.overAccessibility(
+        ? copy.overAccessibility(
             formatNumber(Math.abs(remaining ?? 0)),
             formatNumber(today.net),
             formatNumber(target),
-          ) ??
-          `Over by ${formatNumber(Math.abs(remaining ?? 0))} kcal. ${formatNumber(today.net)} net of ${formatNumber(target)} kcal target.`
-        : copy?.leftAccessibility(
+          )
+        : copy.leftAccessibility(
             formatNumber(remaining),
             formatNumber(today.net),
             formatNumber(target),
-          ) ??
-          `${formatNumber(remaining)} kcal left. ${formatNumber(today.net)} net of ${formatNumber(target)} kcal target.`;
+          );
 
   return {
     target,
@@ -82,11 +79,7 @@ export function readToday(
     measures,
     accessibilityLabel,
     figure: remaining === null ? formatNumber(today.net) : formatNumber(Math.abs(remaining)),
-    caption: remaining === null
-      ? copy?.today ?? 'kcal today'
-      : over
-        ? copy?.over ?? 'kcal over'
-        : copy?.left ?? 'kcal left',
+    caption: remaining === null ? copy.today : over ? copy.over : copy.left,
   };
 }
 
@@ -108,6 +101,7 @@ export function HomeHero({
     noTargetAccessibility: (net) => t('home.noTargetAccessibility', { net }),
     overAccessibility: (amount, net, target) => t('home.overBy', { amount, net, target }),
     leftAccessibility: (amount, net, target) => t('home.caloriesLeft', { amount, net, target }),
+    net: t('home.net'),
     today: t('home.kcalToday'),
     over: t('home.kcalOver'),
     left: t('home.kcalLeft'),

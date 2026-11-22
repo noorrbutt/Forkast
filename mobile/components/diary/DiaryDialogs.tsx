@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 import { Dialog } from '../ui';
 import { displayDish, formatNumber } from '../../lib/format';
 import type { FoodLog } from '../../lib/types';
@@ -25,28 +27,30 @@ export function RepeatMealDialog({
   onConfirm: (log: FoodLog) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Dialog
       visible={log !== null}
       onDismiss={() => !busy && onCancel()}
-      title="Log this again?"
+      title={t('diary.repeatTitle')}
       message={
         log
-          ? `${displayDish(log.dish_name)} goes into today at ${formatNumber(
-              log.estimated_calories
-            )} kcal. You can edit or delete it afterwards.`
+          ? t('diary.repeatMessage', {
+              dish: displayDish(log.dish_name),
+              calories: formatNumber(log.estimated_calories),
+            })
           : undefined
       }
       actions={[
         {
-          label: 'Log it again',
+          label: t('diary.repeatAction'),
           variant: 'primary',
           onPress: () => log && onConfirm(log),
           disabled: busy,
           loading: busy,
         },
         {
-          label: 'Cancel',
+          label: t('diary.cancel'),
           variant: 'secondary',
           onPress: onCancel,
           disabled: busy,
@@ -71,19 +75,20 @@ export function DeleteMealDialog({
   onConfirm: (log: FoodLog) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Dialog
       visible={log !== null}
       onDismiss={onCancel}
-      title="Delete this meal?"
+      title={t('diary.deleteTitle')}
       message={
         log
-          ? `${displayDish(log.dish_name)} will be removed from your diary. You can undo it for a few seconds afterwards.`
+          ? t('diary.deleteMessage', { dish: displayDish(log.dish_name) })
           : undefined
       }
       actions={[
         {
-          label: 'Delete',
+          label: t('diary.delete'),
           variant: 'danger',
           icon: 'trash',
           onPress: () => {
@@ -92,7 +97,7 @@ export function DeleteMealDialog({
           },
         },
         {
-          label: 'Cancel',
+          label: t('diary.cancel'),
           variant: 'secondary',
           onPress: onCancel,
         },
@@ -117,6 +122,7 @@ export function MealActionMenu({
   onDelete: (log: FoodLog) => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <Dialog
       visible={log !== null}
@@ -124,7 +130,7 @@ export function MealActionMenu({
       title={displayDish(log?.dish_name)}
       actions={[
         {
-          label: 'Log again',
+          label: t('diary.logAgain'),
           icon: 'log',
           onPress: () => {
             if (log) onRepeat(log);
@@ -132,7 +138,7 @@ export function MealActionMenu({
           },
         },
         {
-          label: 'Delete',
+          label: t('diary.delete'),
           icon: 'trash',
           variant: 'danger',
           onPress: () => {
@@ -141,7 +147,7 @@ export function MealActionMenu({
           },
         },
         {
-          label: 'Cancel',
+          label: t('diary.cancel'),
           onPress: onClose,
         },
       ]}

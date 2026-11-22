@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { Icon } from '../ui';
@@ -53,6 +54,7 @@ export function useJustRefined(log: FoodLog): boolean {
  * row saying so.
  */
 export function RefinedTag({ overlay = false }: { overlay?: boolean }) {
+  const { t } = useTranslation();
   const { colors, radius, spacing, type } = useTheme();
   const opacity = useSharedValue(0);
 
@@ -74,7 +76,7 @@ export function RefinedTag({ overlay = false }: { overlay?: boolean }) {
       <Animated.View
         accessible
         accessibilityRole="text"
-        accessibilityLabel="Estimate refined"
+        accessibilityLabel={t('diary.refinedA11y')}
         style={[
           {
             flexDirection: 'row',
@@ -90,7 +92,7 @@ export function RefinedTag({ overlay = false }: { overlay?: boolean }) {
         ]}
       >
         <Icon name="check" size={12} color="#FFFFFF" />
-        <Text style={[type.caption, { color: '#FFFFFF' }]}>Refined</Text>
+        <Text style={[type.caption, { color: '#FFFFFF' }]}>{t('diary.refined')}</Text>
       </Animated.View>
     );
   }
@@ -99,7 +101,7 @@ export function RefinedTag({ overlay = false }: { overlay?: boolean }) {
     <Animated.View
       accessible
       accessibilityRole="text"
-      accessibilityLabel="Estimate refined"
+      accessibilityLabel={t('diary.refinedA11y')}
       style={[
         {
           alignSelf: 'flex-start',
@@ -116,7 +118,7 @@ export function RefinedTag({ overlay = false }: { overlay?: boolean }) {
           composited (contrast.test.ts's own "soft status fills" cases), and
           the tint plus the word "Refined" already carry the meaning without
           asking the label's own ink to also be the status colour. */}
-      <Text style={[type.caption, { color: colors.text }]}>Refined</Text>
+      <Text style={[type.caption, { color: colors.text }]}>{t('diary.refined')}</Text>
     </Animated.View>
   );
 }
@@ -128,13 +130,14 @@ export function RefinedTag({ overlay = false }: { overlay?: boolean }) {
  * connection, and it clears itself the moment either resolves.
  */
 export function PendingBadge() {
+  const { t } = useTranslation();
   const { colors, radius, spacing, type } = useTheme();
 
   return (
     <View
       accessible
       accessibilityRole="text"
-      accessibilityLabel="Saving, will sync when back online"
+      accessibilityLabel={t('diary.pendingSyncA11y')}
       style={{
         alignSelf: 'flex-start',
         borderRadius: radius.pill,
@@ -143,7 +146,7 @@ export function PendingBadge() {
         paddingVertical: spacing.xs,
       }}
     >
-      <Text style={[type.caption, { color: colors.muted }]}>Pending sync</Text>
+      <Text style={[type.caption, { color: colors.muted }]}>{t('diary.pendingSync')}</Text>
     </View>
   );
 }

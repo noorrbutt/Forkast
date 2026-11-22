@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { ListGroup } from '../ui';
 import type { useRepeatLog } from '../../hooks/useLogs';
@@ -42,8 +43,10 @@ export function DayGroup({
   confirmed,
   repeat,
 }: DayGroupProps) {
+  const { t } = useTranslation();
   const { colors, spacing, type } = useTheme();
   const segments = useMemo(() => segmentMeals(day.meals), [day.meals]);
+  const heading = day.relativeDay ? t(`diary.${day.relativeDay}`) : day.heading;
 
   const rowProps = (log: FoodLog) => ({
     onOpen,
@@ -64,7 +67,7 @@ export function DayGroup({
           of them, rather than repeating per run or being unreachable for a
           day that opens on a photo. */}
       <Text style={[type.labelSoft, { color: colors.muted, paddingHorizontal: spacing.xs }]}>
-        {`${day.heading} · ${formatNumber(day.total)} kcal`}
+        {`${heading} · ${t('log.calories', { calories: formatNumber(day.total) })}`}
       </Text>
 
       <View style={{ gap: spacing.md }}>

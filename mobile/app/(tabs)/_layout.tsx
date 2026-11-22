@@ -302,7 +302,7 @@ export default function TabsLayout() {
           the one-name-per-destination rule the guide states outright and which
           this app had already got wrong once with Sign up. */}
       <Tabs.Screen name="index" options={{ title: t('home.tab') }} />
-      <Tabs.Screen name="history" options={{ title: 'Diary' }} />
+      <Tabs.Screen name="history" options={{ title: t('diary.tab') }} />
       <Tabs.Screen name="log" options={{ title: t('log.tab') }} />
       <Tabs.Screen name="streaks" options={{ title: 'Streaks' }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile' }} />

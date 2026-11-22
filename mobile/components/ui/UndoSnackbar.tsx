@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { AccessibilityInfo, Pressable, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 import { useTheme } from '../../theme';
 import { quick } from '../../theme/motion';
@@ -25,8 +26,10 @@ type UndoSnackbarProps = {
  * screen reader's focus there on its own, and by the time someone swiped
  * onto it by chance the undo window may already have closed.
  */
-export function UndoSnackbar({ message, onUndo, undoLabel = 'Undo' }: UndoSnackbarProps) {
+export function UndoSnackbar({ message, onUndo, undoLabel }: UndoSnackbarProps) {
+  const { t } = useTranslation();
   const { colors, layout, radius, spacing, type, isDark } = useTheme();
+  const visibleUndoLabel = undoLabel ?? t('common.undo');
   const insets = useSafeAreaInsets();
   const opacity = useSharedValue(0);
   // Clears the floating tab bar, which sits at insets.bottom + tabBarInset
@@ -36,10 +39,10 @@ export function UndoSnackbar({ message, onUndo, undoLabel = 'Undo' }: UndoSnackb
 
   useEffect(() => {
     if (message) {
-      AccessibilityInfo.announceForAccessibility(`${message}. Double tap to undo.`);
+      AccessibilityInfo.announceForAccessibility(`${message}. ${t('common.doubleTapUndo')}`);
     }
     opacity.value = withTiming(message ? 1 : 0, quick);
-  }, [message, opacity]);
+  }, [message, opacity, t]);
 
   const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
 
@@ -81,10 +84,10 @@ export function UndoSnackbar({ message, onUndo, undoLabel = 'Undo' }: UndoSnackb
         <Pressable
           onPress={onUndo}
           accessibilityRole="button"
-          accessibilityLabel={undoLabel}
+          accessibilityLabel={visibleUndoLabel}
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' })}
         >
-          <Text style={[type.body, { color: colors.accent, fontWeight: '600' }]}>{undoLabel}</Text>
+          <Text style={[type.body, { color: colors.accent, fontWeight: '600' }]}>{visibleUndoLabel}</Text>
         </Pressable>
       </View>
     </Animated.View>

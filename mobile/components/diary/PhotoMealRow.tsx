@@ -1,5 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image, Pressable, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { EstimateBadge } from '../ui';
 import { usePhotoSource } from '../../hooks/usePhoto';
@@ -48,12 +49,14 @@ const NARROW_PHOTO_HEIGHT = 180;
  * someone's dinner.
  */
 export function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDelete, onLongPress, sending, confirmed, error }: MealRowProps) {
+  const { t } = useTranslation();
   const { colors, isDark, radius, spacing, type } = useTheme();
   const { width } = useLayout();
   const photoHeight = width < NARROW_PHOTO_WIDTH ? NARROW_PHOTO_HEIGHT : PHOTO_HEIGHT;
   const photo = usePhotoSource(log.id);
   const justRefined = useJustRefined(log);
-  const meta = mealMeta(log);
+  const servingLabel = t(`log.serving${log.serving_size[0].toUpperCase()}${log.serving_size.slice(1)}`);
+  const meta = mealMeta(log, servingLabel);
 
   return (
     <View style={{ paddingBottom: last ? 0 : spacing.lg }}>
@@ -87,9 +90,12 @@ export function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDelet
               onPress={() => onOpen(log.id)}
               onLongPress={() => onLongPress(log.id)}
               accessibilityRole="button"
-              accessibilityLabel={`${log.dish_name}, ${formatNumber(log.estimated_calories)} kcal`}
-              accessibilityHint="Opens this meal"
-              accessibilityActions={[{ name: 'longpress', label: 'Show actions' }]}
+              accessibilityLabel={t('diary.mealCaloriesA11y', {
+                dish: log.dish_name,
+                calories: formatNumber(log.estimated_calories),
+              })}
+              accessibilityHint={t('diary.opensMeal')}
+              accessibilityActions={[{ name: 'longpress', label: t('diary.showActions') }]}
               onAccessibilityAction={(event) => {
                 if (event.nativeEvent.actionName === 'longpress') onLongPress(log.id);
               }}
@@ -131,7 +137,11 @@ export function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDelet
                 {log.estimate_source === 'local' || justRefined ? (
                   <View style={{ position: 'absolute', top: spacing.md, left: spacing.md }}>
                     {log.estimate_source === 'local' ? (
-                      <EstimateBadge variant="overlay" />
+                      <EstimateBadge
+                        variant="overlay"
+                        label={t('diary.estimated')}
+                        accessibilityLabel={t('diary.estimatedLocally')}
+                      />
                     ) : (
                       <RefinedTag overlay />
                     )}
@@ -160,7 +170,7 @@ export function PhotoMealRow({ log, last, onOpen, onRepeat, onDelete, onAskDelet
                         { color: '#FFFFFF', fontVariant: ['tabular-nums'] },
                       ]}
                     >
-                      {`${formatNumber(log.estimated_calories)} kcal`}
+                      {t('log.calories', { calories: formatNumber(log.estimated_calories) })}
                     </Text>
                   </View>
                 </View>

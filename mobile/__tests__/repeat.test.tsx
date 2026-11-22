@@ -103,6 +103,7 @@ const meal = (id: string, dishName: string) => ({
   fun_scale: 3,
   friend_scale: 'solo',
   serving_size: 'medium',
+  portion_multiplier: 1,
   estimated_calories: 820,
   created_at: '2026-09-15T19:20:00Z',
   category: { id: 4, name: 'Karahi', is_junk: false, base_calorie_min: 600, base_calorie_max: 900 },

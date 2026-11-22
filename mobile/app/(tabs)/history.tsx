@@ -1,6 +1,7 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { DayGroup } from '../../components/diary/DayGroup';
 import { groupByDay, type DiaryDay } from '../../components/diary/diaryDays';
@@ -80,6 +81,7 @@ function DiaryList({
   filtersActive: boolean;
   onClearFilters: () => void;
 }) {
+  const { t } = useTranslation();
   const { colors, layout, spacing, type } = useTheme();
   const screenInsets = useScreenInsets();
   const { isExpanded } = useLayout();
@@ -133,7 +135,7 @@ function DiaryList({
 
         {logs.isError && !logs.data ? (
           <ErrorState
-            title="Diary unavailable"
+            title={t('diary.unavailable')}
             message={describeError(logs.error)}
             onRetry={() => void logs.refetch()}
           />
@@ -145,18 +147,18 @@ function DiaryList({
         filtersActive ? (
           <Empty
             icon="empty"
-            title="No meals found"
-            message="Try a different search or category."
-            actionLabel="Clear filters"
+            title={t('diary.noMealsFound')}
+            message={t('diary.tryDifferentSearch')}
+            actionLabel={t('diary.clearFilters')}
             actionVariant="secondary"
             onAction={onClearFilters}
           />
         ) : (
           <Empty
             icon="empty"
-            title="Your diary is empty"
-            message="Every meal you log lands here, newest first, with its photo and its calories. Tap one to fix a typo or delete it."
-            actionLabel="Log your first meal"
+            title={t('diary.emptyTitle')}
+            message={t('diary.emptyMessage')}
+            actionLabel={t('diary.logFirstMeal')}
             actionIcon="log"
             onAction={onLogFirst}
           />
@@ -167,7 +169,7 @@ function DiaryList({
       // The end of the diary is a designed state too. Silence after the
       // last row reads the same as a list that failed to load more.
       logs.isFetchingNextPage ? (
-        <Loading label="Reading further back" />
+        <Loading label={t('diary.readingFurtherBack')} />
       ) : items.length > 0 && !logs.hasNextPage ? (
         <Text
           style={[
@@ -175,7 +177,7 @@ function DiaryList({
             { color: colors.muted, textAlign: 'center', paddingTop: spacing.lg },
           ]}
         >
-          That is every meal you have logged.
+          {t('diary.endOfDiary')}
         </Text>
       ) : null
     }
@@ -215,6 +217,7 @@ function DiaryFilters({
   selectedCategory: RefId | null;
   onSelectCategory: (category: RefId | null) => void;
 }) {
+  const { t } = useTranslation();
   const { layout, spacing } = useTheme();
   const screenInsets = useScreenInsets();
 
@@ -229,10 +232,10 @@ function DiaryFilters({
         }}
       >
         <Field
-          label="Search meals and restaurants"
-          accessibilityLabel="Search meals and restaurants"
+          label={t('diary.searchLabel')}
+          accessibilityLabel={t('diary.searchLabel')}
           testID="history-search"
-          placeholder="Dish or restaurant"
+          placeholder={t('diary.searchPlaceholder')}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
@@ -244,7 +247,7 @@ function DiaryFilters({
       {categoriesError ? (
         <View style={{ paddingHorizontal: layout.screenPadding }}>
           <ErrorState
-            title="Categories unavailable"
+            title={t('diary.categoriesUnavailable')}
             message={describeError(categoriesError)}
             onRetry={onRetryCategories}
           />
@@ -257,7 +260,7 @@ function DiaryFilters({
           contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: layout.screenPadding }}
         >
           <Chip
-            label="All"
+            label={t('diary.allCategories')}
             selected={selectedCategory === null}
             showCheck
             onPress={() => onSelectCategory(null)}
@@ -278,6 +281,7 @@ function DiaryFilters({
 }
 
 export default function HistoryScreen() {
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const params = useLocalSearchParams<{ view?: string }>();
   const [view, setView] = useState<DiaryView>(params.view === 'map' ? 'map' : 'list');
@@ -443,18 +447,24 @@ export default function HistoryScreen() {
   // only thing that moves the list, and it refetches when the screen comes back
   // into view, so a heading cannot sit on "Today" into the next morning without
   // the data under it being refreshed at the same moment.
-  const days = useMemo(() => groupByDay(visibleItems, new Date()), [visibleItems]);
+  const days = useMemo(
+    () => groupByDay(visibleItems, new Date(), i18n.resolvedLanguage ?? i18n.language),
+    [visibleItems, i18n.language, i18n.resolvedLanguage],
+  );
 
   const loadMore = useCallback(() => {
     if (logs.hasNextPage && !logs.isFetchingNextPage) void logs.fetchNextPage();
   }, [logs]);
 
   const toggle = <DiaryViewToggle view={view} onChange={setView} />;
-  const eyebrow = logs.data ? `${formatNumber(total)} logged` : undefined;
+  const eyebrow = logs.data
+    ? t('diary.loggedCount', { count: total, formattedCount: formatNumber(total) })
+    : undefined;
   const snackbar = (
     <UndoSnackbar
-      message={lastDeleted ? `Deleted ${lastDeleted.dishName}.` : null}
+      message={lastDeleted ? t('diary.deletedMessage', { dish: lastDeleted.dishName }) : null}
       onUndo={undoDelete}
+      undoLabel={t('diary.undo')}
     />
   );
 
@@ -462,7 +472,7 @@ export default function HistoryScreen() {
   // padding rather than the list's FlatList set-up below.
   if (view === 'map') {
     return (
-      <Screen title="Your diary" eyebrow={eyebrow} headerRight={toggle}>
+      <Screen title={t('diary.title')} eyebrow={eyebrow} headerRight={toggle}>
         <MapScreen />
         {snackbar}
       </Screen>
@@ -478,7 +488,7 @@ export default function HistoryScreen() {
       // lets the rest go.
       scroll={false}
       padded={false}
-      title="Your diary"
+      title={t('diary.title')}
       eyebrow={eyebrow}
       headerRight={toggle}
     >

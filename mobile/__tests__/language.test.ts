@@ -6,6 +6,89 @@ import ur from '../lib/locales/ur';
 import i18n from '../lib/i18n';
 import { initializeLanguage, setAppLanguage } from '../lib/language';
 
+const translatedScreenKeys = [
+  'common.loading',
+  'common.tryAgain',
+  'common.couldNotLoad',
+  'common.requestFailed',
+  'common.connectionTimeout',
+  'common.cannotConnect',
+  'common.requestStatus',
+  'common.somethingWrong',
+  'common.undo',
+  'common.doubleTapUndo',
+  'diary.tab',
+  'diary.title',
+  'diary.loggedCount',
+  'diary.unavailable',
+  'diary.noMealsFound',
+  'diary.tryDifferentSearch',
+  'diary.clearFilters',
+  'diary.emptyTitle',
+  'diary.emptyMessage',
+  'diary.logFirstMeal',
+  'diary.readingFurtherBack',
+  'diary.endOfDiary',
+  'diary.searchLabel',
+  'diary.searchPlaceholder',
+  'diary.categoriesUnavailable',
+  'diary.allCategories',
+  'diary.viewAccessibilityLabel',
+  'diary.listView',
+  'diary.mapView',
+  'diary.deletedMessage',
+  'diary.undo',
+  'diary.today',
+  'diary.yesterday',
+  'diary.repeatTitle',
+  'diary.repeatMessage',
+  'diary.repeatAction',
+  'diary.cancel',
+  'diary.deleteTitle',
+  'diary.deleteMessage',
+  'diary.delete',
+  'diary.logAgain',
+  'diary.logging',
+  'diary.loggingAgain',
+  'diary.addDishHint',
+  'diary.removeDishHint',
+  'diary.loggedAgainToday',
+  'diary.deleteDish',
+  'diary.showActions',
+  'diary.opensMeal',
+  'diary.mealCaloriesA11y',
+  'diary.savingDish',
+  'diary.refined',
+  'diary.refinedA11y',
+  'diary.pendingSync',
+  'diary.pendingSyncA11y',
+  'diary.estimated',
+  'diary.estimatedLocally',
+  'diary.findingSpots',
+  'diary.mapUnavailable',
+  'diary.noPlacesTitle',
+  'diary.noPlacesMessage',
+  'diary.areaNotSet',
+  'diary.unnamedSpot',
+  'diary.placesHere_one',
+  'diary.placesHere_other',
+  'diary.mealLoggedHere_one',
+  'diary.mealLoggedHere_other',
+  'diary.dismissMapNotice',
+  'diary.mapUnavailableNotice',
+  'diary.overlappingPlacesHint',
+  'diary.groupedMapWebNotice',
+  'diary.showEveryArea',
+  'diary.showingAreaOnly',
+  'diary.areaTotal_one',
+  'diary.areaTotal_other',
+  'diary.visitCount_one',
+  'diary.visitCount_other',
+  'home.calories',
+  'home.net',
+  'log.calories',
+] as const;
+
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(),
   setItemAsync: jest.fn(),
@@ -34,6 +117,18 @@ describe('app language', () => {
 
   it('ships matching English and Urdu translation keys', () => {
     expect(leafKeys(ur)).toEqual(leafKeys(en));
+  });
+
+  it('has translations for the home, log, and diary screens in every locale', () => {
+    const missing: string[] = [];
+    for (const language of ['en', 'ur'] as const) {
+      for (const key of translatedScreenKeys) {
+        if (i18n.getResource(language, 'translation', key) === undefined) {
+          missing.push(`${language}.${key}`);
+        }
+      }
+    }
+    expect(missing).toEqual([]);
   });
 
   it('resolves plural order labels in both languages', async () => {

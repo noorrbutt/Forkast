@@ -1,4 +1,5 @@
 import { View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { Chip } from '../ui';
 import { useTheme } from '../../theme';
@@ -21,23 +22,24 @@ export function DiaryViewToggle({
   view: DiaryView;
   onChange: (view: DiaryView) => void;
 }) {
+  const { t } = useTranslation();
   const { spacing } = useTheme();
 
   return (
     <View
       accessibilityRole="radiogroup"
-      accessibilityLabel="Diary view"
+      accessibilityLabel={t('diary.viewAccessibilityLabel')}
       style={{ flexDirection: 'row', gap: spacing.sm }}
     >
       <Chip
-        label="List"
+        label={t('diary.listView')}
         compact
         showCheck
         selected={view === 'list'}
         onPress={() => onChange('list')}
       />
       <Chip
-        label="Map"
+        label={t('diary.mapView')}
         compact
         showCheck
         selected={view === 'map'}

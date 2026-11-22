@@ -1,5 +1,6 @@
 import { AccessibilityInfo, Text, View } from 'react-native';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useTheme } from '../../theme';
 import { Button } from './Button';
@@ -11,13 +12,16 @@ type ErrorStateProps = {
 };
 
 export function ErrorState({
-  title = 'Could not load',
-  // Every caller passes describeError, which says what actually went wrong.
-  // This is only the fallback, so it does not guess at a cause either.
-  message = 'Something went wrong on the way to the server. Try again.',
+  title,
+  message,
   onRetry,
 }: ErrorStateProps) {
+  const { t } = useTranslation();
   const { colors, radius, spacing, type } = useTheme();
+  const visibleTitle = title ?? t('common.couldNotLoad');
+  // Every caller passes describeError, which says what actually went wrong.
+  // This is only the fallback, so it does not guess at a cause either.
+  const visibleMessage = message ?? t('common.requestFailed');
 
   // Say it out loud, once, when it appears.
   //
@@ -29,15 +33,15 @@ export function ErrorState({
   // covers the Android case where this re-renders with a different message
   // while it is already on screen.
   useEffect(() => {
-    AccessibilityInfo.announceForAccessibility(`${title}. ${message}`);
-  }, [title, message]);
+    AccessibilityInfo.announceForAccessibility(`${visibleTitle}. ${visibleMessage}`);
+  }, [visibleTitle, visibleMessage]);
 
   return (
     <View
       accessible
       accessibilityRole="alert"
       accessibilityLiveRegion="assertive"
-      accessibilityLabel={`${title}. ${message}`}
+      accessibilityLabel={`${visibleTitle}. ${visibleMessage}`}
       style={{
         gap: spacing.sm,
         padding: spacing.xl,
@@ -52,10 +56,10 @@ export function ErrorState({
           failure this component has ever shown, including a 422 and a 500, so
           the one word the reader saw first was usually the wrong diagnosis.
           What happened is in the title and the message. */}
-      <Text style={[type.subtitle, { color: colors.text }]}>{title}</Text>
-      <Text style={[type.caption, { color: colors.muted }]}>{message}</Text>
+      <Text style={[type.subtitle, { color: colors.text }]}>{visibleTitle}</Text>
+      <Text style={[type.caption, { color: colors.muted }]}>{visibleMessage}</Text>
       {onRetry ? (
-        <Button label="Try again" variant="secondary" onPress={onRetry} style={{ marginTop: spacing.md }} />
+        <Button label={t('common.tryAgain')} variant="secondary" onPress={onRetry} style={{ marginTop: spacing.md }} />
       ) : null}
     </View>
   );

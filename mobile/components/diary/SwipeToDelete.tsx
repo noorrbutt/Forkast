@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { Pressable, Text } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 
 import { Icon } from '../ui';
@@ -27,6 +28,7 @@ export function SwipeToDelete({
   onDelete: () => void;
   children: React.ReactNode;
 }) {
+  const { t } = useTranslation();
   const { colors, spacing, type } = useTheme();
   const ref = useRef<SwipeableMethods>(null);
 
@@ -42,7 +44,7 @@ export function SwipeToDelete({
             onDelete();
           }}
           accessibilityRole="button"
-          accessibilityLabel={`Delete ${dishName}`}
+          accessibilityLabel={t('diary.deleteDish', { dish: dishName })}
           style={{
             width: 96,
             alignItems: 'center',
@@ -51,7 +53,9 @@ export function SwipeToDelete({
           }}
         >
           <Icon name="trash" size={20} color={colors.danger} />
-          <Text style={[type.caption, { color: colors.danger, marginTop: spacing.xs }]}>Delete</Text>
+          <Text style={[type.caption, { color: colors.danger, marginTop: spacing.xs }]}>
+            {t('diary.delete')}
+          </Text>
         </Pressable>
       )}
       overshootRight={false}

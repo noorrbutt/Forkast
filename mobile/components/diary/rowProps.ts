@@ -1,4 +1,3 @@
-import { SERVING_LABELS } from '../../lib/format';
 import type { FoodLog, Uuid } from '../../lib/types';
 
 /** The photo, square, large enough to recognise a dish and no larger. Used
@@ -39,11 +38,11 @@ export type MealRowProps = {
 };
 
 /** Category, restaurant (or area) and serving, as one caption line. */
-export function mealMeta(log: FoodLog): string {
+export function mealMeta(log: FoodLog, servingLabel: string): string {
   return [
     log.category?.name,
     log.restaurant?.name ?? log.area,
-    SERVING_LABELS[log.serving_size],
+    servingLabel,
   ]
     .filter(Boolean)
     .join(' · ');

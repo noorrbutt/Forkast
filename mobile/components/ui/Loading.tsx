@@ -1,4 +1,5 @@
 import { ActivityIndicator, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { useTheme } from '../../theme';
 
@@ -17,8 +18,10 @@ type LoadingProps = {
  * turn off behaviour that was already off. Removed rather than made to work: a
  * spinner that sits where it is put is what every one of those callers wanted.
  */
-export function Loading({ label = 'Loading' }: LoadingProps) {
+export function Loading({ label }: LoadingProps) {
+  const { t } = useTranslation();
   const { colors, spacing, type } = useTheme();
+  const visibleLabel = label ?? t('common.loading');
 
   return (
     <View
@@ -30,7 +33,7 @@ export function Loading({ label = 'Loading' }: LoadingProps) {
       }}
     >
       <ActivityIndicator color={colors.accent} />
-      <Text style={[type.labelSoft, { color: colors.muted }]}>{label}</Text>
+      <Text style={[type.labelSoft, { color: colors.muted }]}>{visibleLabel}</Text>
     </View>
   );
 }

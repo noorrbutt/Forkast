@@ -1,4 +1,5 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { FormError, Icon } from '../ui';
 import { useTheme } from '../../theme';
@@ -29,6 +30,7 @@ export function MealActions({
   confirmed,
   error,
 }: Pick<MealRowProps, 'log' | 'onRepeat' | 'onAskDelete' | 'sending' | 'confirmed' | 'error'>) {
+  const { t } = useTranslation();
   const { colors, radius, spacing, type } = useTheme();
   return (
     <View style={{ gap: spacing.xs }}>
@@ -42,8 +44,8 @@ export function MealActions({
           // accessibility label carries the state instead.
           onPress={() => onRepeat(log.id)}
           accessibilityRole="button"
-          accessibilityLabel={sending ? 'Logging again' : 'Log again'}
-          accessibilityHint={`Adds ${log.dish_name} to today, with the time you tap it`}
+          accessibilityLabel={t(sending ? 'diary.loggingAgain' : 'diary.logAgain')}
+          accessibilityHint={t('diary.addDishHint', { dish: log.dish_name })}
           hitSlop={PILL_HIT_SLOP}
           style={({ pressed }) => ({
             flexDirection: 'row',
@@ -63,7 +65,7 @@ export function MealActions({
             <Icon name="repeat" size={16} color={colors.accent} />
           )}
           <Text style={[type.caption, { color: colors.accent, fontWeight: '600' }]}>
-            {sending ? 'Logging' : 'Log again'}
+            {t(sending ? 'diary.logging' : 'diary.logAgain')}
           </Text>
         </Pressable>
 
@@ -78,8 +80,8 @@ export function MealActions({
           // problem a repeated string would leave unsolved, not just a test
           // ambiguity. "Delete" alone matches the long-press menu's own
           // Delete action, which names the dish in its title instead.
-          accessibilityLabel="Delete"
-          accessibilityHint={`Removes ${log.dish_name} from your diary, with a few seconds to undo it`}
+          accessibilityLabel={t('diary.delete')}
+          accessibilityHint={t('diary.removeDishHint', { dish: log.dish_name })}
           hitSlop={PILL_HIT_SLOP}
           style={({ pressed }) => ({
             flexDirection: 'row',
@@ -103,7 +105,7 @@ export function MealActions({
       </View>
 
       {confirmed ? (
-        <Text style={[type.caption, { color: colors.success }]}>Logged again for today.</Text>
+        <Text style={[type.caption, { color: colors.success }]}>{t('diary.loggedAgainToday')}</Text>
       ) : null}
       {error ? <FormError>{error}</FormError> : null}
     </View>
