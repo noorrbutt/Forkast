@@ -146,7 +146,10 @@ async def test_portion_multiplier_scales_photo_calories_and_macros_on_create(
         json={"portion_multiplier": 1.0},
     )
     assert updated.status_code == 200, updated.text
-    assert updated.json()["estimated_calories"] == calories
+    # Calories are stored as integers, so repricing uses the rounded saved value.
+    assert updated.json()["estimated_calories"] == round(
+        body["estimated_calories"] / portion_multiplier
+    )
     assert updated.json()["protein_g"] == 28.0
     assert updated.json()["carbs_g"] == 70.0
     assert updated.json()["fat_g"] == 22.0

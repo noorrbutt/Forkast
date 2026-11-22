@@ -77,7 +77,6 @@ class PlanContext(BaseModel):
     total_calories: int
     total_burned: int
     net_calories: int
-    junk_ratio: float
     avg_calories_per_day: int
     current_streak: int
     longest_streak: int

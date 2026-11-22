@@ -37,7 +37,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_constraint(
-        "ck_food_logs_portion_multiplier_range",
+        op.f("ck_food_logs_portion_multiplier_range"),
         "food_logs",
         type_="check",
     )
