@@ -61,6 +61,15 @@
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.46.4"
   },
+  "overrides": {
+    "@expo/fingerprint": {
+      "minimatch": "11.0.9"
+    },
+    "@sentry/bundler-plugins": {
+      "glob": "14.0.6"
+    },
+    "decode-uri-component": "0.5.1"
+  },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
@@ -72,6 +81,11 @@
   "private": true,
   "jest": {
     "preset": "jest-expo",
+    "transformIgnorePatterns": [
+      "node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|standard-navigation|decode-uri-component))",
+      "node_modules/react-native-reanimated/plugin/",
+      "node_modules/@react-native/babel-preset/"
+    ],
     "setupFilesAfterEnv": [
       "<rootDir>/jest.setup.js"
     ],
