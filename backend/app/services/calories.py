@@ -1,12 +1,12 @@
-"""Serving-size multipliers and the clamping rule for calorie estimation.
+"""Serving-size and portion multipliers and the calorie clamping rule.
 
 Order matters and is deliberate:
 
-    category range -> AI adjusts within range -> clamp to [min, max] -> x serving
+    category range -> AI adjusts within range -> clamp -> x serving -> x portion
 
 Clamping happens BEFORE the serving multiplier so the AI's job stays exactly
 as constrained as the project plan intends ("nudge within a known range"),
-while a large portion can still legitimately exceed the category's nominal max.
+while a large serving or custom portion can still exceed the category's nominal max.
 """
 
 from __future__ import annotations
@@ -29,10 +29,20 @@ def apply_serving_size(calories: float, serving_size: ServingSize) -> int:
 
 
 def finalise_estimate(
-    ai_calories: float, base_min: int, base_max: int, serving_size: ServingSize
+    ai_calories: float,
+    base_min: int,
+    base_max: int,
+    serving_size: ServingSize,
+    portion_multiplier: float = 1.0,
 ) -> int:
-    """Clamp the AI's in-range guess, then scale it by the serving size."""
-    return apply_serving_size(clamp_to_range(ai_calories, base_min, base_max), serving_size)
+    """Clamp the AI's in-range guess, then scale it by serving and portion."""
+    scaled = clamp_to_range(ai_calories, base_min, base_max) * SERVING_MULTIPLIERS[serving_size]
+    return round(scaled * portion_multiplier)
+
+
+def apply_portion_multiplier(calories: float, portion_multiplier: float) -> int:
+    """Scale a calorie value that is already priced for a specific serving."""
+    return round(calories * portion_multiplier)
 
 
 # Absolute floor and ceiling for a single meal, regardless of category. A

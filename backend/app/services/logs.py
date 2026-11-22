@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import uuid
+from decimal import Decimal
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select, text
@@ -38,7 +39,12 @@ from app.services.ai.schemas import (
     DesiDishHint,
     PhotoCalorieEstimate,
 )
-from app.services.calories import clamp_photo_estimate, clamp_to_range, finalise_estimate
+from app.services.calories import (
+    apply_portion_multiplier,
+    clamp_photo_estimate,
+    clamp_to_range,
+    finalise_estimate,
+)
 from app.services.images import compress_for_estimation, invalidate_thumbnail_cache
 from app.services.jobs import REFINE_CALORIE_ESTIMATE, enqueue
 from app.services.rate_limit import RateLimiter, account_identity
@@ -47,15 +53,18 @@ logger = logging.getLogger(__name__)
 
 # Fields that feed the estimate. Editing any of them means the stored figure
 # has to be redone, otherwise the calories quietly stop matching the log.
-_ESTIMATE_INPUTS = frozenset({"dish_name", "category_id", "serving_size"})
+_ESTIMATE_INPUTS = frozenset({"dish_name", "category_id", "serving_size", "portion_multiplier"})
 
 
-def provisional_estimate(category: FoodCategory, serving_size: ServingSize) -> int:
+def provisional_estimate(
+    category: FoodCategory, serving_size: ServingSize, portion_multiplier: float = 1.0
+) -> int:
     """The figure to store right now, with no model in the way.
 
-    The midpoint of the category's own range, clamped and scaled exactly as the
-    model's answer would be. It is the same arithmetic on a different input, so
-    a provisional figure and a refined one are never different kinds of number.
+    The midpoint of the category's own range, clamped and scaled by serving size
+    and portion multiplier exactly as the model's answer would be. It is the
+    same arithmetic on a different input, so a provisional figure and a refined
+    one are never different kinds of number.
 
     This exists because asking the model first made saving a meal take a median
     of two seconds against thirty milliseconds for everything else the app does,
@@ -70,7 +79,11 @@ def provisional_estimate(category: FoodCategory, serving_size: ServingSize) -> i
     """
     midpoint = (category.base_calorie_min + category.base_calorie_max) / 2
     return finalise_estimate(
-        midpoint, category.base_calorie_min, category.base_calorie_max, serving_size
+        midpoint,
+        category.base_calorie_min,
+        category.base_calorie_max,
+        serving_size,
+        portion_multiplier,
     )
 
 
@@ -82,12 +95,13 @@ async def estimate_calories(
     base_calorie_min: int,
     base_calorie_max: int,
     serving_size: ServingSize,
+    portion_multiplier: float = 1.0,
 ) -> int:
     """Ask the AI for an in-range figure, then clamp and scale it.
 
-    The clamp happens before the serving multiplier on purpose: the model's job
-    is only ever to place the dish inside the category range, while a large
-    portion is still allowed to exceed that range once scaled.
+    The clamp happens before the serving and portion multipliers on purpose: the
+    model's job is only ever to place the dish inside the category range, while a
+    large portion is still allowed to exceed that range once scaled.
     """
     match = desi.lookup(dish_name)
     dish_hint = (
@@ -126,6 +140,7 @@ async def estimate_calories(
         base_calorie_min,
         base_calorie_max,
         serving_size,
+        portion_multiplier,
     )
 
 
@@ -167,6 +182,7 @@ async def refine_estimate(
 
         dish_name = log.dish_name
         serving_size = log.serving_size
+        portion_multiplier = log.portion_multiplier
         category_name = category.name
         base_calorie_min = category.base_calorie_min
         base_calorie_max = category.base_calorie_max
@@ -184,6 +200,7 @@ async def refine_estimate(
             base_calorie_min=base_calorie_min,
             base_calorie_max=base_calorie_max,
             serving_size=serving_size,
+            portion_multiplier=portion_multiplier,
         )
     except Exception:
         await circuit_breaker.record_failure(factory)
@@ -201,6 +218,7 @@ async def refine_estimate(
                   AND category_id = :category_id
                   AND dish_name = :dish_name
                   AND serving_size = :serving_size
+                  AND portion_multiplier = :portion_multiplier
                   AND estimate_refined_at IS NULL
                 """
             ),
@@ -210,6 +228,7 @@ async def refine_estimate(
                 "category_id": category_id,
                 "dish_name": dish_name,
                 "serving_size": serving_size,
+                "portion_multiplier": portion_multiplier,
             },
         )
         if result.rowcount == 0:
@@ -340,8 +359,19 @@ def _initial_estimate(
         estimated = clamp_photo_estimate(
             payload.estimated_calories, category.base_calorie_min, category.base_calorie_max
         )
+        estimated = apply_portion_multiplier(estimated, payload.portion_multiplier)
         return estimated, "photo", dt.datetime.now(dt.UTC)
-    return provisional_estimate(category, payload.serving_size), "category", None
+    return (
+        provisional_estimate(category, payload.serving_size, payload.portion_multiplier),
+        "category",
+        None,
+    )
+
+
+def _scale_macro(value: float | Decimal | None, multiplier: float) -> Decimal | None:
+    if value is None:
+        return None
+    return (Decimal(str(value)) * Decimal(str(multiplier))).quantize(Decimal("0.1"))
 
 
 async def create_log(
@@ -378,9 +408,9 @@ async def create_log(
         portion_multiplier=payload.portion_multiplier,
         estimated_calories=estimated,
         calorie_source=calorie_source,
-        protein_g=payload.protein_g,
-        carbs_g=payload.carbs_g,
-        fat_g=payload.fat_g,
+        protein_g=_scale_macro(payload.protein_g, payload.portion_multiplier),
+        carbs_g=_scale_macro(payload.carbs_g, payload.portion_multiplier),
+        fat_g=_scale_macro(payload.fat_g, payload.portion_multiplier),
         estimate_refined_at=estimate_refined_at,
         client_id=payload.client_id,
     )
@@ -456,6 +486,7 @@ async def update_log(
     with them, if the estimate needs redoing and the hourly cap allows it."""
     log = await load_log(session, user.id, log_id)
     changes = payload.model_dump(exclude_unset=True)
+    previous_multiplier = log.portion_multiplier
 
     if "category_id" in changes:
         await get_category(session, changes["category_id"])
@@ -465,10 +496,24 @@ async def update_log(
     for field, value in changes.items():
         setattr(log, field, value)
 
-    refine = bool(_ESTIMATE_INPUTS & changes.keys())
+    multiplier_only_reprice = (
+        "portion_multiplier" in changes
+        and not ({"dish_name", "category_id", "serving_size"} & changes.keys())
+        and log.calorie_source == "photo"
+    )
+    if multiplier_only_reprice:
+        scale = log.portion_multiplier / previous_multiplier
+        log.estimated_calories = apply_portion_multiplier(log.estimated_calories, scale)
+        log.protein_g = _scale_macro(log.protein_g, scale)
+        log.carbs_g = _scale_macro(log.carbs_g, scale)
+        log.fat_g = _scale_macro(log.fat_g, scale)
+
+    refine = bool(_ESTIMATE_INPUTS & changes.keys()) and not multiplier_only_reprice
     if refine:
         category = await get_category(session, log.category_id)
-        log.estimated_calories = provisional_estimate(category, log.serving_size)
+        log.estimated_calories = provisional_estimate(
+            category, log.serving_size, log.portion_multiplier
+        )
         log.estimate_refined_at = None
         # The dish name, category or serving size just changed, so a photo
         # estimate from a previous save no longer describes this row -- the
@@ -571,8 +616,8 @@ async def repeat_log(
         serving_size=original.serving_size,
         portion_multiplier=original.portion_multiplier,
         # Copied, not re-estimated. The estimate is a function of dish name,
-        # category range and serving size, and all three are carried over
-        # unchanged, so asking again can only return the same number or, once a
+        # category range, serving size and portion multiplier, and all four are
+        # carried over unchanged, so asking again can only return the same number or, once a
         # real model is behind the seam, a different one for an identical meal;
         # the user would see the same dish costing two different amounts. It
         # also keeps this route a pure database copy, so a one tap repeat cannot

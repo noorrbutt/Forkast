@@ -91,6 +91,91 @@ async def test_portion_multiplier_is_saved_and_returned(auth_client: AsyncClient
     assert updated.json()["portion_multiplier"] == 0.7
 
 
+@pytest.mark.parametrize("portion_multiplier", [0.5, 2.0])
+async def test_portion_multiplier_scales_provisional_calories_on_create(
+    auth_client: AsyncClient, portion_multiplier: float
+) -> None:
+    category = await _a_category(auth_client)
+    response = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "chicken biryani",
+            "category_id": category["id"],
+            "rating": 4,
+            "serving_size": "medium",
+            "portion_multiplier": portion_multiplier,
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    expected = round(
+        ((category["base_calorie_min"] + category["base_calorie_max"]) / 2) * portion_multiplier
+    )
+    assert response.json()["estimated_calories"] == expected
+
+
+@pytest.mark.parametrize("portion_multiplier", [0.5, 2.0])
+async def test_portion_multiplier_scales_photo_calories_and_macros_on_create(
+    auth_client: AsyncClient, portion_multiplier: float
+) -> None:
+    category = await _a_category(auth_client)
+    calories = (category["base_calorie_min"] + category["base_calorie_max"]) // 2
+    response = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "chicken biryani",
+            "category_id": category["id"],
+            "rating": 4,
+            "estimated_calories": calories,
+            "protein_g": 28.0,
+            "carbs_g": 70.0,
+            "fat_g": 22.0,
+            "portion_multiplier": portion_multiplier,
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["estimated_calories"] == round(calories * portion_multiplier)
+    assert body["protein_g"] == round(28.0 * portion_multiplier, 1)
+    assert body["carbs_g"] == round(70.0 * portion_multiplier, 1)
+    assert body["fat_g"] == round(22.0 * portion_multiplier, 1)
+
+    updated = await auth_client.patch(
+        f"{LOGS}/{body['id']}",
+        json={"portion_multiplier": 1.0},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["estimated_calories"] == calories
+    assert updated.json()["protein_g"] == 28.0
+    assert updated.json()["carbs_g"] == 70.0
+    assert updated.json()["fat_g"] == 22.0
+    assert updated.json()["calorie_source"] == "photo"
+
+
+async def test_editing_portion_multiplier_reprices_the_log(auth_client: AsyncClient) -> None:
+    category = await _a_category(auth_client)
+    response = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "chicken biryani",
+            "category_id": category["id"],
+            "rating": 4,
+        },
+    )
+    assert response.status_code == 201, response.text
+
+    updated = await auth_client.patch(
+        f"{LOGS}/{response.json()['id']}",
+        json={"portion_multiplier": 2.0},
+    )
+
+    assert updated.status_code == 200, updated.text
+    expected = round(((category["base_calorie_min"] + category["base_calorie_max"]) / 2) * 2.0)
+    assert updated.json()["portion_multiplier"] == 2.0
+    assert updated.json()["estimated_calories"] == expected
+
+
 @pytest.mark.parametrize("portion_multiplier", [0.24, 3.01])
 async def test_out_of_range_portion_multiplier_is_rejected_on_create(
     auth_client: AsyncClient, portion_multiplier: float

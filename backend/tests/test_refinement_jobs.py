@@ -16,10 +16,10 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import FoodLog, Job
-from app.models.enums import JobStatus
+from app.models.enums import JobStatus, ServingSize
 from app.services import jobs
 from app.services.ai.fake import DeterministicAIService
-from app.services.logs import refine_estimate
+from app.services.logs import estimate_calories, refine_estimate
 
 LOGS = "/api/v1/logs"
 
@@ -54,6 +54,38 @@ async def test_saving_a_meal_queues_its_refinement_and_runs_it(
     # Run behind the response by the request itself, as the BackgroundTask was.
     assert job.status is JobStatus.done
     assert (await auth_client.get(f"{LOGS}/{created.json()['id']}")).json()["refined"] is True
+
+
+async def test_refinement_preserves_the_portion_multiplier(auth_client: AsyncClient) -> None:
+    category = await _a_category(auth_client)
+    ai = DeterministicAIService()
+    expected = await estimate_calories(
+        ai,
+        dish_name="haleem",
+        category_name=category["name"],
+        base_calorie_min=category["base_calorie_min"],
+        base_calorie_max=category["base_calorie_max"],
+        serving_size=ServingSize.medium,
+        portion_multiplier=2.0,
+    )
+    created = await auth_client.post(
+        LOGS,
+        json={
+            "dish_name": "haleem",
+            "category_id": category["id"],
+            "rating": 4,
+            "serving_size": "medium",
+            "portion_multiplier": 2.0,
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    refined = await auth_client.get(f"{LOGS}/{created.json()['id']}")
+
+    assert refined.status_code == 200, refined.text
+    assert refined.json()["portion_multiplier"] == 2.0
+    assert refined.json()["estimated_calories"] == expected
+    assert refined.json()["refined"] is True
 
 
 async def test_a_save_that_fails_leaves_no_job_behind(

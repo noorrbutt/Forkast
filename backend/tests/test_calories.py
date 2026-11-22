@@ -46,6 +46,13 @@ def test_an_out_of_range_guess_is_pulled_back_before_scaling() -> None:
     assert finalise_estimate(9000, 100, 400, ServingSize.medium) == 400
 
 
+@pytest.mark.parametrize(("portion_multiplier", "expected"), [(0.5, 150), (2.0, 600)])
+def test_portion_multiplier_scales_the_final_estimate(
+    portion_multiplier: float, expected: int
+) -> None:
+    assert finalise_estimate(300, 100, 400, ServingSize.medium, portion_multiplier) == expected
+
+
 def test_a_photo_estimate_inside_the_widened_bound_is_kept_as_is() -> None:
     # 700 is well past the category's own max of 400, which a photo estimate
     # is allowed to be -- it already answers for the real, photographed
