@@ -13,7 +13,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-class AIProvider(str, enum.Enum):
+class AIProvider(enum.StrEnum):
     """Which AI implementation backs the calorie and plan seams.
 
     An enum rather than a bool so a typo fails loudly at startup and a third
@@ -24,7 +24,7 @@ class AIProvider(str, enum.Enum):
     groq = "groq"
 
 
-class Environment(str, enum.Enum):
+class Environment(enum.StrEnum):
     """Which deployment this is. Controls only things that must differ between
     a laptop and a public host, never business behaviour."""
 
