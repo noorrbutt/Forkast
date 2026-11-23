@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     access_token_expire_minutes: int = Field(default=30, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
     refresh_token_expire_days: int = Field(default=30, alias="REFRESH_TOKEN_EXPIRE_DAYS")
-    refresh_reuse_leeway_seconds: int = Field(default=30, alias="REFRESH_REUSE_LEEWAY_SECONDS")
+    refresh_reuse_leeway_seconds: int = Field(default=15, alias="REFRESH_REUSE_LEEWAY_SECONDS")
     refine_rate_limit: int = Field(default=60, alias="REFINE_RATE_LIMIT")
     # The jobs queue (services/jobs.py). A failed job waits roughly
     # base * 2^attempts seconds, plus up to half that again as jitter so a
